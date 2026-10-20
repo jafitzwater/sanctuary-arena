@@ -438,10 +438,15 @@ body.touch #stick { display: block; }
 .item-desc { font-size: 13px; color: #d9c7a2; }
 .item.owned { border-color: #86c378; }
 
-@media (max-width: 640px) {
-  #shop-grid { grid-template-columns: 1fr; }
+@media (max-width: 900px) {
   .vitals { width: 120px; }
   .stat.slim:last-of-type { display: none; }
+  .top-actions button { padding: 4px 8px; }
+  #minimap { top: 50px; width: min(150px, 28vw); height: 52px; }
+}
+
+@media (max-width: 640px) {
+  #shop-grid { grid-template-columns: 1fr; }
 }
 
 #end h2 { margin: 0; font-weight: normal; letter-spacing: 0.14em; text-transform: uppercase; font-size: clamp(32px, 6vw, 64px); }
