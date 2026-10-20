@@ -60,7 +60,6 @@ export class Renderer {
   private reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private gait = new Map<number, { x: number; y: number; d: number }>();
   private facingRow = new Map<number, number>();
-  private mapRef: ActDef | null = null;
   private readonly art = {
     raven: loadImage(monsterSheets.raven),
     ravenWalk: loadImage(monsterSheets.ravenWalk),
@@ -174,7 +173,6 @@ export class Renderer {
   }
 
   draw(sim: Sim, opts: DrawOpts): void {
-    this.mapRef = sim.map;
     this.ensureMap(sim.map);
     const ctx = this.ctx;
     const { dpr, cssW, cssH } = this.camera;
@@ -438,9 +436,9 @@ export class Renderer {
         return this.atlas(pack.attack, 4, col, row);
       }
       if (moving) {
-        // One frame per 16 world pixels, so the cycle slows with the 120 run.
+        // One run sheet, one column per 16 world pixels, in order.
         const col = Math.floor(phase / 16) % 4;
-        return this.atlas(this.inTown(unit) ? pack.walk : pack.run, 4, col, row);
+        return this.atlas(pack.run, 4, col, row);
       }
       return this.atlas(pack.idle, 1, 0, row);
     }
@@ -518,13 +516,6 @@ export class Renderer {
     return { img, flip: false, sx: col * sw, sy: row * sh, sw, sh };
   }
 
-
-  private inTown(unit: Unit): boolean {
-    const map = this.mapRef;
-    if (!map) return false;
-    const base = map.playerBase;
-    return Math.hypot(unit.x - base.x, unit.y - base.y) <= map.shopRadius;
-  }
 
   private gaitOf(unit: Unit): { moving: boolean; d: number } {
     const prev = this.gait.get(unit.id);
