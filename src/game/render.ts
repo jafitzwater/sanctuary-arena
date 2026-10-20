@@ -1,4 +1,4 @@
-import { actProps, d2Atlas, isSheetMatte, mephisto, pr23Boulders, pr23Cast, type CastSheet, type FrameSheet } from './art/sheets';
+import { actProps, d2Atlas, heroDrawBox, isSheetMatte, mephisto, pr23Boulders, pr23Cast, type CastSheet, type FrameSheet } from './art/sheets';
 import {
   animFrame,
   heroHoldCompass,
@@ -41,8 +41,8 @@ interface Glyph {
   sh: number;
   /** Opaque foot inside the cell, in source pixels. */
   foot?: { x: number; y: number };
-  /** Cell height before the hero trim, so a short frame is not stretched. */
-  cellH?: number;
+  /** Hero frames keep native pixels. The draw scale does not depend on the cell. */
+  hero?: boolean;
 }
 
 /** Grass side of each blend diamond, in screen space: east, south, west, north. */
@@ -455,8 +455,12 @@ export class Renderer {
     }
     const glyph = this.sheetFor(unit, gait.moving, gait.d, gait.elapsed, gait.walking, tier, unit.id === playerId, opts.time);
     const outlined = unit.kind === 'minion' || unit.kind === 'champion';
-    const spriteH = glyph?.cellH ? Math.max(1, Math.round(height * (glyph.sh / glyph.cellH))) : height;
-    if (glyph) this.blit(ctx, glyph.img, footX, y, spriteH, glyph.flip, glyph, outlined);
+    if (glyph?.hero) {
+      const drawn = heroDrawBox(footX, y, glyph.sw, glyph.sh, tier, u);
+      this.blit(ctx, glyph.img, footX, y, drawn.frameHeight, glyph.flip, glyph, outlined, drawn.frameWidth);
+    } else if (glyph) {
+      this.blit(ctx, glyph.img, footX, y, height, glyph.flip, glyph, outlined);
+    }
     if (unit.whirlT > 0) {
       ctx.strokeStyle = 'rgba(240, 220, 170, 0.8)';
       ctx.lineWidth = 3;
@@ -624,13 +628,12 @@ export class Renderer {
   }
 
   /**
-   * Trim one hero cell to its opaque box and anchor the bottom center:
-   * drawX = x - frameWidth/2, drawY = y - frameHeight.
+   * Trim to the opaque box, keeping that box's offset inside the original cell.
+   * sw/sh stay the native pixel size. heroDrawBox applies one scale for every state.
    */
   private heroGlyph(img: HTMLImageElement, cols: number, col: number, row: number): Glyph | null {
     const glyph = this.atlas(img, cols, col, row, false);
     if (!glyph) return null;
-    const cellH = glyph.sh;
     const box = this.opaqueBox(img, glyph.sx, glyph.sy, glyph.sw, glyph.sh);
     if (box) {
       glyph.sx += box.x;
@@ -639,7 +642,7 @@ export class Renderer {
       glyph.sh = box.h;
     }
     glyph.foot = { x: glyph.sw / 2, y: glyph.sh };
-    glyph.cellH = cellH;
+    glyph.hero = true;
     return glyph;
   }
 
@@ -915,13 +918,14 @@ export class Renderer {
     flip: boolean,
     src?: Glyph,
     outline = false,
+    destW?: number,
   ): void {
     const sheet = this.prepare(img);
     const iw = src ? src.sw : sheet instanceof HTMLImageElement ? sheet.naturalWidth : sheet.width;
     const ih = src ? src.sh : sheet instanceof HTMLImageElement ? sheet.naturalHeight : sheet.height;
     if (!iw || !ih) return;
     const dh = Math.max(1, Math.round(height));
-    const dw = Math.max(1, Math.round((iw / ih) * dh));
+    const dw = Math.max(1, Math.round(destW ?? (iw / ih) * dh));
     ctx.save();
     crisp(ctx);
     ctx.translate(Math.round(x), Math.round(y));

@@ -65,6 +65,39 @@ export {
 } from '../gait';
 
 /**
+ * One magnification for idle, walk, and run.
+ * The packed walk cell is the native pixel size (light 84, medium 104, heavy 102).
+ * Run cells are taller (114 / 121 / 117) only because the sheet's tallest frame
+ * sets the cell. Dividing by that cell shrinks a body that is the same source size.
+ */
+export const HERO_HEIGHT = 108;
+export const HERO_NATIVE_PX = {
+  light: 84,
+  medium: 104,
+  heavy: 102,
+} as const;
+export type HeroScaleTier = keyof typeof HERO_NATIVE_PX;
+
+export function heroDrawScale(tier: HeroScaleTier, zoom = 1): number {
+  return (HERO_HEIGHT * zoom) / HERO_NATIVE_PX[tier];
+}
+
+/** frameWidth and frameHeight are native pixels times that one scale. */
+export function heroDrawBox(
+  x: number,
+  y: number,
+  nativeW: number,
+  nativeH: number,
+  tier: HeroScaleTier,
+  zoom = 1,
+): { scale: number; frameWidth: number; frameHeight: number; drawX: number; drawY: number } {
+  const scale = heroDrawScale(tier, zoom);
+  const frameWidth = nativeW * scale;
+  const frameHeight = nativeH * scale;
+  return { scale, frameWidth, frameHeight, drawX: x - frameWidth / 2, drawY: y - frameHeight };
+}
+
+/**
  * Fallen, zombie, and fallen shaman walk the same way. The quill rat has no
  * sheet here — the plain rat sheet is not used — so quillrat.webp is drawn
  * in the Act I browns. ground.webp is 4 variants by 7 rows of 160×80 diamonds:
