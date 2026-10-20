@@ -184,8 +184,15 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
 {
   const sim = createMatch(act1, barbarian, 1);
   assert.deepEqual(sim.belt, ['bash', '', '', '']);
+  const heroBefore = player(sim);
+  heroBefore.hp = 40;
+  heroBefore.mana = 12;
   grantXp(sim, 60);
   assert.equal(sim.level, 2);
+  assert.equal(heroBefore.hp, heroBefore.maxHp, 'level-up restores life');
+  assert.equal(heroBefore.mana, heroBefore.maxMana, 'level-up restores mana');
+  assert.ok(sim.sfx.includes('level'));
+  assert.ok(sim.fx.some((fx) => fx.kind === 'text' && fx.text === 'Level 2'));
   assert.equal(sim.belt[1], '', 'Shout is not equipped until it is learned');
   tryAssignBelt(sim, 'shout', 1);
   assert.equal(sim.belt[1], '');
