@@ -1,5 +1,13 @@
 import { actProps, d2Atlas, isSheetMatte, mephisto, pr23Boulders, pr23Cast, type CastSheet, type FrameSheet } from './art/sheets';
-import { animFrame, RUN_FRAME_MS, RUN_FRAMES, WALK_FRAME_MS, WALK_FRAMES } from './gait';
+import {
+  animFrame,
+  heroHoldCompass,
+  heroSheetRow,
+  RUN_FRAME_MS,
+  RUN_FRAMES,
+  WALK_FRAME_MS,
+  WALK_FRAMES,
+} from './gait';
 import type { ActDef } from './data/acts/types';
 import { projectIso, unprojectIso } from './iso';
 import type { Prop } from './landscape';
@@ -33,6 +41,8 @@ interface Glyph {
   sh: number;
   /** Opaque foot inside the cell, in source pixels. */
   foot?: { x: number; y: number };
+  /** Cell height before the hero trim, so a short frame is not stretched. */
+  cellH?: number;
 }
 
 /** Grass side of each blend diamond, in screen space: east, south, west, north. */
@@ -125,8 +135,10 @@ export class Renderer {
   private reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private gait = new Map<number, { x: number; y: number; d: number; elapsed: number }>();
   private facingRow = new Map<number, number>();
+  private heroCompass = new Map<number, number>();
   private aim = new Map<number, number>();
   private feet = new WeakMap<HTMLImageElement, Map<string, { x: number; y: number }>>();
+  private trims = new WeakMap<HTMLImageElement, Map<string, { x: number; y: number; w: number; h: number } | null>>();
   private frameDt = 0;
   private floor: HTMLCanvasElement | null = null;
   private readonly cutouts = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
@@ -443,7 +455,8 @@ export class Renderer {
     }
     const glyph = this.sheetFor(unit, gait.moving, gait.d, gait.elapsed, gait.walking, tier, unit.id === playerId, opts.time);
     const outlined = unit.kind === 'minion' || unit.kind === 'champion';
-    if (glyph) this.blit(ctx, glyph.img, footX, y, height, glyph.flip, glyph, outlined);
+    const spriteH = glyph?.cellH ? Math.max(1, Math.round(height * (glyph.sh / glyph.cellH))) : height;
+    if (glyph) this.blit(ctx, glyph.img, footX, y, spriteH, glyph.flip, glyph, outlined);
     if (unit.whirlT > 0) {
       ctx.strokeStyle = 'rgba(240, 220, 170, 0.8)';
       ctx.lineWidth = 3;
@@ -522,31 +535,33 @@ export class Renderer {
     logFrames = false,
     time = 0,
   ): Glyph | null {
+    if (unit.defId === 'barbarian') {
+      const pack = this.d2[tier];
+      // Joystick compass, 15° deadband. Changing row does not reset the frame clock.
+      const facing = heroSheetRow(this.holdHero(unit.id, unit.facing));
+      if (!unit.alive) return this.heroGlyph(pack.idle, 1, 0, facing);
+      if (unit.whirlT > 0) return this.heroGlyph(pack.run, RUN_FRAMES, Math.floor(phase / 10) % RUN_FRAMES, facing);
+      if (unit.leap) return this.heroGlyph(pack.attack, 4, 2, facing);
+      if (moving) {
+        // Run and walk atlases contain only locomotion cells. Attack, hit, cast, and death stay off this path.
+        const frames = walking ? WALK_FRAMES : RUN_FRAMES;
+        const frameMs = walking ? WALK_FRAME_MS : RUN_FRAME_MS;
+        const col = animFrame(elapsed, frameMs, frames);
+        if (ANIM_LOG && logFrames) console.log(walking ? `anim walk ${col}` : `anim ${col}`);
+        return this.heroGlyph(walking ? pack.walk : pack.run, frames, col, facing);
+      }
+      if (unit.castT > 0) return this.heroGlyph(pack.idle, 1, 0, facing);
+      if (unit.swing > 0) {
+        const col = Math.min(3, Math.floor((1 - Math.max(0, unit.swing)) * 4));
+        return this.heroGlyph(pack.attack, 4, col, facing);
+      }
+      return this.heroGlyph(pack.idle, 1, 0, facing);
+    }
     const delta = this.screenDelta(unit.facing);
     const row = unit.whirlT > 0 ? this.rowOf(delta) : this.heldRow(unit.id, this.smoothAim(unit.id, delta));
     if (unit.kind === 'seal') return this.full(this.props.rock[0], false);
     if (unit.defId === 'base-ally' || unit.defId === 'base-enemy') return this.full(this.bannerSheet, false);
     if (unit.defId === 'tower') return this.towerGlyph(unit, time);
-    if (unit.defId === 'barbarian') {
-      const pack = this.d2[tier];
-      // One armor tier, one sheet per state. The hero keeps the measured foot pivot.
-      // The column is elapsed time, advanced by the same rAF dt as the stride.
-      if (!unit.alive || unit.castT > 0) return this.atlas(pack.idle, 1, 0, row, true);
-      if (unit.whirlT > 0) return this.atlas(pack.run, RUN_FRAMES, Math.floor(phase / 10) % RUN_FRAMES, row, true);
-      if (unit.leap || unit.swing > 0) {
-        const col = unit.leap ? 2 : Math.min(3, Math.floor((1 - Math.max(0, unit.swing)) * 4));
-        return this.atlas(pack.attack, 4, col, row, true);
-      }
-      if (moving) {
-        // Run sheet is 12 columns (109 / 113 / 110). Walk sheet is 4. Time does not reset.
-        const frames = walking ? WALK_FRAMES : RUN_FRAMES;
-        const frameMs = walking ? WALK_FRAME_MS : RUN_FRAME_MS;
-        const col = animFrame(elapsed, frameMs, frames);
-        if (ANIM_LOG && logFrames) console.log(walking ? `anim walk ${col}` : `anim ${col}`);
-        return this.atlas(walking ? pack.walk : pack.run, frames, col, row, true);
-      }
-      return this.atlas(pack.idle, 1, 0, row, true);
-    }
     if (unit.objective === 'herald') return this.mephistoGlyph(moving, elapsed, unit.alive, row);
     if (unit.objective === 'baron') return this.castGlyph(pr23Cast.diablo, moving, elapsed, row);
     if (unit.objective === 'dragon') return this.castGlyph(pr23Cast.duriel, moving, elapsed, row);
@@ -596,9 +611,81 @@ export class Renderer {
     return this.frameGlyph(pose, col, row);
   }
 
-  /** New sheets are packed on the cell's bottom center. The hero keeps footOf. */
+  /** New sheets are packed on the cell's bottom center. The hero trims each frame. */
   private frameGlyph(pose: FrameSheet, col: number, row: number): Glyph | null {
     return this.atlas(this.sheet(pose.src), pose.cols, col, row, false, pose.rows);
+  }
+
+  /** Hero facing row. The 15° deadband does not touch the frame clock. */
+  private holdHero(id: number, facing: number): number {
+    const next = heroHoldCompass(this.heroCompass.get(id) ?? null, facing);
+    this.heroCompass.set(id, next);
+    return next;
+  }
+
+  /**
+   * Trim one hero cell to its opaque box and anchor the bottom center:
+   * drawX = x - frameWidth/2, drawY = y - frameHeight.
+   */
+  private heroGlyph(img: HTMLImageElement, cols: number, col: number, row: number): Glyph | null {
+    const glyph = this.atlas(img, cols, col, row, false);
+    if (!glyph) return null;
+    const cellH = glyph.sh;
+    const box = this.opaqueBox(img, glyph.sx, glyph.sy, glyph.sw, glyph.sh);
+    if (box) {
+      glyph.sx += box.x;
+      glyph.sy += box.y;
+      glyph.sw = box.w;
+      glyph.sh = box.h;
+    }
+    glyph.foot = { x: glyph.sw / 2, y: glyph.sh };
+    glyph.cellH = cellH;
+    return glyph;
+  }
+
+  /** Exact opaque bounds of one cell. Alpha at or below 24 stays transparent. */
+  private opaqueBox(
+    img: HTMLImageElement,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+  ): { x: number; y: number; w: number; h: number } | null {
+    if (!img.complete || img.naturalWidth === 0) return null;
+    let table = this.trims.get(img);
+    if (!table) {
+      table = new Map();
+      this.trims.set(img, table);
+    }
+    const key = `${sx}:${sy}:${sw}:${sh}`;
+    const cached = table.get(key);
+    if (cached !== undefined) return cached;
+    const w = Math.max(1, Math.round(sw));
+    const h = Math.max(1, Math.round(sh));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    crisp(ctx);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    let minX = w;
+    let minY = h;
+    let maxX = -1;
+    let maxY = -1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (data[(y * w + x) * 4 + 3] <= 24) continue;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+    const box = maxX < 0 ? null : { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+    table.set(key, box);
+    return box;
   }
 
   /** Ease the facing angle, then keep the current sheet row until the stick leaves its sector. */

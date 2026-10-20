@@ -18,7 +18,24 @@ import { UNIT_DEFS } from '../src/game/data/units';
 import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
 import { campGates, DECOR_MARGIN, FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, sceneryFor } from '../src/game/landscape';
 import { groundAt, slide, walkable } from '../src/game/terrain';
-import { animFrame, RUN_FRAME_MS, RUN_FRAMES, strideLength, WALK_FRAME_MS, WALK_FRAMES } from '../src/game/gait';
+import {
+  animFrame,
+  HERO_COMBAT_BANDS,
+  HERO_RUN_RECTS,
+  HERO_WALK_RECTS,
+  heroCompass,
+  heroDrawOrigin,
+  heroHoldCompass,
+  heroRectOverlapsCombat,
+  heroSheetRow,
+  heroSourceRect,
+  RUN_FRAME_MS,
+  RUN_FRAMES,
+  strideLength,
+  WALK_FRAME_MS,
+  WALK_FRAMES,
+  type HeroArmor,
+} from '../src/game/gait';
 
 function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   const frames = Math.max(1, Math.round(seconds / dt));
@@ -491,7 +508,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.equal(animFrame(elapsed, RUN_FRAME_MS, RUN_FRAMES), Math.floor(700 / RUN_FRAME_MS) % RUN_FRAMES, 'run frame is floor(elapsed / 40) % 12');
   assert.equal(animFrame(elapsed, WALK_FRAME_MS, WALK_FRAMES), Math.floor(700 / WALK_FRAME_MS) % WALK_FRAMES, 'walk frame keeps the same elapsed clock');
   assert.ok(Math.abs(strideLength(216, RUN_FRAME_MS, RUN_FRAMES) - 103.68) < 0.01, 'run stride at 216 is 103.68px');
-  assert.ok(Math.abs(strideLength(144, WALK_FRAME_MS, WALK_FRAMES) - 33.408) < 0.01, 'walk stride at 144 is 33.408px');
+  assert.ok(Math.abs(strideLength(144, WALK_FRAME_MS, WALK_FRAMES) - 66.816) < 0.01, 'walk stride at 144 is 66.816px');
   const rocks = sceneryFor(sanctuary).filter((prop) => prop.kind === 'rock');
   assert.ok(rocks.length > 24, 'boulder walls line the lanes');
   assert.notEqual(animFrame(elapsed, RUN_FRAME_MS, RUN_FRAMES), 0, 'a mid-cycle run is not frame 0');
@@ -506,6 +523,86 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
     assert.equal(runSeq[i], (runSeq[i - 1] + 1) % RUN_FRAMES, `run clock skipped ${runSeq[i - 1]} -> ${runSeq[i]}`);
   }
   assert.ok(runSeq.includes(0) && runSeq.includes(11), 'the run clock wraps the 12-frame sheet');
+  const tiers: HeroArmor[] = ['light', 'medium', 'heavy'];
+  for (const tier of tiers) {
+    for (const mode of [HERO_RUN_RECTS, HERO_WALK_RECTS]) {
+      for (const row of mode[tier]) {
+        assert.equal(row.length, mode === HERO_RUN_RECTS ? RUN_FRAMES : WALK_FRAMES);
+        for (const rect of row) {
+          assert.equal(heroRectOverlapsCombat(tier, rect), false, `${tier} locomotion cell overlaps a combat band`);
+          const combat = HERO_COMBAT_BANDS[tier].find((band) => rect[1] < band.y1 && rect[3] > band.y0);
+          assert.equal(combat, undefined);
+        }
+      }
+    }
+  }
+  assert.equal(heroCompass(0), 0, 'east is facing 0');
+  assert.equal(heroCompass(Math.PI / 4), 1, 'southeast is facing 1');
+  assert.equal(heroCompass(Math.PI / 2), 2, 'south is facing 2');
+  assert.equal(heroCompass(Math.PI), 4, 'west is facing 4');
+  assert.equal(heroCompass(-Math.PI / 4), 7, 'northeast is facing 7');
+  assert.equal(heroSheetRow(1), 0, 'southeast uses the camera-facing row');
+  assert.equal(heroHoldCompass(0, (35 * Math.PI) / 180), 0, '35° stays inside the 15° deadband');
+  assert.equal(heroHoldCompass(0, (40 * Math.PI) / 180), 1, '40° steps one sector');
+  assert.deepEqual(heroDrawOrigin(100, 80, 30, 48), { drawX: 85, drawY: 32 });
+  const kept = animFrame(5 * RUN_FRAME_MS + 5, RUN_FRAME_MS, RUN_FRAMES);
+  let turned = heroHoldCompass(null, 0);
+  for (let i = 0; i < 8; i++) turned = heroHoldCompass(turned, Math.PI / 2);
+  assert.equal(animFrame(5 * RUN_FRAME_MS + 5, RUN_FRAME_MS, RUN_FRAMES), kept, 'a facing change does not reset the run frame');
+  assert.equal(kept, 5);
+  assert.equal(turned, 2);
+  const open = { x: 1760, y: 360 };
+  for (let dir = 0; dir < 8; dir++) {
+    const sim = createMatch(sanctuary, barbarian, 20 + dir);
+    const hero = player(sim);
+    hero.hp = 100000;
+    hero.invuln = 30;
+    hero.x = open.x;
+    hero.y = open.y;
+    hero.swing = 0;
+    hero.castT = 0;
+    hero.whirlT = 0;
+    hero.leap = null;
+    const facing = dir * (Math.PI / 4);
+    hero.facing = facing;
+    const input = emptyInput();
+    input.moveX = Math.cos(facing);
+    input.moveY = Math.sin(facing);
+    const dt = RUN_FRAME_MS / 1000;
+    let elapsed = 0;
+    let held: number | null = null;
+    let prevX = hero.x;
+    let prevY = hero.y;
+    const seen: number[] = [];
+    for (let tick = 0; tick < RUN_FRAMES * 2 + 1; tick++) {
+      held = heroHoldCompass(held, hero.facing);
+      const frame = animFrame(elapsed, RUN_FRAME_MS, RUN_FRAMES);
+      seen.push(frame);
+      for (const tier of tiers) {
+        const row = heroSheetRow(held);
+        const rect = heroSourceRect(tier, 'run', row, frame);
+        assert.deepEqual(rect, HERO_RUN_RECTS[tier][row][frame], `${tier} dir ${dir} tick ${tick} left the run set`);
+        assert.equal(heroRectOverlapsCombat(tier, rect), false, `${tier} dir ${dir} drew a combat row`);
+        assert.ok(frame >= 0 && frame < RUN_FRAMES);
+      }
+      updateSim(sim, input, dt);
+      const moved = Math.hypot(hero.x - prevX, hero.y - prevY);
+      if (moved > 0.4) elapsed += dt * 1000;
+      prevX = hero.x;
+      prevY = hero.y;
+      assert.equal(hero.swing, 0, 'a plain run does not start a swing');
+      let gap = hero.facing - facing;
+      if (gap > Math.PI) gap -= Math.PI * 2;
+      else if (gap < -Math.PI) gap += Math.PI * 2;
+      assert.ok(Math.abs(gap) < 0.01, 'the stick keeps the facing');
+    }
+    assert.ok(elapsed >= RUN_FRAMES * 2 * RUN_FRAME_MS, `dir ${dir} did not finish two run cycles`);
+    const zeros = seen.filter((frame) => frame === 0).length;
+    const elevens = seen.filter((frame) => frame === 11).length;
+    assert.ok(zeros >= 2 && elevens >= 2, `dir ${dir} frames ${seen.join(',')}`);
+    const travelled = Math.hypot(hero.x - open.x, hero.y - open.y);
+    assert.ok(travelled > 180, `dir ${dir} only moved ${travelled.toFixed(1)}px`);
+  }
   let slideCase = false;
   for (const fence of sceneryFor(sanctuary).filter((prop) => prop.kind === 'fence')) {
     const foot = fence.block * 0.3;

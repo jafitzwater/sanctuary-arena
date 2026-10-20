@@ -46,11 +46,25 @@ import quill from '../../assets/art/d2/quillrat.webp';
 import banner from '../../assets/art/d2/banner.webp';
 
 /**
- * Real Spriters Resource atlases. Eight direction rows, south then clockwise.
- * Run sheets keep the first 12 frames of each direction (the cycle that returns
- * to the start pose). Later blobs on that row are the next weapon group.
- * Barbarian whirl, leap, cast, get-hit, and death reuse these same sheets
- * (run, attack, or idle) so a state never swaps in an older drawing.
+ * Real Spriters Resource atlases. Eight direction rows, southeast toward the
+ * camera, then clockwise. Barbarian run and walk use only the leading
+ * locomotion cells (12 run, 8 walk). The next blob on that row, and every
+ * attack, get-hit, cast, and death band, is outside those rectangles.
+ * The rectangles themselves live in gait.ts so the match test can read them
+ * without loading image modules. They are re-exported here.
+ */
+export {
+  HERO_COMBAT_BANDS,
+  HERO_RUN_RECTS,
+  HERO_WALK_RECTS,
+  heroRectOverlapsCombat,
+  heroSourceRect,
+  type HeroArmor,
+  type HeroCombatBand,
+  type PixelRect,
+} from '../gait';
+
+/**
  * Fallen, zombie, and fallen shaman walk the same way. The quill rat has no
  * sheet here — the plain rat sheet is not used — so quillrat.webp is drawn
  * in the Act I browns. ground.webp is 4 variants by 7 rows of 160×80 diamonds:
