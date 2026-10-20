@@ -108,6 +108,12 @@ const skillList: SkillDef[] = [
 ];
 
 /**
+ * Joystick sectors are 45° wide: 0 east, then SE, S, SW, W, NW, N, NE.
+ * The facing row stays put until the stick is 15° past that sector's edge.
+ */
+export const HERO_FACING_DEADBAND = (15 * Math.PI) / 180;
+
+/**
  * Stats and the 30-skill tree are the 1.13c CharStats / Skills rows, scaled
  * in tools/import-d2.mjs. Q W E R are belt slots, not fixed skills.
  */
