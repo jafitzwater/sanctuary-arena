@@ -1,4 +1,4 @@
-import { actProps, d2Atlas, heroDrawBox, isSheetMatte, mephisto, pr23Boulders, pr23Cast, type CastSheet, type FrameSheet } from './art/sheets';
+import { actProps, d2Atlas, heroDrawBox, heroRunDraw, isSheetMatte, mephisto, pr23Boulders, pr23Cast, type CastSheet, type FrameSheet } from './art/sheets';
 import {
   animFrame,
   heroHoldCompass,
@@ -43,6 +43,9 @@ interface Glyph {
   foot?: { x: number; y: number };
   /** Hero frames keep native pixels. The draw scale does not depend on the cell. */
   hero?: boolean;
+  /** Set for the 12-frame run sheet. Walk and idle stay on the trimmed bottom. */
+  runRow?: number;
+  runCol?: number;
 }
 
 /** Grass side of each blend diamond, in screen space: east, south, west, north. */
@@ -455,7 +458,11 @@ export class Renderer {
     }
     const glyph = this.sheetFor(unit, gait.moving, gait.d, gait.elapsed, gait.walking, tier, unit.id === playerId, opts.time);
     const outlined = unit.kind === 'minion' || unit.kind === 'champion';
-    if (glyph?.hero) {
+    if (glyph?.hero && glyph.runRow != null && glyph.runCol != null) {
+      const run = heroRunDraw(footX, y, glyph.sw, glyph.sh, tier, glyph.runRow, glyph.runCol, u);
+      // drawX = x - frameWidth/2: the trimmed frame stays centered. The row baseline lifts a raised foot.
+      this.blit(ctx, glyph.img, footX, y - run.lift * run.scale, run.frameHeight, glyph.flip, glyph, outlined, run.frameWidth);
+    } else if (glyph?.hero) {
       const drawn = heroDrawBox(footX, y, glyph.sw, glyph.sh, tier, u);
       this.blit(ctx, glyph.img, footX, y, drawn.frameHeight, glyph.flip, glyph, outlined, drawn.frameWidth);
     } else if (glyph) {
@@ -544,7 +551,7 @@ export class Renderer {
       // Joystick compass, 15° deadband. Changing row does not reset the frame clock.
       const facing = heroSheetRow(this.holdHero(unit.id, unit.facing));
       if (!unit.alive) return this.heroGlyph(pack.idle, 1, 0, facing);
-      if (unit.whirlT > 0) return this.heroGlyph(pack.run, RUN_FRAMES, Math.floor(phase / 10) % RUN_FRAMES, facing);
+      if (unit.whirlT > 0) return this.heroGlyph(pack.run, RUN_FRAMES, Math.floor(phase / 10) % RUN_FRAMES, facing, true);
       if (unit.leap) return this.heroGlyph(pack.attack, 4, 2, facing);
       if (moving) {
         // Run and walk atlases contain only locomotion cells. Attack, hit, cast, and death stay off this path.
@@ -552,7 +559,7 @@ export class Renderer {
         const frameMs = walking ? WALK_FRAME_MS : RUN_FRAME_MS;
         const col = animFrame(elapsed, frameMs, frames);
         if (ANIM_LOG && logFrames) console.log(walking ? `anim walk ${col}` : `anim ${col}`);
-        return this.heroGlyph(walking ? pack.walk : pack.run, frames, col, facing);
+        return this.heroGlyph(walking ? pack.walk : pack.run, frames, col, facing, !walking);
       }
       if (unit.castT > 0) return this.heroGlyph(pack.idle, 1, 0, facing);
       if (unit.swing > 0) {
@@ -630,8 +637,9 @@ export class Renderer {
   /**
    * Trim to the opaque box, keeping that box's offset inside the original cell.
    * sw/sh stay the native pixel size. heroDrawBox applies one scale for every state.
+   * Run marks the cell so the row baseline, not this frame's trimmed bottom, is the ground.
    */
-  private heroGlyph(img: HTMLImageElement, cols: number, col: number, row: number): Glyph | null {
+  private heroGlyph(img: HTMLImageElement, cols: number, col: number, row: number, fixedBaseline = false): Glyph | null {
     const glyph = this.atlas(img, cols, col, row, false);
     if (!glyph) return null;
     const box = this.opaqueBox(img, glyph.sx, glyph.sy, glyph.sw, glyph.sh);
@@ -643,6 +651,10 @@ export class Renderer {
     }
     glyph.foot = { x: glyph.sw / 2, y: glyph.sh };
     glyph.hero = true;
+    if (fixedBaseline) {
+      glyph.runRow = row % 8;
+      glyph.runCol = col % cols;
+    }
     return glyph;
   }
 
