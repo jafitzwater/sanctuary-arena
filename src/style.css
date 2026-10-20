@@ -139,6 +139,10 @@ h1 {
 }
 
 .class-name { margin: 0; font-size: 22px; color: var(--gold); }
+.class-pick { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 680px; margin: 8px auto 0; }
+.class-btn { min-height: 40px; padding: 6px 12px; letter-spacing: 0.06em; text-transform: uppercase; font-size: 13px; }
+.class-btn.on { border-color: var(--gold); color: var(--gold); }
+.class-btn:disabled { opacity: 0.45; }
 .blurb { margin: 0; max-width: 38rem; font-size: 15px; line-height: 1.4; }
 
 #play-btn,

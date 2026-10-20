@@ -1,5 +1,6 @@
 import { sanctuary } from './data/acts/sanctuary';
-import { barbarian } from './data/classes/barbarian';
+import { getClass } from './data/classes';
+import { playableIds } from './data/classes/roster';
 import { AudioBus } from './audio';
 import { Hud } from './hud';
 import { InputController } from './input';
@@ -16,6 +17,7 @@ type Mode = 'title' | 'play' | 'end';
  */
 export class Game {
   private sim: Sim;
+  private classId = 'barbarian';
   private mode: Mode = 'title';
   private last = 0;
   private time = 0;
@@ -25,7 +27,7 @@ export class Game {
   private audio = new AudioBus();
 
   constructor(canvas: HTMLCanvasElement, root: HTMLElement) {
-    this.sim = createMatch(sanctuary, barbarian);
+    this.sim = createMatch(sanctuary, getClass(this.classId));
     this.renderer = new Renderer(canvas);
     this.hud = new Hud(root);
     this.input = new InputController(canvas, {
@@ -54,6 +56,11 @@ export class Game {
         this.hud.treeOpen = false;
       },
     });
+    this.hud.onPickClass = (id) => {
+      if (!playableIds().includes(id)) return;
+      this.classId = id;
+      this.hud.markClass(id);
+    };
     this.hud.onPlay = () => this.begin();
     this.hud.onAgain = () => this.begin();
     this.hud.onCast = (id) => {
@@ -123,7 +130,7 @@ export class Game {
 
   private begin(): void {
     this.audio.unlock();
-    this.sim = createMatch(sanctuary, barbarian);
+    this.sim = createMatch(sanctuary, getClass(this.classId));
     this.mode = 'play';
     this.hud.shopOpen = false;
     this.hud.helpOpen = false;

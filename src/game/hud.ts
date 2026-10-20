@@ -1,4 +1,5 @@
 import portraitUrl from '../assets/art/barbarian/idle.png';
+import { ROSTER } from './data/classes/roster';
 import { itemIcon, skillIcon } from './art/icons';
 import { ITEMS, potionCap, type ItemDef } from './data/items';
 import { inShopRange, manaCost, MAX_LEVEL, xpToNext } from './combat';
@@ -31,6 +32,7 @@ export class Hud {
   onAssign: ((id: string, slot: number) => void) | null = null;
   onAttribute: ((key: 'str' | 'dex' | 'vit' | 'energy') => void) | null = null;
   onPlay: (() => void) | null = null;
+  onPickClass: ((id: string) => void) | null = null;
   onAgain: (() => void) | null = null;
 
   shopOpen = false;
@@ -55,6 +57,7 @@ export class Hud {
     const portrait = this.root.querySelector<HTMLImageElement>('#portrait-img');
     if (portrait) portrait.src = portraitUrl;
     this.arm('#play-btn', () => this.onPlay?.());
+    this.buildClasses();
     this.arm('#again-btn', () => this.onAgain?.());
     this.arm('#shop-btn', () => this.onToggleShop?.());
     this.arm('#recall-btn', () => this.onRecall?.());
@@ -280,6 +283,32 @@ export class Hud {
     }
     if (!this.treeOpen || this.tab !== 'skills') this.pendingSkill = null;
     this.syncTree(sim);
+  }
+
+  markClass(id: string): void {
+    for (const button of this.root.querySelectorAll<HTMLButtonElement>('.class-btn')) {
+      button.classList.toggle('on', button.dataset.class === id);
+    }
+  }
+
+  private buildClasses(): void {
+    const host = this.root.querySelector('#class-pick');
+    if (!host || host.childElementCount > 0) return;
+    for (const entry of ROSTER) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'class-btn';
+      button.dataset.class = entry.id;
+      button.disabled = !entry.playable;
+      button.textContent = entry.playable ? entry.name : `${entry.name} — coming soon`;
+      if (entry.playable) button.classList.add('on');
+      button.addEventListener('click', () => {
+        if (!entry.playable) return;
+        this.markClass(entry.id);
+        this.onPickClass?.(entry.id);
+      });
+      host.appendChild(button);
+    }
   }
 
   private fillTitle(sim: Sim): void {

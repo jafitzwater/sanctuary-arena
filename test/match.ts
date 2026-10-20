@@ -11,6 +11,8 @@ import { SKILLS } from '../src/game/skills';
 import { findBase, player } from '../src/game/query';
 import { createMatch, spawnHero, spawnMinion, updateSim } from '../src/game/sim';
 import { comebackMul, paceOf, xpShare } from '../src/game/pace';
+import { ROSTER } from '../src/game/data/classes/roster';
+import { dealTeams } from '../src/game/teams';
 import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
 
 function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
@@ -443,6 +445,52 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
       assert.ok(gap > 80, `objective at ${spot.x},${spot.y} is ${gap.toFixed(0)}px from ${path.name}`);
     }
   }
+}
+
+{
+  assert.equal(ROSTER.length, 7);
+  assert.deepEqual(
+    ROSTER.filter((entry) => entry.playable).map((entry) => entry.id),
+    ['barbarian'],
+  );
+  const dealt = dealTeams(3, 'barbarian');
+  assert.equal(dealt.allies.length, 4);
+  assert.equal(dealt.enemies.length, 5);
+  assert.equal(new Set(dealt.allies.map((seat) => seat.name)).size, 4);
+  assert.equal(new Set(dealt.enemies.map((seat) => seat.name)).size, 5);
+  assert.ok(dealt.allies.every((seat) => seat.classId === 'barbarian'));
+  assert.ok(dealt.enemies.every((seat) => seat.classId === 'barbarian'));
+
+  const sim = createMatch(sanctuary, barbarian, 3);
+  const allies = sim.units.filter((unit) => unit.bot && unit.team === 'ally');
+  const enemies = sim.units.filter((unit) => unit.bot && unit.team === 'enemy' && unit.defId === 'barbarian');
+  assert.equal(allies.length, 4);
+  assert.equal(enemies.length, 5);
+  const lanes = new Set(allies.map((unit) => unit.path));
+  assert.ok(lanes.size >= 2, 'allied heroes do not all take the same path');
+
+  const bot = allies[0];
+  bot.x = 2200;
+  bot.y = 1200;
+  bot.hp = 20;
+  bot.invuln = 5;
+  const home = sim.map.playerBase;
+  const before = Math.hypot(bot.x - home.x, bot.y - home.y);
+  step(sim, emptyInput(), 1);
+  const after = Math.hypot(bot.x - home.x, bot.y - home.y);
+  assert.ok(after < before - 80, `wounded hero should retreat, ${before.toFixed(0)} -> ${after.toFixed(0)}`);
+
+  const hunter = enemies[0];
+  hunter.x = 1800;
+  hunter.y = 1400;
+  hunter.hp = hunter.maxHp;
+  hunter.invuln = 2;
+  const low = spawnMinion(sim, 'fallen', 'ally', hunter.x + 36, hunter.y);
+  low.hp = 4;
+  low.armor = 0;
+  spawnMinion(sim, 'fallen', 'ally', hunter.x + 240, hunter.y);
+  updateSim(sim, emptyInput(), 0.1);
+  assert.equal(hunter.targetId, low.id, 'a hero last-hits the wounded minion');
 }
 
 console.log('match tests passed');
