@@ -60,6 +60,8 @@ export class Renderer {
   private reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private gait = new Map<number, { x: number; y: number; d: number }>();
   private facingRow = new Map<number, number>();
+  private drawPos = new Map<number, { x: number; y: number }>();
+  private frameDt = 0;
   private readonly art = {
     raven: loadImage(monsterSheets.raven),
     ravenWalk: loadImage(monsterSheets.ravenWalk),
@@ -145,6 +147,7 @@ export class Renderer {
   }
 
   updateCamera(sim: Sim, mode: DrawOpts['mode'], dt: number, time: number): void {
+    this.frameDt = dt;
     const focus = this.focus(sim, mode, time);
     if (!this.snapped) {
       this.focusX = focus.x;
@@ -324,7 +327,8 @@ export class Renderer {
   }
 
   private drawUnit(ctx: CanvasRenderingContext2D, unit: Unit, opts: DrawOpts, u: number, tier: ArmorTier): void {
-    const p = this.project(unit.x, unit.y);
+    const at = this.eased(unit);
+    const p = this.project(at.x, at.y);
     if (p.x < -160 || p.y < -200 || p.x > this.camera.cssW + 160 || p.y > this.camera.cssH + 60) return;
     const gait = this.gaitOf(unit);
     let y = p.y;
@@ -516,6 +520,31 @@ export class Renderer {
     return { img, flip: false, sx: col * sw, sy: row * sh, sw, sh };
   }
 
+
+  /** Ease the hero toward the sim point. Frame choice still uses the true step. */
+  private eased(unit: Unit): { x: number; y: number } {
+    if (unit.defId !== 'barbarian') return { x: unit.x, y: unit.y };
+    const prev = this.drawPos.get(unit.id);
+    const dt = this.frameDt;
+    if (!prev || dt <= 0) {
+      const at = { x: unit.x, y: unit.y };
+      this.drawPos.set(unit.id, at);
+      return at;
+    }
+    const gap = Math.hypot(unit.x - prev.x, unit.y - prev.y);
+    if (gap > 72) {
+      const at = { x: unit.x, y: unit.y };
+      this.drawPos.set(unit.id, at);
+      return at;
+    }
+    const t = 1 - Math.exp(-dt * 28);
+    const at = {
+      x: prev.x + (unit.x - prev.x) * t,
+      y: prev.y + (unit.y - prev.y) * t,
+    };
+    this.drawPos.set(unit.id, at);
+    return at;
+  }
 
   private gaitOf(unit: Unit): { moving: boolean; d: number } {
     const prev = this.gait.get(unit.id);

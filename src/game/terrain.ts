@@ -143,16 +143,18 @@ export function resolveSanctuary(map: ActDef, x: number, y: number): Vec {
 export function groundAt(map: ActDef, x: number, y: number): GroundKind {
   const camp = Math.hypot(x - map.playerBase.x, y - map.playerBase.y);
   const lair = Math.hypot(x - map.enemyBase.x, y - map.enemyBase.y);
-  if (camp <= map.plaza) return 'town';
-  if (lair <= map.plaza) return map.theme.decor === 'sanctuary' ? 'pale' : 'town';
   const road = nearestRoad(map, x, y);
-  const cobble = map.laneWidth / 2 + 10;
-  const shoulder = cobble + 78;
+  const limit = roadLimit(map);
+  const cobble = limit - 26;
+  const shoulder = limit + 16;
   if (map.river && map.river.length > 1) {
     const water = distToPolyline({ x, y }, map.river);
     if (water < 46 && road > cobble) return 'river';
     if (water < 92 && road > cobble) return 'bank';
   }
+  if (camp <= map.plaza - 26) return 'town';
+  if (lair <= map.plaza - 26) return map.theme.decor === 'sanctuary' ? 'pale' : 'town';
+  if (camp <= map.plaza + 16 || lair <= map.plaza + 16) return 'edge';
   if (road <= cobble) return 'path';
   if (road <= shoulder) return 'edge';
   if (x < 70 || y < 70 || x > map.width - 70 || y > map.height - 70 || road > 460) return 'dark';
