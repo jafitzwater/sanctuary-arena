@@ -25,6 +25,11 @@ import rock1 from '../../assets/art/d2/rock1.webp';
 import rock2 from '../../assets/art/d2/rock2.webp';
 import fence0 from '../../assets/art/d2/fence0.webp';
 import fence1 from '../../assets/art/d2/fence1.webp';
+import fence2 from '../../assets/art/d2/fence2.webp';
+import stump0 from '../../assets/art/d2/stump0.webp';
+import stump1 from '../../assets/art/d2/stump1.webp';
+import stump2 from '../../assets/art/d2/stump2.webp';
+import wagon0 from '../../assets/art/d2/wagon0.webp';
 import tent0 from '../../assets/art/d2/tent0.webp';
 import tent1 from '../../assets/art/d2/tent1.webp';
 import tent2 from '../../assets/art/d2/tent2.webp';
@@ -47,8 +52,9 @@ import banner from '../../assets/art/d2/banner.webp';
  * (run, attack, or idle) so a state never swaps in an older drawing.
  * Fallen, zombie, and fallen shaman walk the same way. The quill rat has no
  * sheet here — the plain rat sheet is not used — so quillrat.webp is drawn
- * in the Act I browns. ground.webp is 4 variants by 6 rows of 160×80 diamonds:
- * grass, shoulder, path, town, pale stone, dark.
+ * in the Act I browns. ground.webp is 4 variants by 7 rows of 160×80 diamonds:
+ * grass, shoulder, path, town, pale stone, dark, then grass-to-dirt
+ * transitions facing east, south, west, and north.
  */
 export const d2Atlas = {
   light: { idle: lightIdle, walk: lightWalk, run: lightRun, attack: lightAttack },
@@ -68,7 +74,9 @@ export const d2Atlas = {
 export const actProps = {
   tree: [tree0, tree1, tree2, tree3, tree4],
   rock: [rock0, rock1, rock2],
-  fence: [fence0, fence1],
+  fence: [fence0, fence1, fence2],
+  stump: [stump0, stump1, stump2],
+  wagon: [wagon0],
   tent: [tent0, tent1, tent2],
   stone: [stone0, stone1],
 };
