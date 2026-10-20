@@ -99,6 +99,9 @@ export class Game {
     this.hud.onAttribute = (key) => {
       this.input.attribute = key;
     };
+    this.hud.onRecall = () => {
+      this.input.recall = true;
+    };
     this.hud.onToggleMute = () => {
       const muted = this.audio.toggleMute();
       this.hud.setMuteLabel(muted);

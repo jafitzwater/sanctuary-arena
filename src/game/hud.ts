@@ -25,6 +25,7 @@ export class Hud {
   onToggleShop: (() => void) | null = null;
   onToggleHelp: (() => void) | null = null;
   onToggleMute: (() => void) | null = null;
+  onRecall: (() => void) | null = null;
   onToggleTree: (() => void) | null = null;
   onOpenTree: ((slot: number) => void) | null = null;
   onAssign: ((id: string, slot: number) => void) | null = null;
@@ -56,6 +57,7 @@ export class Hud {
     this.arm('#play-btn', () => this.onPlay?.());
     this.arm('#again-btn', () => this.onAgain?.());
     this.arm('#shop-btn', () => this.onToggleShop?.());
+    this.arm('#recall-btn', () => this.onRecall?.());
     this.arm('#help-btn', () => this.onToggleHelp?.());
     this.arm('#mute-btn', () => this.onToggleMute?.());
     this.arm('#tree-btn', () => this.onToggleTree?.());

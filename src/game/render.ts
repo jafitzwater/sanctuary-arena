@@ -7,7 +7,7 @@ import { player } from './query';
 import type { Camera, Sim, Unit } from './types';
 
 interface Scenery {
-  kind: 'tree' | 'dead' | 'tent' | 'wall' | 'npc' | 'seal';
+  kind: 'tree' | 'dead' | 'tent' | 'wall' | 'npc' | 'seal' | 'fountain';
   x: number;
   y: number;
   s: number;
@@ -256,6 +256,12 @@ export class Renderer {
     for (const den of sim.map.dens ?? []) {
       this.strokeEllipse(den.x, den.y, 40, 'rgba(120, 70, 160, 0.28)');
     }
+    for (const pit of sim.map.pits ?? []) {
+      this.strokeEllipse(pit.x, pit.y, 70, pit.id === 'dragon' ? 'rgba(180, 60, 30, 0.35)' : 'rgba(160, 140, 70, 0.35)');
+    }
+    for (const shrine of sim.map.shrines ?? []) {
+      this.strokeEllipse(shrine.x, shrine.y, 28, 'rgba(120, 190, 160, 0.4)');
+    }
     if (Math.hypot(hero.x - camp.x, hero.y - camp.y) < sim.map.fountainRadius && hero.alive) {
       this.strokeEllipse(camp.x, camp.y, sim.map.fountainRadius, 'rgba(230, 190, 110, 0.22)');
     }
@@ -470,6 +476,15 @@ export class Renderer {
       }
       return;
     }
+    if (prop.kind === 'fountain') {
+      ctx.fillStyle = 'rgba(80, 140, 170, 0.45)';
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, 28 * u, 12 * u, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(186, 214, 224, 0.7)';
+      ctx.stroke();
+      return;
+    }
     if (prop.kind === 'seal') {
       ctx.fillStyle = 'rgba(0,0,0,0.45)';
       ctx.beginPath();
@@ -610,6 +625,8 @@ export class Renderer {
         return 96;
       case 'demon':
         return 92;
+      case 'seal':
+        return 120;
       case 'rogue':
       case 'rogue-archer':
         return 86;
@@ -723,6 +740,25 @@ export class Renderer {
 
   /** Silhouettes for monsters that have no sprite sheet. */
   private drawGenerated(ctx: CanvasRenderingContext2D, unit: Unit, x: number, y: number, height: number): boolean {
+    if (unit.kind === 'seal') {
+      ctx.fillStyle = unit.alive ? '#2c2622' : '#3a342c';
+      ctx.beginPath();
+      ctx.moveTo(x, y - height * 0.7);
+      ctx.lineTo(x + height * 0.22, y - height * 0.12);
+      ctx.lineTo(x - height * 0.22, y - height * 0.12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = unit.team === 'ally' ? '#d4b46a' : '#c44536';
+      ctx.stroke();
+      return true;
+    }
+    if (unit.objective === 'dragon' || unit.objective === 'herald' || unit.objective === 'baron') {
+      ctx.fillStyle = unit.color;
+      ctx.beginPath();
+      ctx.ellipse(x, y - height * 0.28, height * (unit.objective === 'dragon' ? 0.46 : 0.32), height * 0.24, 0, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
     const known = ['skeleton', 'hungry-dead', 'goatman', 'willowisp', 'mummy', 'demon'];
     if (!known.includes(unit.defId)) return false;
     ctx.fillStyle = unit.alive ? unit.color : '#3a342c';
@@ -1011,10 +1047,6 @@ function offsetPoint(lane: Vec[], at: Vec, side: number): Vec {
   return { x: at.x + (-dy / mag) * side, y: at.y + (dx / mag) * side };
 }
 
-function beside(lane: Vec[], t: number, side: number): Vec {
-  return offsetPoint(lane, pointAlong(lane, t), side);
-}
-
 function northOfRiver(map: ActDef, x: number, y: number): boolean {
   const river = map.river;
   if (!river || river.length < 2) return y < map.height * 0.45;
@@ -1048,20 +1080,14 @@ function buildScenery(map: ActDef): Scenery[] {
     const dead = map.paths?.length ? (frozen ? rng.next() > 0.16 : rng.next() > 0.78) : x > map.width * 0.62 || rng.next() > 0.7;
     props.push({ kind: dead ? 'dead' : 'tree', x, y, s: rng.range(0.75, 1.45), flip: rng.next() > 0.5 });
   }
-  if (map.paths) {
-    for (const path of map.paths) {
-      const ally = beside(path.lane, 0.12, 100);
-      const enemy = beside(path.lane, 0.88, -100);
-      props.push({ kind: 'seal', x: ally.x, y: ally.y, s: 1, flip: false });
-      props.push({ kind: 'seal', x: enemy.x, y: enemy.y, s: 1, flip: true });
-    }
-  }
   const camp = map.playerBase;
   props.push(
     { kind: 'tent', x: camp.x - 30, y: camp.y - 175, s: 1.05, flip: false },
     { kind: 'tent', x: camp.x + 155, y: camp.y - 140, s: 0.92, flip: true },
     { kind: 'tent', x: camp.x + 130, y: camp.y + 155, s: 0.84, flip: false },
     { kind: 'npc', x: camp.x + 48, y: camp.y - 36, s: 1, flip: false },
+    { kind: 'fountain', x: camp.x, y: camp.y + 20, s: 1, flip: false },
+    { kind: 'fountain', x: map.enemyBase.x, y: map.enemyBase.y + 16, s: 1, flip: false },
   );
   for (let i = 0; i < 16; i++) {
     const angle = (i / 16) * Math.PI * 2;

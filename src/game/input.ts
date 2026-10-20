@@ -30,6 +30,7 @@ export class InputController {
   attribute: FrameInput['attribute'] = null;
   assignSkill: string | null = null;
   assignSlot = 0;
+  recall = false;
   aimX = 0;
   aimY = 0;
 
@@ -182,6 +183,7 @@ export class InputController {
       attribute: this.attribute,
       assignSkill: this.assignSkill,
       assignSlot: this.assignSlot,
+      recall: this.recall,
     };
   }
 
@@ -193,6 +195,7 @@ export class InputController {
     this.attribute = null;
     this.assignSkill = null;
     this.assignSlot = 0;
+    this.recall = false;
   }
 
   private onKeyDown(event: KeyboardEvent): void {
@@ -234,6 +237,11 @@ export class InputController {
       if (event.key === 'b' || event.key === 'B') {
         event.preventDefault();
         this.hooks.toggleShop();
+        return;
+      }
+      if (event.key === 'g' || event.key === 'G') {
+        event.preventDefault();
+        this.recall = true;
         return;
       }
     }

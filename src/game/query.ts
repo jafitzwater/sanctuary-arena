@@ -42,5 +42,5 @@ export function inRange(attacker: Unit, target: Unit): boolean {
 }
 
 export function isStructure(kind: UnitKind): boolean {
-  return kind === 'tower' || kind === 'base';
+  return kind === 'tower' || kind === 'base' || kind === 'seal';
 }

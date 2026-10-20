@@ -84,7 +84,7 @@ export function fillEmptyBelt(sim: Sim): void {
 
 export function damageUnit(sim: Sim, target: Unit, amount: number, attacker: Unit | null): void {
   if (!target.alive || target.invuln > 0 || sim.phase !== 'playing') return;
-  const armor = target.armor + (target.buffT > 0 ? target.buffArmor : 0);
+  const armor = target.armor + (target.buffT > 0 ? target.buffArmor : 0) + (target.guardT > 0 ? 14 : 0);
   const dealt = mitigated(amount, armor);
   target.hp -= dealt;
   target.hitFlash = 0.12;
@@ -115,10 +115,11 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
       sfx(sim, 'death');
     }
   }
-  if (unit.kind === 'tower') {
+  if (unit.kind === 'tower' || unit.kind === 'seal') {
     banner(sim, `${unit.name} has fallen`);
     sfx(sim, 'tower');
     sim.shake = Math.max(sim.shake, 8);
+    if (unit.kind === 'seal') unit.respawn = 40;
   }
   if (unit.kind === 'base') {
     sim.phase = unit.team === 'enemy' ? 'victory' : 'defeat';
@@ -133,11 +134,20 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
     sim.shake = 14;
   }
 
+  if (unit.objective === 'dragon' && killer && (killer.team === 'ally' || killer.team === 'enemy')) {
+    for (const heroUnit of sim.units) {
+      if (!heroUnit.alive || heroUnit.kind !== 'champion' || heroUnit.team !== killer.team) continue;
+      if (unit.affix === 'Cold') heroUnit.guardT = Math.max(heroUnit.guardT, 16);
+      else if (unit.affix === 'Lightning') heroUnit.haste = Math.max(heroUnit.haste, 16);
+      else heroUnit.mightT = Math.max(heroUnit.mightT, 16);
+    }
+    banner(sim, `${unit.affix || 'Fire'} power fills your side.`);
+  }
   const worth = unit.team === 'enemy' || unit.team === 'wild';
   if (!worth) return;
   const hero = player(sim);
   const playerKill = killer?.id === sim.playerId;
-  const structure = unit.kind === 'tower' || unit.kind === 'base';
+  const structure = unit.kind === 'tower' || unit.kind === 'base' || unit.kind === 'seal';
   if (playerKill) {
     awardGold(sim, unit);
     if (unit.kind === 'minion') sim.cs += 1;

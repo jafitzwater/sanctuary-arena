@@ -19,6 +19,27 @@ export interface PathDef {
   later?: { nightmare: WaveGroup[]; hell: WaveGroup[] };
 }
 
+export interface SealSpawn {
+  team: 'ally' | 'enemy';
+  path: PathId;
+  x: number;
+  y: number;
+  name: string;
+}
+
+export interface PitSpawn {
+  id: 'dragon' | 'herald';
+  x: number;
+  y: number;
+}
+
+export interface ShrineSpawn {
+  x: number;
+  y: number;
+  /** might raises damage, guard raises armor, haste raises speed, mana refills mana. */
+  kind: 'might' | 'guard' | 'haste' | 'mana';
+}
+
 export interface DenSpawn {
   id: number;
   x: number;
@@ -106,6 +127,9 @@ export interface ActDef {
   river?: { x: number; y: number }[];
   /** Neutral packs in the wilderness. They respawn on their own timer. */
   dens?: DenSpawn[];
+  seals?: SealSpawn[];
+  pits?: PitSpawn[];
+  shrines?: ShrineSpawn[];
   /** The whole rectangle is walkable, not only the road shoulder. */
   roam?: boolean;
   /** Town names drawn over each base. The base unit name stays the Worldstone. */

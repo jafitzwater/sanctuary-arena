@@ -376,4 +376,73 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   assert.ok(ids.has('skeleton') && ids.has('hungry-dead') && ids.has('willowisp'), [...ids].join(','));
 }
 
+{
+  const sim = createMatch(sanctuary, barbarian, 1);
+  const seals = sim.units.filter((unit) => unit.kind === 'seal');
+  assert.equal(seals.length, 6);
+  const enemySeal = seals.find((unit) => unit.team === 'enemy' && unit.path === 0);
+  if (!enemySeal) throw new Error('missing enemy seal');
+  damageUnit(sim, enemySeal, 99999, player(sim));
+  assert.equal(enemySeal.alive, false);
+  sim.waveIn = 0.05;
+  updateSim(sim, emptyInput(), 0.1);
+  assert.ok(
+    sim.units.some((unit) => unit.alive && unit.team === 'ally' && unit.affix.length > 0),
+    'a broken enemy seal sends a super monster with the next ally wave',
+  );
+  for (const unit of sim.units.filter((entry) => entry.team === 'ally' && entry.kind === 'minion')) {
+    unit.alive = false;
+    unit.corpse = 0;
+  }
+  enemySeal.respawn = 0.05;
+  updateSim(sim, emptyInput(), 0.1);
+  assert.equal(enemySeal.alive, true);
+  sim.waveIn = 0.05;
+  updateSim(sim, emptyInput(), 0.1);
+  assert.equal(
+    sim.units.some((unit) => unit.alive && unit.team === 'ally' && unit.kind === 'minion' && unit.affix.length > 0),
+    false,
+  );
+
+  const pits = createMatch(sanctuary, barbarian, 1);
+  pits.dragonIn = 0.05;
+  updateSim(pits, emptyInput(), 0.1);
+  const dragon = pits.units.find((unit) => unit.objective === 'dragon' && unit.alive);
+  if (!dragon) throw new Error('dragon pit did not spawn');
+  dragon.hp = 1;
+  dragon.armor = 0;
+  damageUnit(pits, dragon, 500, player(pits));
+  const buffed = player(pits);
+  assert.ok(buffed.mightT > 0 || buffed.guardT > 0 || buffed.haste > 0);
+
+  const home = createMatch(sanctuary, barbarian, 1);
+  const hero = player(home);
+  hero.x = 80;
+  hero.y = 80;
+  hero.invuln = 10;
+  const recall = emptyInput();
+  recall.recall = true;
+  step(home, recall, 3);
+  assert.ok(
+    Math.hypot(hero.x - home.map.playerBase.x, hero.y - home.map.playerBase.y) < 160,
+    `recall left the hero at ${hero.x.toFixed(0)},${hero.y.toFixed(0)} recall=${hero.recall.toFixed(2)}`,
+  );
+
+  const shrines = createMatch(sanctuary, barbarian, 1);
+  const shrine = shrines.map.shrines?.[0];
+  if (!shrine) throw new Error('missing shrine');
+  const pilgrim = player(shrines);
+  pilgrim.x = shrine.x;
+  pilgrim.y = shrine.y;
+  updateSim(shrines, emptyInput(), 0.1);
+  assert.ok(pilgrim.mightT > 0 || pilgrim.guardT > 0 || pilgrim.haste > 0 || pilgrim.mana === pilgrim.maxMana);
+
+  for (const spot of [...(sim.map.pits ?? []), ...(sim.map.shrines ?? []), ...seals]) {
+    for (const path of sim.map.paths ?? []) {
+      const gap = distToPolyline(spot, path.lane);
+      assert.ok(gap > 80, `objective at ${spot.x},${spot.y} is ${gap.toFixed(0)}px from ${path.name}`);
+    }
+  }
+}
+
 console.log('match tests passed');
