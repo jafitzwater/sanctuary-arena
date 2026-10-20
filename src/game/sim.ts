@@ -6,6 +6,7 @@ import type { ClassDef } from './data/classes/types';
 import { unitDef } from './data/units';
 import { Rng } from './math';
 import { clampToPlayable } from './lane';
+import { FOOTPRINT } from './terrain';
 import {
   banner,
   damageUnit,
@@ -713,6 +714,12 @@ function enemyMinionInTower(sim: Sim, raven: Unit): boolean {
   });
 }
 
+/** Bases and seals keep their full radius. Units and towers collide on the foot band. */
+function footRadius(unit: Unit): number {
+  if (unit.kind === 'base' || unit.kind === 'seal') return unit.radius;
+  return unit.radius * FOOTPRINT;
+}
+
 function resolveBodies(sim: Sim, started: Map<number, { x: number; y: number }>): void {
   const movers = sim.units.filter((unit) => unit.alive && !unit.leap && !isStructure(unit.kind));
   for (const unit of movers) {
@@ -727,7 +734,7 @@ function resolveBodies(sim: Sim, started: Map<number, { x: number; y: number }>)
     for (const solid of solids) {
       const dx = unit.x - solid.x;
       const dy = unit.y - solid.y;
-      const min = unit.radius + solid.radius;
+      const min = footRadius(unit) + footRadius(solid);
       const d = Math.hypot(dx, dy) || 0.001;
       if (d < min) {
         unit.x += (dx / d) * (min - d);
@@ -745,7 +752,7 @@ function resolveBodies(sim: Sim, started: Map<number, { x: number; y: number }>)
         const b = movers[j];
         const dx = b.x - a.x;
         const dy = b.y - a.y;
-        const min = a.radius + b.radius - 6;
+        const min = footRadius(a) + footRadius(b) - 6 * FOOTPRINT;
         const d = Math.hypot(dx, dy) || 0.001;
         if (d < min) {
           const push = (min - d) / 2;
