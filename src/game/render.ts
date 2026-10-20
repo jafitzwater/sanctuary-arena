@@ -314,9 +314,7 @@ export class Renderer {
       for (let i = -2; i <= i1; i++) {
         const kind = groundAt(map, i * step, j * step);
         const row = rows[kind];
-        let col = Math.abs((i * 3 + j * 5) % 4);
-        if (kind === 'river') col %= 2;
-        if (kind === 'dark') col = 2 + (col % 2);
+        const col = floorCol(kind, i, j);
         const sx = Math.round((i - j) * 80 + ox);
         const sy = Math.round((i + j) * 40 + oy);
         // One extra pixel on every side so integer diamonds meet with no seam.
@@ -585,6 +583,20 @@ export class Renderer {
     ctx.drawImage(img, 0, 0);
     const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const px = data.data;
+    // Some cells store the diamond shifted, with the overflow wrapped around the cell.
+    const src = new Uint8ClampedArray(px);
+    const cellW = 160;
+    const cellH = 80;
+    for (let row = 0; row < FLOOR_SEAT.length; row++) {
+      for (let col = 0; col < 4; col++) {
+        const shift = FLOOR_SEAT[row][col];
+        if (!shift) continue;
+        for (let y = 0; y < cellH; y++) {
+          const from = ((row * cellH + (y + shift) % cellH) * canvas.width + col * cellW) * 4;
+          px.set(src.subarray(from, from + cellW * 4), ((row * cellH + y) * canvas.width + col * cellW) * 4);
+        }
+      }
+    }
     for (let i = 0; i < px.length; i += 4) {
       const magenta = px[i] > 200 && px[i + 2] > 180 && px[i + 1] < 80;
       if (px[i + 3] < 16 || magenta) {
@@ -801,6 +813,25 @@ export class Renderer {
     ctx.lineWidth = 1;
     ctx.strokeRect(this.camera.x * sx, this.camera.y * sy, this.camera.viewW * sx, this.camera.viewH * sy);
   }
+}
+
+/** Roll, in pixels, that seats each floor cell on the 160×80 diamond. */
+const FLOOR_SEAT: readonly (readonly number[])[] = [
+  [12, 12, 12, 12],
+  [12, 0, 12, 0],
+  [12, 0, 0, 18],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [6, 6, 6, 0],
+];
+
+function floorCol(kind: GroundKind, i: number, j: number): number {
+  const cols =
+    kind === 'path' ? [0, 3] :
+    kind === 'bank' || kind === 'edge' ? [0, 2] :
+    kind === 'river' || kind === 'dark' ? [0, 1] :
+    [0, 1, 2, 3];
+  return cols[Math.abs((i * 3 + j * 5) % cols.length)];
 }
 
 function roadPoints(map: ActDef, lane: Vec[]): Vec[] {
