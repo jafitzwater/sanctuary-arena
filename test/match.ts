@@ -16,9 +16,9 @@ import { dealTeams } from '../src/game/teams';
 import { FUTURE_ITEMS, isShopItem, ITEMS } from '../src/game/data/items';
 import { UNIT_DEFS } from '../src/game/data/units';
 import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
-import { sceneryFor } from '../src/game/landscape';
-import { groundAt, walkable } from '../src/game/terrain';
-import { locomotionColumn } from '../src/game/gait';
+import { campGates, DECOR_MARGIN, FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, sceneryFor } from '../src/game/landscape';
+import { groundAt, slide, walkable } from '../src/game/terrain';
+import { animFrame, RUN_FRAME_MS, RUN_FRAMES, WALK_FRAME_MS, WALK_FRAMES } from '../src/game/gait';
 
 function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   const frames = Math.max(1, Math.round(seconds / dt));
@@ -37,45 +37,53 @@ function steer(sim: Sim, x: number, y: number, seconds = 7): void {
   }
 }
 
-function roadside(lane: { x: number; y: number }[], side: number): number[] {
-  const props = sceneryFor(sanctuary).filter((prop) => prop.kind === 'tree' || prop.kind === 'stump' || prop.kind === 'rock');
+function laneSamples(lane: { x: number; y: number }[]): { x: number; y: number; nx: number; ny: number }[] {
   let total = 0;
-  const marks: { at: number; x: number; y: number }[] = [];
+  const segs: { len: number; ax: number; ay: number; dx: number; dy: number }[] = [];
   for (let i = 1; i < lane.length; i++) {
-    const len = Math.hypot(lane[i].x - lane[i - 1].x, lane[i].y - lane[i - 1].y);
-    marks.push({ at: total, x: lane[i - 1].x, y: lane[i - 1].y });
+    const dx = lane[i].x - lane[i - 1].x;
+    const dy = lane[i].y - lane[i - 1].y;
+    const len = Math.hypot(dx, dy);
+    segs.push({ len, ax: lane[i - 1].x, ay: lane[i - 1].y, dx, dy });
     total += len;
   }
-  marks.push({ at: total, x: lane[lane.length - 1].x, y: lane[lane.length - 1].y });
-  const hit: number[] = [];
-  for (const prop of props) {
-    let best = Infinity;
-    let at = 0;
-    let cross = 0;
-    for (let i = 1; i < marks.length; i++) {
-      const ax = marks[i - 1].x;
-      const ay = marks[i - 1].y;
-      const bx = marks[i].x;
-      const by = marks[i].y;
-      const dx = bx - ax;
-      const dy = by - ay;
-      const len2 = dx * dx + dy * dy || 1;
-      const t = Math.max(0, Math.min(1, ((prop.x - ax) * dx + (prop.y - ay) * dy) / len2));
-      const qx = ax + dx * t;
-      const qy = ay + dy * t;
-      const dist = Math.hypot(prop.x - qx, prop.y - qy);
-      if (dist < best) {
-        best = dist;
-        at = marks[i - 1].at + Math.hypot(qx - ax, qy - ay);
-        cross = dx * (prop.y - ay) - dy * (prop.x - ax);
+  const out: { x: number; y: number; nx: number; ny: number }[] = [];
+  for (let dist = 0; dist <= total; dist += 36) {
+    let left = dist;
+    for (let i = 0; i < segs.length; i++) {
+      const seg = segs[i];
+      if (left <= seg.len || i === segs.length - 1) {
+        const f = seg.len ? Math.min(1, left / seg.len) : 0;
+        const mag = Math.hypot(seg.dx, seg.dy) || 1;
+        out.push({
+          x: seg.ax + seg.dx * f,
+          y: seg.ay + seg.dy * f,
+          nx: -seg.dy / mag,
+          ny: seg.dx / mag,
+        });
+        break;
       }
+      left -= seg.len;
     }
-    if (Math.sign(cross) !== Math.sign(side)) continue;
-    const offset = sanctuary.laneWidth / 2 + 88;
-    if (best < Infinity && Math.abs(best - offset) < 50 && at > 400 && at < total - 400) hit.push(at);
   }
-  hit.sort((a, b) => a - b);
-  return hit;
+  return out;
+}
+
+function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): number {
+  const open = (dist: number) => walkable(sanctuary, x + nx * sign * dist, y + ny * sign * dist);
+  if (!open(0)) return 0;
+  let lo = 0;
+  let hi = 8;
+  while (hi < 1400 && open(hi)) {
+    lo = hi;
+    hi *= 2;
+  }
+  for (let i = 0; i < 16; i++) {
+    const mid = (lo + hi) / 2;
+    if (open(mid)) lo = mid;
+    else hi = mid;
+  }
+  return lo;
 }
 
 {
@@ -381,19 +389,34 @@ function roadside(lane: { x: number; y: number }[], side: number): number[] {
   const tent = sceneryFor(sanctuary).find((prop) => prop.kind === 'tent' && prop.block > 0);
   assert.ok(tent && !walkable(sanctuary, tent.x, tent.y), 'a tent blocks passage');
   assert.equal(groundAt(sanctuary, 2418, 1367), 'blend', 'the lane shoulder uses a grass-to-dirt transition');
-  {
-    const home = sanctuary.playerBase;
-    const mouth = sanctuary.paths?.[2].lane[0];
-    if (!mouth) throw new Error('south lane missing');
-    const mx = (home.x + mouth.x) / 2;
-    const my = (home.y + mouth.y) / 2;
-    const dx = mouth.x - home.x;
-    const dy = mouth.y - home.y;
-    const mag = Math.hypot(dx, dy) || 1;
-    const wide = (80 / 0.85) * 1.6;
-    assert.equal(walkable(sanctuary, mx + (-dy / mag) * wide, my + (dx / mag) * wide), true, 'the south entrance is at least three tiles wide');
+  const decorLimit = sanctuary.laneWidth / 2 + DECOR_MARGIN;
+  for (const prop of sceneryFor(sanctuary)) {
+    if (prop.kind !== 'tree' && prop.kind !== 'stump' && prop.kind !== 'rock' && prop.kind !== 'fence') continue;
+    const gap = Math.min(...(sanctuary.paths ?? []).map((path) => distToPolyline(prop, path.lane)));
+    assert.ok(gap >= decorLimit - 0.5, `${prop.kind} at ${prop.x.toFixed(0)},${prop.y.toFixed(0)} is ${gap.toFixed(0)} from a lane`);
   }
+  const decor = sceneryFor(sanctuary).filter((prop) => prop.kind === 'tree' || prop.kind === 'stump' || prop.kind === 'rock' || prop.kind === 'fence');
+  assert.ok(decor.length <= 200, `decorative clutter is ${decor.length}, half of the old 400`);
+  const trees = sceneryFor(sanctuary).filter((prop) => prop.kind === 'tree');
+  const edgeTrees = trees.filter(
+    (prop) => prop.x < 220 || prop.y < 220 || prop.x > sanctuary.width - 220 || prop.y > sanctuary.height - 220,
+  );
+  assert.ok(trees.length > 40 && edgeTrees.length === trees.length, 'trees stand in the outer forests');
   for (const path of sanctuary.paths ?? []) {
+    let narrow = Infinity;
+    for (const sample of laneSamples(path.lane)) {
+      const left = clearHalf(sample.x, sample.y, sample.nx, sample.ny, 1);
+      const right = clearHalf(sample.x, sample.y, sample.nx, sample.ny, -1);
+      const width = left + right;
+      narrow = Math.min(narrow, width);
+      assert.ok(width >= 5 * FLOOR_STEP - 1, `${path.name} corridor is ${width.toFixed(0)} at ${sample.x.toFixed(0)},${sample.y.toFixed(0)}`);
+      assert.equal(
+        walkable(sanctuary, sample.x + sample.nx * (LANE_CLEAR_HALF - 2), sample.y + sample.ny * (LANE_CLEAR_HALF - 2)),
+        true,
+        `${path.name} stays open 2.5 tiles off the center`,
+      );
+    }
+    console.log(`${path.id} corridor min ${narrow.toFixed(1)} (${(narrow / FLOOR_STEP).toFixed(2)} tiles)`);
     for (const [home, mouth] of [
       [sanctuary.playerBase, path.lane[0]],
       [sanctuary.enemyBase, path.lane[path.lane.length - 1]],
@@ -404,13 +427,43 @@ function roadside(lane: { x: number; y: number }[], side: number): number[] {
         assert.equal(walkable(sanctuary, x, y), true, `${path.name} entrance stays open at ${t.toFixed(2)}`);
       }
     }
-    for (const side of [1, -1]) {
-      const band = roadside(path.lane, side);
-      assert.ok(band.length >= 8, `${path.name} side ${side} is a continuous border`);
-      let worst = 0;
-      for (let i = 1; i < band.length; i++) worst = Math.max(worst, band[i] - band[i - 1]);
-      assert.ok(worst < 240, `${path.name} side ${side} gap is ${worst.toFixed(0)}`);
+  }
+  for (const [index, gate] of campGates(sanctuary).entries()) {
+    const side = index === 0 ? 'ally' : 'enemy';
+    let left = Infinity;
+    let right = Infinity;
+    for (const prop of sceneryFor(sanctuary)) {
+      if (prop.kind !== 'fence') continue;
+      const dx = prop.x - gate.x;
+      const dy = prop.y - gate.y;
+      const along = dx * gate.axisX + dy * gate.axisY;
+      const perp = dx * gate.perpX + dy * gate.perpY;
+      if (Math.abs(along) > 36) continue;
+      const inner = Math.abs(perp) - prop.block * 0.3;
+      if (perp >= 0) right = Math.min(right, inner);
+      else left = Math.min(left, inner);
     }
+    const width = left + right;
+    assert.ok(Math.abs(width - 6 * FLOOR_STEP) < 1, `${side} gate is ${width.toFixed(2)}, expected ${ (6 * FLOOR_STEP).toFixed(2) }`);
+    console.log(`${side} gate ${width.toFixed(1)} (${(width / FLOOR_STEP).toFixed(2)} tiles)`);
+    for (let t = -1; t <= 1; t += 0.25) {
+      const off = t * (GATE_HALF - 4);
+      const x = gate.x + gate.perpX * off;
+      const y = gate.y + gate.perpY * off;
+      assert.equal(walkable(sanctuary, x, y), true, `${side} gate opening is clear`);
+    }
+    const home = index === 0 ? sanctuary.playerBase : sanctuary.enemyBase;
+    for (const path of sanctuary.paths ?? []) {
+      const mouth = index === 0 ? path.lane[0] : path.lane[path.lane.length - 1];
+      for (let t = 0; t <= 1; t += 0.1) {
+        const x = gate.x + (mouth.x - gate.x) * t;
+        const y = gate.y + (mouth.y - gate.y) * t;
+        assert.equal(walkable(sanctuary, x, y), true, `${side} ${path.name} has no collider between palisade and lane`);
+        const blockers = sceneryFor(sanctuary).filter((prop) => prop.block > 0 && Math.hypot(prop.x - x, prop.y - y) < prop.block * 0.3);
+        assert.equal(blockers.length, 0, `${side} ${path.name} gate line is empty`);
+      }
+    }
+    assert.ok(Math.hypot(home.x - gate.x, home.y - gate.y) > 40, `${side} palisade stands off the banner`);
   }
   const runHome = createMatch(sanctuary, barbarian, 3);
   const runner = player(runHome);
@@ -434,11 +487,55 @@ function roadside(lane: { x: number; y: number }[], side: number): number[] {
       assert.ok(Math.hypot(runner.x - startX, runner.y - startY) < 48, `${path.name} lets the hero back into the base`);
     }
   }
-  const held = 80;
-  const runCol = locomotionColumn(held, 12);
-  const walkCol = locomotionColumn(held, 4);
-  assert.notEqual(runCol, 0, 'a mid-cycle run is not frame 0');
-  assert.ok(Math.abs(walkCol / 4 - runCol / 12) < 0.2, 'walk keeps the run cycle fraction');
+  const elapsed = 700;
+  assert.equal(animFrame(elapsed, RUN_FRAME_MS, RUN_FRAMES), Math.floor(700 / 70) % 12, 'run frame is floor(elapsed / 70) % 12');
+  assert.equal(animFrame(elapsed, WALK_FRAME_MS, WALK_FRAMES), Math.floor(700 / 100) % 4, 'walk frame keeps the same elapsed clock');
+  assert.notEqual(animFrame(elapsed, RUN_FRAME_MS, RUN_FRAMES), 0, 'a mid-cycle run is not frame 0');
+  const runSeq: number[] = [];
+  let clock = 0;
+  for (let i = 0; i < 80; i++) {
+    clock += 1000 / 60;
+    const frame = animFrame(clock, RUN_FRAME_MS, RUN_FRAMES);
+    if (runSeq[runSeq.length - 1] !== frame) runSeq.push(frame);
+  }
+  for (let i = 1; i < runSeq.length; i++) {
+    assert.equal(runSeq[i], (runSeq[i - 1] + 1) % RUN_FRAMES, `run clock skipped ${runSeq[i - 1]} -> ${runSeq[i]}`);
+  }
+  assert.ok(runSeq.includes(0) && runSeq.includes(11), 'the run clock wraps the 12-frame sheet');
+  let slideCase = false;
+  for (const fence of sceneryFor(sanctuary).filter((prop) => prop.kind === 'fence')) {
+    const foot = fence.block * 0.3;
+    for (let turn = 0; turn < 16; turn++) {
+      const ang = (turn / 16) * Math.PI * 2 + 0.2;
+      const from = { x: fence.x - Math.cos(ang) * (foot + 10), y: fence.y - Math.sin(ang) * (foot + 10) };
+      const to = { x: fence.x + Math.cos(ang) * 8, y: fence.y + Math.sin(ang) * 8 };
+      if (!walkable(sanctuary, from.x, from.y) || walkable(sanctuary, to.x, to.y)) continue;
+      const landed = slide(sanctuary, from, to);
+      const dx = Math.abs(landed.x - from.x);
+      const dy = Math.abs(landed.y - from.y);
+      const moved = Math.hypot(dx, dy);
+      if (moved > 1 && walkable(sanctuary, landed.x, landed.y) && (dx < 0.05 || dy < 0.05)) {
+        slideCase = true;
+        const simSlide = createMatch(sanctuary, barbarian, 9);
+        const slider = player(simSlide);
+        slider.hp = 100000;
+        slider.invuln = 60;
+        slider.x = from.x;
+        slider.y = from.y;
+        const input = emptyInput();
+        input.moveX = to.x - from.x;
+        input.moveY = to.y - from.y;
+        const x0 = slider.x;
+        const y0 = slider.y;
+        step(simSlide, input, 0.35);
+        assert.ok(Math.hypot(slider.x - x0, slider.y - y0) > 4, 'a diagonal hit slides instead of stopping');
+        assert.equal(walkable(sanctuary, slider.x, slider.y), true, 'the slide stays on open ground');
+        break;
+      }
+    }
+    if (slideCase) break;
+  }
+  assert.ok(slideCase, 'a gate post produces an open-axis slide');
   step(sim, emptyInput(), sanctuary.waves.first + 0.25);
   const minions = sim.units.filter((unit) => unit.kind === 'minion' && unit.alive);
   for (const index of [0, 1, 2]) {
