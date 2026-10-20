@@ -256,7 +256,7 @@ export const sanctuary: ActDef = {
     hp: 298,
     ad: 13,
     armor: raven.moba.armor,
-    moveSpeed: 168,
+    moveSpeed: 93,
     attackRange: raven.moba.attackRange,
     attackInterval: raven.moba.attackInterval,
     projectileSpeed: raven.moba.projectileSpeed,

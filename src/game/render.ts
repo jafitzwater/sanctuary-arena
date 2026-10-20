@@ -438,6 +438,7 @@ export class Renderer {
         return this.atlas(pack.attack, 4, col, row);
       }
       if (moving) {
+        // One frame per 16 world pixels, so the cycle slows with the 120 run.
         const col = Math.floor(phase / 16) % 4;
         return this.atlas(this.inTown(unit) ? pack.walk : pack.run, 4, col, row);
       }
