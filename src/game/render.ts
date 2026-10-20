@@ -1,5 +1,5 @@
 import moorUrl from '../assets/art/moor.png';
-import { barbarianSheets, d2Atlas, monsterSheets, propSheets, TWO_HAND_WCLASS } from './art/sheets';
+import { d2Atlas, monsterSheets, propSheets } from './art/sheets';
 import type { ActDef } from './data/acts/types';
 import { projectIso, unprojectIso } from './iso';
 import { distToPolyline, Rng, type Vec } from './math';
@@ -46,8 +46,8 @@ function loadImage(src: string): HTMLImageElement {
 }
 
 /**
- * Isometric view of the Blood Moor. The ground is baked once. Real character
- * frames are billboards; generated poses fill the modes the sheets do not include.
+ * Isometric view of Sanctuary. The ground is baked once. Characters are
+ * billboards from one sheet per state, drawn at whole pixels.
  */
 export class Renderer {
   camera: Camera = { x: 0, y: 0, viewW: 800, viewH: 500, zoom: 1, cssW: 800, cssH: 500, dpr: 1 };
@@ -65,38 +65,25 @@ export class Renderer {
   private oy = 0;
   private reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private gait = new Map<number, { x: number; y: number; d: number }>();
-  private archer: HTMLCanvasElement | null = null;
-
   private mapRef: ActDef | null = null;
   private readonly moor = loadImage(moorUrl);
   private readonly art = {
-    idle: loadImage(barbarianSheets.NU),
-    north: loadImage(barbarianSheets.north),
-    walk1: loadImage(barbarianSheets.WL[0]),
-    walk2: loadImage(barbarianSheets.WL[1]),
-    run1: loadImage(barbarianSheets.RN[0]),
-    run2: loadImage(barbarianSheets.RN[1]),
-    atk1: loadImage(barbarianSheets.A1),
-    atk2: loadImage(barbarianSheets.A2),
-    cast: loadImage(barbarianSheets.S1),
-    gethit: loadImage(barbarianSheets.GH),
-    death: loadImage(barbarianSheets.DD),
-    whirl: loadImage(barbarianSheets.whirl),
-    leap: loadImage(barbarianSheets.leap),
-    fallen: loadImage(monsterSheets.fallen),
-    fallenWalk: loadImage(monsterSheets.fallenWalk),
-    zombie: loadImage(monsterSheets.zombie),
-    zombieWalk: loadImage(monsterSheets.zombieWalk),
     raven: loadImage(monsterSheets.raven),
     ravenWalk: loadImage(monsterSheets.ravenWalk),
-    rogue: loadImage(monsterSheets.rogue),
-    quill: loadImage(monsterSheets.quill),
-    quillWalk: loadImage(monsterSheets.quillWalk),
     tent: loadImage(propSheets.tent),
     fire: loadImage(propSheets.fire),
     wall: loadImage(propSheets.wall),
     tower: loadImage(propSheets.tower),
     altar: loadImage(propSheets.altar),
+  };
+  private readonly mobs = {
+    fallenIdle: loadImage(d2Atlas.fallen.idle),
+    fallenWalk: loadImage(d2Atlas.fallen.walk),
+    zombieIdle: loadImage(d2Atlas.zombie.idle),
+    zombieWalk: loadImage(d2Atlas.zombie.walk),
+    shamanIdle: loadImage(d2Atlas.shaman.idle),
+    shamanWalk: loadImage(d2Atlas.shaman.walk),
+    quill: loadImage(d2Atlas.quill),
   };
   private readonly d2 = {
     light: {
@@ -197,7 +184,6 @@ export class Renderer {
   draw(sim: Sim, opts: DrawOpts): void {
     this.mapRef = sim.map;
     this.ensureMap(sim.map);
-    this.ensureArcher();
     const ctx = this.ctx;
     const { dpr, cssW, cssH } = this.camera;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -209,6 +195,7 @@ export class Renderer {
       const srcH = cssH / this.scale;
       ctx.drawImage(this.mapCanvas, this.camBakeX, this.camBakeY, srcW, srcH, 0, 0, cssW, cssH);
     }
+    ctx.imageSmoothingEnabled = false;
 
     const u = this.spriteScale();
     const layers: { depth: number; paint: () => void }[] = [];
@@ -444,21 +431,6 @@ export class Renderer {
     }
   }
 
-  private ensureArcher(): void {
-    const src = this.art.raven;
-    if (this.archer || !src.complete || !src.naturalWidth) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = src.naturalWidth;
-    canvas.height = src.naturalHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.drawImage(src, 0, 0);
-    ctx.globalCompositeOperation = 'source-atop';
-    ctx.fillStyle = 'rgba(86, 122, 168, 0.42)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    this.archer = canvas;
-  }
-
   private drawScenery(ctx: CanvasRenderingContext2D, prop: Scenery, u: number): void {
     const p = this.project(prop.x, prop.y);
     if (p.x < -140 || p.y < -180 || p.x > this.camera.cssW + 140 || p.y > this.camera.cssH + 40) return;
@@ -552,38 +524,42 @@ export class Renderer {
     } else if (gait.moving && !this.reduceMotion) {
       y += Math.sin(gait.d / 14) * 2.2;
     }
-    const height = this.unitHeight(unit) * u;
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    const height = Math.max(1, Math.round(this.unitHeight(unit) * u));
+    const footX = Math.round(p.x);
+    const footY = Math.round(p.y);
+    y = Math.round(y);
+    ctx.fillStyle = 'rgba(0,0,0,0.62)';
     ctx.beginPath();
-    ctx.ellipse(p.x, p.y + 2, height * 0.26, height * 0.1, 0, 0, Math.PI * 2);
+    ctx.ellipse(footX, footY + 1, Math.max(6, Math.round(height * 0.36)), Math.max(3, Math.round(height * 0.13)), 0, 0, Math.PI * 2);
     ctx.fill();
     if (unit.bot && unit.alive) {
       ctx.strokeStyle = unit.color;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y, height * 0.3, height * 0.12, 0, 0, Math.PI * 2);
+      ctx.ellipse(footX, footY, height * 0.32, height * 0.13, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
     if (opts.targetId === unit.id && unit.alive) {
       ctx.strokeStyle = '#f0e2bc';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y, height * 0.32, height * 0.13, 0, 0, Math.PI * 2);
+      ctx.ellipse(footX, footY, height * 0.34, height * 0.14, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.save();
     if (!unit.alive) ctx.globalAlpha = 0.55;
-    else if (unit.invuln > 0 && Math.sin(opts.time * 28) > 0) ctx.globalAlpha = 0.55;
-    if (!unit.alive && unit.kind === 'minion') {
-      ctx.translate(p.x, y);
-      ctx.scale(1, 0.55);
-      ctx.translate(-p.x, -y);
+    else if ((unit.invuln > 0 || unit.hitFlash > 0) && Math.sin(opts.time * 28) > 0) ctx.globalAlpha = 0.55;
+    if (!unit.alive && (unit.kind === 'minion' || unit.kind === 'champion')) {
+      ctx.translate(footX, y);
+      ctx.scale(1, 0.5);
+      ctx.translate(-footX, -y);
     }
     const stone = this.mapRef?.theme.decor === 'sanctuary' && (unit.defId === 'base-ally' || unit.defId === 'base-enemy');
     const glyph = stone ? null : this.sheetFor(unit, gait.moving, gait.d, tier);
-    if (stone) this.drawWorldstone(ctx, p.x, y, height, unit.team, unit.alive);
-    else if (glyph) this.blit(ctx, glyph.img, p.x, y, height, glyph.flip, glyph);
-    else if (!this.drawGenerated(ctx, unit, p.x, y, height)) this.fallback(ctx, unit, p.x, y, height);
+    const outlined = unit.kind === 'minion' || unit.kind === 'champion';
+    if (stone) this.drawWorldstone(ctx, footX, y, height, unit.team, unit.alive);
+    else if (glyph) this.blit(ctx, glyph.img, footX, y, height, glyph.flip, glyph, outlined);
+    else if (!this.drawGenerated(ctx, unit, footX, y, height)) this.fallback(ctx, unit, footX, y, height);
     if (unit.whirlT > 0) {
       ctx.strokeStyle = 'rgba(240, 220, 170, 0.8)';
       ctx.lineWidth = 3;
@@ -599,7 +575,9 @@ export class Renderer {
       ctx.ellipse(p.x, p.y, height * 0.34, height * 0.14, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
-    if (unit.alive && (unit.kind !== 'minion' || unit.hp < unit.maxHp)) this.drawBar(unit, p.x, y, height);
+    if (unit.alive && (unit.kind !== 'minion' || unit.hp < unit.maxHp)) {
+      this.drawBar(unit, footX, y, height, opts.targetId);
+    }
     if (unit.stun > 0 && unit.alive) {
       ctx.fillStyle = '#f0e2bc';
       ctx.font = '14px Georgia, serif';
@@ -609,34 +587,35 @@ export class Renderer {
   }
 
   private unitHeight(unit: Unit): number {
+    if (unit.defId === 'fallen' && unit.name === 'Bishibosh') return 92;
     switch (unit.defId) {
       case 'barbarian':
-        return 102;
+        return 108;
       case 'blood-raven':
-        return 96;
+        return 104;
       case 'fallen':
-        return 64;
+        return 80;
       case 'zombie':
-        return 92;
+        return 104;
       case 'quillrat':
-        return 70;
+        return 72;
       case 'skeleton':
-        return 78;
-      case 'hungry-dead':
-        return 90;
-      case 'goatman':
-        return 86;
-      case 'willowisp':
-        return 64;
-      case 'mummy':
         return 96;
+      case 'hungry-dead':
+        return 108;
+      case 'goatman':
+        return 104;
+      case 'willowisp':
+        return 76;
+      case 'mummy':
+        return 112;
       case 'demon':
-        return 92;
+        return 116;
       case 'seal':
         return 120;
       case 'rogue':
       case 'rogue-archer':
-        return 86;
+        return 100;
       case 'tower':
         return unit.alive ? 128 : 70;
       case 'base-ally':
@@ -649,42 +628,47 @@ export class Renderer {
   }
 
   private sheetFor(unit: Unit, moving: boolean, phase: number, tier: ArmorTier): Glyph | null {
-    const flip = Math.cos(unit.facing) < -0.12;
-    const step = Math.floor(phase / 22) % 2 === 0;
+    const row = this.dirRow(unit.facing);
     if (unit.defId === 'barbarian') {
-      const row = this.dirRow(unit.facing);
       const pack = this.d2[tier];
-      if (!unit.alive) return this.full(this.art.death, flip);
-      if (unit.whirlT > 0) return this.full(this.art.whirl, flip);
-      if (unit.leap) return this.full(this.art.leap, flip);
-      if (unit.castT > 0) return this.full(this.art.cast, flip);
-      if (unit.hitFlash > 0 && unit.swing <= 0) return this.full(this.art.gethit, flip);
-      if (unit.swing > 0) {
-        const col = Math.min(3, Math.floor((1 - Math.max(0, unit.swing)) * 4));
-        return this.atlas(pack.attack, 4, col, row) ?? this.full(TWO_HAND_WCLASS.has(unit.wclass) ? this.art.atk2 : this.art.atk1, flip);
+      // Every pose stays on this armor tier. Death, whirl, leap, and cast
+      // borrow idle, run, or attack instead of a second drawing.
+      if (!unit.alive || unit.castT > 0) return this.atlas(pack.idle, 1, 0, row);
+      if (unit.whirlT > 0) return this.atlas(pack.run, 4, Math.floor(phase / 8) % 4, row);
+      if (unit.leap || unit.swing > 0) {
+        const col = unit.leap ? 2 : Math.min(3, Math.floor((1 - Math.max(0, unit.swing)) * 4));
+        return this.atlas(pack.attack, 4, col, row);
       }
       if (moving) {
         const col = Math.floor(phase / 18) % 4;
-        const img = this.inTown(unit) ? pack.walk : pack.run;
-        const fallback = this.inTown(unit) ? (step ? this.art.walk1 : this.art.walk2) : step ? this.art.run1 : this.art.run2;
-        return this.atlas(img, 4, col, row) ?? this.full(fallback, flip);
+        return this.atlas(this.inTown(unit) ? pack.walk : pack.run, 4, col, row);
       }
-      return this.atlas(pack.idle, 1, 0, row) ?? this.full(this.art.idle, flip);
+      return this.atlas(pack.idle, 1, 0, row);
     }
     if (unit.defId === 'rogue' || unit.defId === 'rogue-archer') {
-      const real = this.atlas(this.rogueSheet, 2, moving ? 1 : 0, this.dirRow(unit.facing));
-      if (real) return real;
-      if (unit.defId === 'rogue-archer') return this.full(this.archer ?? this.art.rogue, flip);
-      return this.full(this.art.rogue, flip);
+      return this.atlas(this.rogueSheet, 2, moving ? 1 : 0, row);
     }
-    if (unit.defId === 'fallen') return this.full(moving ? (step ? this.art.fallenWalk : this.art.fallen) : this.art.fallen, flip);
-    if (unit.defId === 'zombie') return this.full(moving ? (step ? this.art.zombieWalk : this.art.zombie) : this.art.zombie, flip);
-    if (unit.defId === 'quillrat') return this.full(moving ? (step ? this.art.quillWalk : this.art.quill) : this.art.quill, flip);
+    if (unit.defId === 'fallen' && unit.name === 'Bishibosh') {
+      return this.cycle(this.mobs.shamanWalk, this.mobs.shamanIdle, moving, phase, row);
+    }
+    if (unit.defId === 'fallen') return this.cycle(this.mobs.fallenWalk, this.mobs.fallenIdle, moving, phase, row);
+    if (unit.defId === 'zombie') return this.cycle(this.mobs.zombieWalk, this.mobs.zombieIdle, moving, phase, row);
+    if (unit.defId === 'quillrat') {
+      return this.atlas(this.mobs.quill, 2, moving ? Math.floor(phase / 16) % 2 : 0, row);
+    }
+    const flip = Math.cos(unit.facing) < -0.12;
+    const step = Math.floor(phase / 22) % 2 === 0;
     if (unit.defId === 'blood-raven') return this.full(moving ? (step ? this.art.ravenWalk : this.art.raven) : this.art.raven, flip);
     if (unit.defId === 'tower') return unit.alive ? this.full(this.art.tower, false) : null;
     if (unit.defId === 'base-ally') return unit.alive ? this.full(this.art.tent, false) : null;
     if (unit.defId === 'base-enemy') return unit.alive ? this.full(this.art.altar, false) : null;
     return null;
+  }
+
+  /** Walk and idle from one monster's own sheet. No flip: every direction is a row. */
+  private cycle(walk: HTMLImageElement, idle: HTMLImageElement, moving: boolean, phase: number, row: number): Glyph | null {
+    if (moving) return this.atlas(walk, 4, Math.floor(phase / 16) % 4, row);
+    return this.atlas(idle, 1, 0, row);
   }
 
   private armorTier(sim: Sim): ArmorTier {
@@ -745,74 +729,105 @@ export class Renderer {
     ctx.fill();
   }
 
-  /** Silhouettes for monsters that have no sprite sheet. */
+  /** Act I shapes for monsters that have no sheet, in the game's browns and bone. */
   private drawGenerated(ctx: CanvasRenderingContext2D, unit: Unit, x: number, y: number, height: number): boolean {
+    const h = height;
+    const ink = '#140e0a';
     if (unit.kind === 'seal') {
       ctx.fillStyle = unit.alive ? '#2c2622' : '#3a342c';
       ctx.beginPath();
-      ctx.moveTo(x, y - height * 0.7);
-      ctx.lineTo(x + height * 0.22, y - height * 0.12);
-      ctx.lineTo(x - height * 0.22, y - height * 0.12);
+      ctx.moveTo(x, y - h * 0.7);
+      ctx.lineTo(x + h * 0.22, y - h * 0.12);
+      ctx.lineTo(x - h * 0.22, y - h * 0.12);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = unit.team === 'ally' ? '#d4b46a' : '#c44536';
+      ctx.lineWidth = 2;
       ctx.stroke();
       return true;
     }
     if (unit.objective === 'dragon' || unit.objective === 'herald' || unit.objective === 'baron') {
-      ctx.fillStyle = unit.color;
+      const wide = unit.objective === 'dragon';
+      ctx.fillStyle = ink;
       ctx.beginPath();
-      ctx.ellipse(x, y - height * 0.28, height * (unit.objective === 'dragon' ? 0.46 : 0.32), height * 0.24, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, y - h * 0.28, h * (wide ? 0.5 : 0.36), h * 0.28, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = unit.objective === 'dragon' ? '#8a2a18' : unit.objective === 'baron' ? '#6a6248' : '#8a7040';
+      ctx.beginPath();
+      ctx.ellipse(x, y - h * 0.3, h * (wide ? 0.42 : 0.28), h * 0.22, 0, 0, Math.PI * 2);
       ctx.fill();
       return true;
     }
     const known = ['skeleton', 'hungry-dead', 'goatman', 'willowisp', 'mummy', 'demon'];
     if (!known.includes(unit.defId)) return false;
-    ctx.fillStyle = unit.alive ? unit.color : '#3a342c';
-    if (unit.defId === 'willowisp') {
-      ctx.globalAlpha = 0.85;
+    if (!unit.alive) {
+      ctx.fillStyle = '#3a342c';
       ctx.beginPath();
-      ctx.arc(x, y - height * 0.45, height * 0.28, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = unit.accent;
-      ctx.beginPath();
-      ctx.arc(x, y - height * 0.45, height * 0.12, 0, Math.PI * 2);
+      ctx.ellipse(x, y - h * 0.16, h * 0.28, h * 0.1, 0, 0, Math.PI * 2);
       ctx.fill();
       return true;
     }
+    if (unit.defId === 'willowisp') {
+      ctx.fillStyle = ink;
+      ctx.beginPath();
+      ctx.arc(x, y - h * 0.48, h * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#7aaa48';
+      ctx.beginPath();
+      ctx.arc(x, y - h * 0.48, h * 0.24, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f2e6a8';
+      ctx.beginPath();
+      ctx.arc(x, y - h * 0.48, h * 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+    const body =
+      unit.defId === 'skeleton'
+        ? '#d7d0b8'
+        : unit.defId === 'hungry-dead'
+          ? '#5e6a48'
+          : unit.defId === 'goatman'
+            ? '#8a5a30'
+            : unit.defId === 'mummy'
+              ? '#e4d4ae'
+              : '#7a221c';
+    ctx.fillStyle = ink;
     ctx.beginPath();
-    ctx.ellipse(x, y - height * 0.34, height * 0.22, height * 0.32, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, y - h * 0.36, h * 0.26, h * 0.36, 0, 0, Math.PI * 2);
     ctx.fill();
-    if (unit.defId === 'skeleton') {
-      ctx.strokeStyle = unit.accent;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x, y - height * 0.5);
-      ctx.lineTo(x, y - height * 0.16);
-      ctx.moveTo(x - height * 0.12, y - height * 0.4);
-      ctx.lineTo(x + height * 0.12, y - height * 0.4);
-      ctx.stroke();
-    }
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.ellipse(x, y - h * 0.38, h * 0.2, h * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = ink;
+    ctx.beginPath();
+    ctx.arc(x, y - h * 0.62, h * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = unit.defId === 'skeleton' ? '#f0ead8' : body;
+    ctx.beginPath();
+    ctx.arc(x, y - h * 0.63, h * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = unit.defId === 'goatman' || unit.defId === 'demon' ? '#e6d3a1' : unit.defId === 'mummy' ? '#8a6840' : '#6a2030';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
     if (unit.defId === 'goatman' || unit.defId === 'demon') {
-      ctx.strokeStyle = unit.accent;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x - height * 0.08, y - height * 0.58);
-      ctx.lineTo(x - height * 0.2, y - height * 0.78);
-      ctx.moveTo(x + height * 0.08, y - height * 0.58);
-      ctx.lineTo(x + height * 0.2, y - height * 0.78);
-      ctx.stroke();
+      ctx.moveTo(x - h * 0.05, y - h * 0.7);
+      ctx.lineTo(x - h * 0.16, y - h * 0.88);
+      ctx.moveTo(x + h * 0.05, y - h * 0.7);
+      ctx.lineTo(x + h * 0.16, y - h * 0.88);
+    } else if (unit.defId === 'mummy') {
+      ctx.moveTo(x - h * 0.16, y - h * 0.5);
+      ctx.lineTo(x + h * 0.16, y - h * 0.44);
+      ctx.moveTo(x - h * 0.14, y - h * 0.32);
+      ctx.lineTo(x + h * 0.14, y - h * 0.26);
+    } else if (unit.defId === 'skeleton') {
+      ctx.moveTo(x, y - h * 0.5);
+      ctx.lineTo(x, y - h * 0.18);
+      ctx.moveTo(x - h * 0.14, y - h * 0.42);
+      ctx.lineTo(x + h * 0.14, y - h * 0.42);
     }
-    if (unit.defId === 'mummy') {
-      ctx.strokeStyle = '#efe6c8';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(x - height * 0.16, y - height * 0.46);
-      ctx.lineTo(x + height * 0.16, y - height * 0.4);
-      ctx.moveTo(x - height * 0.14, y - height * 0.3);
-      ctx.lineTo(x + height * 0.14, y - height * 0.24);
-      ctx.stroke();
-    }
+    ctx.stroke();
     return true;
   }
 
@@ -851,20 +866,38 @@ export class Renderer {
     height: number,
     flip: boolean,
     src?: Glyph,
+    outline = false,
   ): void {
     const iw = src ? src.sw : img instanceof HTMLImageElement ? img.naturalWidth : img.width;
     const ih = src ? src.sh : img instanceof HTMLImageElement ? img.naturalHeight : img.height;
     if (!iw || !ih) return;
-    const w = (iw / ih) * height;
+    const dh = Math.max(1, Math.round(height));
+    const dw = Math.max(1, Math.round((iw / ih) * dh));
     ctx.save();
-    ctx.translate(x, y);
+    ctx.imageSmoothingEnabled = false;
+    ctx.translate(Math.round(x), Math.round(y));
     if (flip) ctx.scale(-1, 1);
-    if (src) ctx.drawImage(img, src.sx, src.sy, src.sw, src.sh, -w / 2, -height, w, height);
-    else ctx.drawImage(img, -w / 2, -height, w, height);
+    const dx = -Math.round(dw / 2);
+    const dy = -dh;
+    const paint = (ox: number, oy: number) => {
+      if (src) ctx.drawImage(img, src.sx, src.sy, src.sw, src.sh, dx + ox, dy + oy, dw, dh);
+      else ctx.drawImage(img, dx + ox, dy + oy, dw, dh);
+    };
+    if (outline) {
+      ctx.save();
+      ctx.filter = 'brightness(0)';
+      ctx.globalAlpha *= 0.92;
+      paint(-1, 0);
+      paint(1, 0);
+      paint(0, -1);
+      paint(0, 1);
+      ctx.restore();
+    }
+    paint(0, 0);
     ctx.restore();
   }
 
-  private drawBar(unit: Unit, x: number, footY: number, height: number): void {
+  private drawBar(unit: Unit, x: number, footY: number, height: number, targetId: number | null): void {
     const ctx = this.ctx;
     const w = unit.kind === 'base' ? 74 : unit.kind === 'champion' ? 54 : 34;
     const y = footY - height - (unit.kind === 'minion' ? 6 : 16);
@@ -874,7 +907,7 @@ export class Renderer {
     ctx.fillRect(x - w / 2, y, w, 4);
     ctx.fillStyle = unit.team === 'ally' ? '#c6d28a' : unit.team === 'wild' ? '#c49a3a' : '#e4553c';
     ctx.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, unit.hp / unit.maxHp)), 4);
-    if (unit.kind === 'champion' || unit.kind === 'base') {
+    if (unit.id === targetId) {
       ctx.fillStyle = '#f0e2bc';
       ctx.font = '13px Georgia, serif';
       ctx.textAlign = 'center';
@@ -889,14 +922,14 @@ export class Renderer {
     if (p.x < 24 || p.y < 0 || p.x > w - 24 || p.y > h - 8) return;
     // The phone HUD owns the top-left level, xp, and gold row. Fade the zone
     // name as it approaches that row and skip it if it would sit on top.
-    const clear = 76;
+    const clear = 96;
     if (p.y < clear) return;
     const fade = p.y < clear + 28 ? (p.y - clear) / 28 : 1;
     const ctx = this.ctx;
     ctx.save();
     ctx.globalAlpha = fade;
     ctx.fillStyle = color;
-    ctx.font = '20px Georgia, serif';
+    ctx.font = '15px Georgia, serif';
     ctx.textAlign = 'center';
     ctx.fillText(text, p.x, p.y);
     ctx.restore();

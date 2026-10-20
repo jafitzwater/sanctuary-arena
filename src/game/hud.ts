@@ -1,4 +1,4 @@
-import portraitUrl from '../assets/art/barbarian/idle.png';
+import portraitUrl from '../assets/art/d2/portrait.webp';
 import { ROSTER } from './data/classes/roster';
 import { itemIcon, skillIcon } from './art/icons';
 import { isShopItem, ITEMS, potionCap, type ItemDef } from './data/items';
@@ -226,10 +226,8 @@ export class Hud {
       banner.textContent = sim.banner.text;
     } else banner.hidden = true;
     const tip = this.q('#tip');
-    if (sim.tip) {
-      tip.hidden = false;
-      tip.textContent = sim.tip;
-    } else tip.hidden = true;
+    tip.hidden = true;
+    tip.textContent = '';
 
     const death = this.q('#death');
     if (!hero.alive) {

@@ -2,7 +2,7 @@
 
 A personal, non-commercial browser MOBA with a Diablo II theme. The match is Sanctuary: three paths from the Rogue Encampment to Harrogath, split by a blood-red river. The Barbarian's goal is the enemy Worldstone. Act I's single Blood Moor lane is still in the data files for the older tests.
 
-The look is an isometric take on Act I. Real Spriters Resource frames (Barbarian light, medium, and heavy; Rogue mercenary; Akara; Act I town and outdoor floor) are bundled under `src/assets/art/d2/`. Whirlwind, leap, cast, get-hit, death, Fallen, zombies, Blood Raven, the quill rat, and the props are generated for this project. The page does not hotlink art or audio. Sound effects and the ambient bed are synthesized in the browser (`src/game/audio.ts`).
+The look is an isometric take on Act I. Real Spriters Resource frames (Barbarian light, medium, and heavy; Fallen; Fallen Shaman; Zombie; Rogue mercenary; Akara; Act I town and outdoor floor) are bundled under `src/assets/art/d2/`. Blood Raven, the quill rat, and the props are drawn for this project. The page does not hotlink art or audio. Sound effects and the ambient bed are synthesized in the browser (`src/game/audio.ts`).
 
 Numbers for the Barbarian, the skill tree, Act I normal shop bases, and Act I monsters come from Diablo II 1.13c text files, converted once by `tools/import-d2.mjs` into `src/game/data/d2/`. The match does not fetch them at runtime. See [Diablo II data](#diablo-ii-data).
 
@@ -147,23 +147,23 @@ node tools/import-d2.mjs
 
 The Spriters Resource hosts Diablo II and Lord of Destruction sheets (Barbarian by mode and weapon class, Act I monsters, Rogues, and town tiles) at <https://www.spriters-resource.com/pc_computer/diablo2diablo2lordofdestruction/>. Those are Blizzard assets. This personal, non-commercial project does not hotlink them.
 
-`tools/slice-explicit.py` cuts whole cells from the labeled Barbarian bands (Town Walk, Neutral, Run, Attack1) on the light, medium, and heavy sheets. Each atlas has eight directions, south then clockwise. Medium and heavy have no Neutral block, so their idle frame is the first town-walk pose. The Rogue mercenary sheet supplies the Rogue and Rogue archer. Akara stands in the encampment. Town floor fills the camp plaza and outdoor floor fills the lane. `src/game/art/sheets.ts` (`d2Atlas`) is the swap point. DCC and COF files are not extracted. The plain rat sheet is not used for the quill rat.
+`tools/slice-explicit.py` cuts whole cells from the labeled Barbarian bands (Town Walk, Neutral, Run, Attack1) on the light, medium, and heavy sheets. `tools/slice-monsters.py` cuts eight-direction walk and idle atlases from the Fallen body, Zombie body, and Fallen Shaman sheets. Each atlas is south, then clockwise. Medium and heavy have no Neutral block, so their idle frame is the first town-walk pose. Whirlwind, leap, cast, get-hit, and death stay on that same armor atlas (run, attack, or idle) instead of a second drawing. The Rogue mercenary sheet supplies the Rogue and Rogue archer. Bishibosh uses the Fallen Shaman sheet. Akara stands in the encampment. Town floor fills the camp plaza and outdoor floor fills the lane. `src/game/art/sheets.ts` (`d2Atlas`) is the swap point. DCC and COF files are not extracted. The plain rat sheet is not used for the quill rat.
 
-Real, from the supplied Spriters Resource sheets: Barbarian idle, walk, run, and attack in eight directions for light, medium, and heavy armor; Rogue mercenary; Akara; Act I town floor; Act I outdoor floor.
+Real, from the supplied Spriters Resource sheets: Barbarian idle, walk, run, and attack in eight directions for light, medium, and heavy armor; Fallen; Zombie; Fallen Shaman; Rogue mercenary; Akara; Act I town floor; Act I outdoor floor.
 
-Still generated: Barbarian death, get-hit, cast, leap, and whirlwind; Fallen; zombie; Fallen Shaman was not a clean direction grid; Blood Raven; quill rat; orbs, belt, skill icons, tents, walls, campfires, and the altar. Kashya, Warriv, and the graveyard sheet are not drawn. Level-up plays the existing three-note cue plus a gold ring and a "Level N" floater, and refills life and mana after the new maximums.
+Still drawn for this project: the quill rat (no sheet was supplied); Blood Raven; skeleton, hungry dead, goatman, willowisp, mummy, and demon silhouettes; orbs, belt, skill icons, tents, walls, campfires, and the altar. Kashya, Warriv, and the graveyard sheet are not drawn. Level-up plays the existing three-note cue plus a gold ring and a "Level N" floater, and refills life and mana after the new maximums.
 
 Generated stand-ins, drawn for this project to match the Diablo II shapes rather than ripped from the sheets:
 
 - Life orb, mana orb, and belt frame: `src/assets/art/ui/`
 - Bash, Shout, Stun, Leap Attack, Battle Orders, and Whirlwind icons, plus weapon, armor, helm, belt, and potion icons: `src/assets/art/icons/` (`src/game/art/icons.ts`)
-- Blood Raven and the quill rat, idle and walk: `src/assets/art/generated/`
+- Blood Raven, idle and walk: `src/assets/art/generated/`. The quill rat atlas is `src/assets/art/d2/quillrat.webp`.
 
 ## Known gaps
 
 - The title screen lists all seven classes. Only the Barbarian can be played. Four allied heroes and five enemies reuse that kit. Akara can hire one rogue for 45 seconds. Item records can carry a tier (base, magic, rare, unique, set), magic find, gold find, sockets, runes, and charms. The shop still sells only the four base slots, potions, and the hire.
 - The match uses six Barbarian skills and a four-slot belt, not the full 30-skill tree. The 1.13c JSON is still in the repo as the reference for names and raw numbers. Ranks stop at 5. Battle Orders raises life only. Shout raises defense for a few seconds.
 - Cooldowns and monster damage are scaled for a short match. Exceptional and elite items are not in the shop. Dual wield uses the slower swing and about half the offhand damage.
-- Blood Raven kites and retreats; she does not cast a skill kit. The quill rat has one pose. Rogues use the mercenary sheet, not a separate archer body.
-- Death is not a labeled block on the light, medium, or heavy Barbarian sheets, so the corpse is still generated. Trees are drawn in code. Audio is synthesized, not the Diablo II soundtrack.
+- Blood Raven kites and retreats; she does not cast a skill kit. Rogues use the mercenary sheet, not a separate archer body.
+- Death is not a labeled block on the Barbarian sheets, so a corpse is the idle frame laid flat. Trees are drawn in code. Audio is synthesized, not the Diablo II soundtrack.
 - The isometric camera shows the lane from a 2:1 angle. Movement on the stick and arrow keys follows the screen, not the raw map axes.
