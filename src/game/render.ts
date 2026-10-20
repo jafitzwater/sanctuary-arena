@@ -632,13 +632,15 @@ export class Renderer {
     const data = ctx.getImageData(0, 0, w, h);
     const px = data.data;
     const matte = (i: number) => {
-      const a = px[i + 3];
-      if (a < 16) return true;
       const r = px[i];
       const g = px[i + 1];
       const b = px[i + 2];
+      const a = px[i + 3];
+      if (a < 16) return true;
       if (r > 200 && b > 180 && g < 80) return true;
-      return a >= 16 && r < 20 && g < 20 && b < 20;
+      if (r > 140 && b > 100 && g < 60 && b > g + 60 && r > g + 80) return true;
+      if (r > 240 && g > 240 && b > 240) return true;
+      return r < 20 && g < 20 && b < 20;
     };
     const kill = new Uint8Array(w * h);
     const queue: number[] = [];
