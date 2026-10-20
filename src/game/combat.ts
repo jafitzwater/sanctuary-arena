@@ -1,6 +1,7 @@
 import { itemById, potionCap, potionItem, type ItemDef, type PotionKind } from './data/items';
 import type { SkillDef } from './data/classes/types';
 import { dist } from './math';
+import { comebackMul, xpShare } from './pace';
 import { player } from './query';
 import type { Fx, Sim, Unit } from './types';
 
@@ -132,22 +133,37 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
     sim.shake = 14;
   }
 
-  if (unit.team !== 'enemy') return;
+  const worth = unit.team === 'enemy' || unit.team === 'wild';
+  if (!worth) return;
   const hero = player(sim);
   const playerKill = killer?.id === sim.playerId;
   const structure = unit.kind === 'tower' || unit.kind === 'base';
   if (playerKill) {
-    award(sim, unit);
+    awardGold(sim, unit);
     if (unit.kind === 'minion') sim.cs += 1;
     if (unit.kind === 'champion') sim.kills += 1;
   } else if (structure && killer && killer.team === 'ally') {
-    award(sim, unit);
-  } else if (hero.alive && dist(hero, unit) < 700) {
-    grantXp(sim, Math.round(unit.xp * 0.55));
+    awardGold(sim, unit);
   }
+  if (structure && killer && killer.team === 'ally') {
+    grantXp(sim, unit.xp);
+    return;
+  }
+  if (killer && killer.team === 'enemy') return;
+  const near = sim.units.filter(
+    (other) =>
+      other.alive &&
+      other.kind === 'champion' &&
+      other.team === 'ally' &&
+      dist(other, unit) <= 520,
+  );
+  if (playerKill && hero.alive && !near.some((other) => other.id === hero.id)) near.push(hero);
+  if (!near.some((other) => other.id === sim.playerId)) return;
+  const xp = Math.round(unit.xp * xpShare(near.length) * comebackMul(sim.level, sim.time));
+  grantXp(sim, xp);
 }
 
-function award(sim: Sim, unit: Unit): void {
+function awardGold(sim: Sim, unit: Unit): void {
   const hero = player(sim);
   let gold = unit.gold;
   if (hero.findGold > 0 && unit.kind === 'minion') {
@@ -155,7 +171,6 @@ function award(sim: Sim, unit: Unit): void {
     hero.findGold = 0;
   }
   sim.gold += gold;
-  grantXp(sim, unit.xp);
   floater(sim, unit.x, unit.y - 24, `+${gold}`, '#e6c864');
   sfx(sim, 'coin');
 }

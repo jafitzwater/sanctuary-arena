@@ -1,7 +1,7 @@
 import type { ActDef } from './data/acts/types';
 import type { ClassDef } from './data/classes/types';
 
-export type Team = 'ally' | 'enemy';
+export type Team = 'ally' | 'enemy' | 'wild';
 export type UnitKind = 'champion' | 'minion' | 'tower' | 'base';
 export type Phase = 'playing' | 'victory' | 'defeat';
 
@@ -44,6 +44,10 @@ export interface Unit {
   waypoint: number;
   /** Index into map.paths. Single-lane maps stay on 0. */
   path: number;
+  /** Wilderness den id. Lane minions stay on 0. */
+  pack: number;
+  anchorX: number;
+  anchorY: number;
   targetId: number | null;
   facing: number;
   swing: number;
@@ -138,6 +142,9 @@ export interface Sim {
   phase: Phase;
   waveIn: number;
   announcedWave: boolean;
+  pace: 'Normal' | 'Nightmare' | 'Hell';
+  /** Seconds until each wilderness den respawns. Indexed by den id. */
+  denIn: number[];
   banner: { text: string; t: number } | null;
   tip: string;
   tipT: number;

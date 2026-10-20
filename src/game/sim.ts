@@ -1,4 +1,5 @@
-import { TOWER_TIERS, type ActDef } from './data/acts/types';
+import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef } from './data/acts/types';
+import { paceOf } from './pace';
 import type { ClassDef } from './data/classes/types';
 import { unitDef } from './data/units';
 import { Rng } from './math';
@@ -55,6 +56,8 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     phase: 'playing',
     waveIn: map.waves.first,
     announcedWave: false,
+    pace: 'Normal',
+    denIn: [],
     banner: null,
     tip: 'Last-hit Fallen for gold. Points spends skills and stats. Shop at the Encampment.',
     tipT: 9,
@@ -76,6 +79,10 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
   for (const tower of map.towers) spawnTower(sim, tower);
   sim.playerId = spawnPlayer(sim).id;
   sim.enemyChampionId = spawnEnemyChampion(sim).id;
+  for (const den of map.dens ?? []) {
+    spawnDen(sim, den);
+    sim.denIn[den.id] = den.respawn;
+  }
   return sim;
 }
 
@@ -107,6 +114,9 @@ function blankUnit(sim: Sim, partial: Pick<Unit, 'defId' | 'kind' | 'team' | 'na
     projectileSpeed: partial.projectileSpeed ?? 420,
     waypoint: partial.waypoint ?? 0,
     path: partial.path ?? 0,
+    pack: partial.pack ?? 0,
+    anchorX: partial.anchorX ?? 0,
+    anchorY: partial.anchorY ?? 0,
     targetId: null,
     facing: partial.facing ?? 0,
     swing: 0,
@@ -262,6 +272,9 @@ export function spawnMinion(sim: Sim, defId: string, team: Team, x: number, y: n
   const def = unitDef(defId);
   const spot = clampToPlayable(sim.map, x, y);
   const lane = laneAt(sim, path);
+  const scaled = paceOf(sim.time);
+  const hp = Math.max(1, Math.round(def.hp * scaled.hp));
+  const ad = Math.max(1, Math.round(def.ad * scaled.ad));
   return blankUnit(sim, {
     defId,
     kind: 'minion',
@@ -270,9 +283,9 @@ export function spawnMinion(sim: Sim, defId: string, team: Team, x: number, y: n
     x: spot.x,
     y: spot.y,
     radius: def.radius,
-    hp: def.hp,
-    maxHp: def.hp,
-    ad: def.ad,
+    hp,
+    maxHp: hp,
+    ad,
     armor: def.armor,
     moveSpeed: def.moveSpeed,
     attackRange: def.attackRange,
@@ -312,12 +325,20 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
     if (unit.leap) advanceLeap(sim, unit, step);
   }
 
+  const pace = paceOf(sim.time);
+  if (pace.name !== sim.pace) {
+    sim.pace = pace.name;
+    banner(sim, pace.name === 'Nightmare' ? 'The wilds turn to Nightmare.' : 'Hell walks the roads.');
+  }
+
   const hero = player(sim);
   if (hero.alive) updatePlayer(sim, hero, input, step);
   const raven = byId(sim, sim.enemyChampionId);
   if (raven) updateEnemyChampion(sim, raven, step);
   for (const unit of sim.units) {
-    if (unit.kind === 'minion') updateMinion(sim, unit, step);
+    if (unit.kind !== 'minion') continue;
+    if (unit.team === 'wild') updateCamp(sim, unit, step);
+    else updateMinion(sim, unit, step);
   }
 
   resolveBodies(sim);
@@ -334,6 +355,7 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
   if (input.assignSkill) tryAssignBelt(sim, input.assignSkill, input.assignSlot);
 
   waves(sim, step);
+  updateDens(sim, step);
 
   for (const fx of sim.fx) {
     fx.t += step;
@@ -468,6 +490,28 @@ function updatePlayer(sim: Sim, hero: Unit, input: FrameInput, dt: number): void
   if (input.destX != null && input.destY != null) {
     moveToward(hero, input.destX, input.destY, dt, pace);
   }
+}
+
+function updateCamp(sim: Sim, unit: Unit, dt: number): void {
+  if (!unit.alive || unit.stun > 0) return;
+  const home = Math.hypot(unit.x - unit.anchorX, unit.y - unit.anchorY);
+  if (home > 380) {
+    unit.targetId = null;
+    moveToward(unit, unit.anchorX, unit.anchorY, dt);
+    return;
+  }
+  acquireCreepTarget(sim, unit);
+  const target = byId(sim, unit.targetId);
+  if (target?.alive) {
+    if (Math.hypot(target.x - unit.anchorX, target.y - unit.anchorY) > 420) {
+      unit.targetId = null;
+      moveToward(unit, unit.anchorX, unit.anchorY, dt);
+      return;
+    }
+    if (!inRange(unit, target)) moveToward(unit, target.x, target.y, dt);
+    return;
+  }
+  if (home > 36) moveToward(unit, unit.anchorX, unit.anchorY, dt);
 }
 
 function updateMinion(sim: Sim, unit: Unit, dt: number): void {
@@ -792,14 +836,86 @@ function laneAt(sim: Sim, path: number): { x: number; y: number }[] {
 function spawnWave(sim: Sim, team: Team): void {
   const alive = sim.units.filter((unit) => unit.alive && unit.kind === 'minion' && unit.team === team).length;
   if (alive >= 18) return;
+  const extra = team === 'enemy' ? paceOf(sim.time).extra : 0;
   if (sim.map.paths?.length) {
     sim.map.paths.forEach((path, index) => {
-      const groups = team === 'ally' ? path.ally : path.enemy;
-      spawnOnLane(sim, team, path.lane, index, groups);
+      const groups = waveGroups(sim, path, team);
+      spawnOnLane(sim, team, path.lane, index, withExtra(groups, extra));
     });
     return;
   }
-  spawnOnLane(sim, team, sim.map.lane, 0, team === 'ally' ? sim.map.waves.ally : sim.map.waves.enemy);
+  const groups = team === 'ally' ? sim.map.waves.ally : sim.map.waves.enemy;
+  spawnOnLane(sim, team, sim.map.lane, 0, withExtra(groups, extra));
+}
+
+function waveGroups(sim: Sim, path: PathDef, team: Team) {
+  if (team === 'ally') return path.ally;
+  const pace = paceOf(sim.time).name;
+  if (pace === 'Hell' && path.later?.hell) return path.later.hell;
+  if (pace === 'Nightmare' && path.later?.nightmare) return path.later.nightmare;
+  return path.enemy;
+}
+
+function withExtra(groups: { unit: string; count: number }[], extra: number): { unit: string; count: number }[] {
+  if (extra <= 0 || !groups.length) return groups;
+  return groups.map((group, index) => (index === 0 ? { ...group, count: group.count + extra } : group));
+}
+
+function spawnDen(sim: Sim, den: DenSpawn): void {
+  const count = den.boss ? 1 : den.count;
+  for (let n = 0; n < count; n++) {
+    const angle = (n / Math.max(1, count)) * Math.PI * 2;
+    const unit = spawnMinion(sim, den.unit, 'wild', den.x + Math.cos(angle) * 28, den.y + Math.sin(angle) * 22);
+    unit.pack = den.id;
+    unit.anchorX = den.x;
+    unit.anchorY = den.y;
+    const lead = n === 0 && Boolean(den.unique || den.boss);
+    const mul = den.boss ? 2.4 : lead ? 1.8 : 1;
+    unit.maxHp = Math.round(unit.maxHp * mul);
+    unit.hp = unit.maxHp;
+    unit.ad = Math.max(1, Math.round(unit.ad * (den.boss ? 1.35 : 1)));
+    unit.gold = Math.round(unit.gold * (den.boss ? 4 : lead ? 2 : 1));
+    unit.xp = Math.round(unit.xp * (den.boss ? 3 : lead ? 1.6 : 1));
+    if (den.boss) unit.name = den.boss;
+    else if (lead && den.unique) unit.name = den.unique;
+  }
+}
+
+function updateDens(sim: Sim, dt: number): void {
+  for (const den of sim.map.dens ?? []) {
+    const alive = sim.units.some((unit) => unit.alive && unit.pack === den.id);
+    if (alive) {
+      sim.denIn[den.id] = den.respawn;
+      continue;
+    }
+    sim.denIn[den.id] = (sim.denIn[den.id] ?? den.respawn) - dt;
+    if (sim.denIn[den.id] > 0) continue;
+    spawnDen(sim, den);
+    sim.denIn[den.id] = den.respawn;
+  }
+}
+
+export function spawnHero(sim: Sim, team: Team, x: number, y: number, name: string): Unit {
+  return blankUnit(sim, {
+    defId: 'barbarian',
+    kind: 'champion',
+    team,
+    name,
+    x,
+    y,
+    radius: 18,
+    hp: 240,
+    maxHp: 240,
+    mana: 80,
+    maxMana: 80,
+    ad: 15,
+    armor: 8,
+    moveSpeed: 216,
+    attackRange: 48,
+    attackInterval: 1,
+    color: team === 'ally' ? '#c4a574' : '#8a3030',
+    accent: '#e6d3a1',
+  });
 }
 
 function spawnOnLane(

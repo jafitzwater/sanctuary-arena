@@ -9,7 +9,8 @@ import { getClass } from '../src/game/data/classes';
 import { grantXp, MAX_LEVEL, recomputeHero, tryAssignBelt, tryBuy, trySpendAttribute, tryUpgrade, damageUnit } from '../src/game/combat';
 import { SKILLS } from '../src/game/skills';
 import { findBase, player } from '../src/game/query';
-import { createMatch, spawnMinion, updateSim } from '../src/game/sim';
+import { createMatch, spawnHero, spawnMinion, updateSim } from '../src/game/sim';
+import { comebackMul, paceOf, xpShare } from '../src/game/pace';
 import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
 
 function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
@@ -292,6 +293,87 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
     assert.ok(minions.some((unit) => unit.path === index && unit.team === 'ally'), `ally path ${index}`);
     assert.ok(minions.some((unit) => unit.path === index && unit.team === 'enemy'), `enemy path ${index}`);
   }
+}
+
+{
+  assert.equal(paceOf(0).name, 'Normal');
+  assert.equal(paceOf(90).name, 'Nightmare');
+  assert.equal(paceOf(180).name, 'Hell');
+  assert.equal(xpShare(1), 1);
+  assert.equal(xpShare(2), 0.65);
+  assert.equal(xpShare(4), 0.45);
+  assert.equal(comebackMul(1, 0), 1);
+  assert.ok(comebackMul(1, 90) > 1);
+
+  const solo = createMatch(act1, barbarian, 1);
+  const hero = player(solo);
+  const foe = spawnMinion(solo, 'fallen', 'enemy', hero.x + 30, hero.y);
+  const full = foe.xp;
+  foe.hp = 1;
+  foe.armor = 0;
+  damageUnit(solo, foe, 80, hero);
+  assert.equal(solo.xp, full, 'a solo hero keeps the full experience award');
+
+  const group = createMatch(act1, barbarian, 1);
+  const hero2 = player(group);
+  spawnHero(group, 'ally', hero2.x + 24, hero2.y, 'Ally');
+  const foe2 = spawnMinion(group, 'fallen', 'enemy', hero2.x + 30, hero2.y);
+  foe2.hp = 1;
+  foe2.armor = 0;
+  damageUnit(group, foe2, 80, hero2);
+  assert.equal(group.xp, Math.round(foe2.xp * 0.65));
+
+  const behind = createMatch(act1, barbarian, 1);
+  behind.time = 90;
+  const hero3 = player(behind);
+  const foe3 = spawnMinion(behind, 'fallen', 'enemy', hero3.x + 30, hero3.y);
+  const baseXp = foe3.xp;
+  foe3.hp = 1;
+  foe3.armor = 0;
+  damageUnit(behind, foe3, 80, hero3);
+  assert.ok(behind.xp > baseXp, 'a hero behind the clock earns a comeback bonus');
+
+  const grown = createMatch(act1, barbarian, 1);
+  grown.time = 90;
+  const scaled = spawnMinion(grown, 'fallen', 'enemy', player(grown).x + 40, player(grown).y);
+  assert.ok(scaled.maxHp > 76, `nightmare Fallen should be tougher, hp=${scaled.maxHp}`);
+}
+
+{
+  const sim = createMatch(sanctuary, barbarian, 1);
+  const dens = sim.map.dens ?? [];
+  assert.equal(dens.length, 6);
+  const boss = sim.units.find((unit) => unit.name === 'Rakanishu');
+  assert.ok(boss && boss.team === 'wild' && boss.alive);
+  const named = sim.units.find((unit) => unit.name === 'Bishibosh');
+  assert.ok(named && named.team === 'wild');
+  for (const den of dens) {
+    for (const path of sim.map.paths ?? []) {
+      const gap = distToPolyline(den, path.lane);
+      assert.ok(gap > 140, `${den.unit} den is ${gap.toFixed(0)}px from ${path.name}`);
+    }
+    if (sim.map.river) {
+      const river = distToPolyline(den, sim.map.river);
+      assert.ok(river > 120, `${den.unit} den is ${river.toFixed(0)}px from the river`);
+    }
+    assert.ok(sim.units.some((unit) => unit.alive && unit.pack === den.id && unit.team === 'wild'));
+  }
+  const first = dens[0];
+  for (const unit of sim.units.filter((entry) => entry.pack === first.id && entry.alive)) {
+    unit.hp = 1;
+    damageUnit(sim, unit, 500, null);
+  }
+  assert.equal(sim.units.filter((unit) => unit.pack === first.id && unit.alive).length, 0);
+  step(sim, emptyInput(), first.respawn + 0.25);
+  assert.ok(sim.units.some((unit) => unit.pack === first.id && unit.alive), 'a cleared den respawns');
+
+  const night = createMatch(sanctuary, barbarian, 1);
+  night.time = 90;
+  night.waveIn = 0.05;
+  updateSim(night, emptyInput(), 0.1);
+  const foes = night.units.filter((unit) => unit.kind === 'minion' && unit.team === 'enemy' && unit.alive);
+  const ids = new Set(foes.map((unit) => unit.defId));
+  assert.ok(ids.has('skeleton') && ids.has('hungry-dead') && ids.has('willowisp'), [...ids].join(','));
 }
 
 console.log('match tests passed');

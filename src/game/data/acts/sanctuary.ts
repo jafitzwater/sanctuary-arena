@@ -47,6 +47,13 @@ const north: PathDef = {
   ],
   ally: [{ unit: 'rogue', count: 1 }],
   enemy: [{ unit: 'fallen', count: 2 }],
+  later: {
+    nightmare: [{ unit: 'skeleton', count: 2 }],
+    hell: [
+      { unit: 'goatman', count: 1 },
+      { unit: 'demon', count: 1 },
+    ],
+  },
 };
 
 const center: PathDef = {
@@ -69,6 +76,16 @@ const center: PathDef = {
     { unit: 'fallen', count: 1 },
     { unit: 'zombie', count: 1 },
   ],
+  later: {
+    nightmare: [
+      { unit: 'hungry-dead', count: 1 },
+      { unit: 'skeleton', count: 1 },
+    ],
+    hell: [
+      { unit: 'mummy', count: 1 },
+      { unit: 'goatman', count: 1 },
+    ],
+  },
 };
 
 const south: PathDef = {
@@ -88,6 +105,16 @@ const south: PathDef = {
     { unit: 'quillrat', count: 1 },
     { unit: 'fallen', count: 1 },
   ],
+  later: {
+    nightmare: [
+      { unit: 'willowisp', count: 1 },
+      { unit: 'quillrat', count: 1 },
+    ],
+    hell: [
+      { unit: 'demon', count: 1 },
+      { unit: 'willowisp', count: 1 },
+    ],
+  },
 };
 
 function laneTowers(path: PathDef): TowerSpawn[] {
@@ -140,6 +167,14 @@ export const sanctuary: ActDef = {
   march: 'Minions leave both Worldstones.',
   lane: center.lane,
   paths: [north, center, south],
+  dens: [
+    { id: 1, x: 1680, y: 160, unit: 'fallen', count: 3, respawn: 22, unique: 'Bishibosh' },
+    { id: 2, x: 2480, y: 860, unit: 'skeleton', count: 3, respawn: 22 },
+    { id: 3, x: 900, y: 1500, unit: 'quillrat', count: 3, respawn: 22 },
+    { id: 4, x: 2060, y: 1960, unit: 'hungry-dead', count: 2, respawn: 24 },
+    { id: 5, x: 2920, y: 1680, unit: 'goatman', count: 2, respawn: 24, boss: 'Rakanishu' },
+    { id: 6, x: 1400, y: 2050, unit: 'mummy', count: 2, respawn: 26 },
+  ],
   river: [
     { x: 180, y: 160 },
     { x: 1500, y: 860 },

@@ -15,6 +15,21 @@ export interface PathDef {
   lane: { x: number; y: number }[];
   ally: WaveGroup[];
   enemy: WaveGroup[];
+  /** Stronger lane packs once the match leaves Normal. */
+  later?: { nightmare: WaveGroup[]; hell: WaveGroup[] };
+}
+
+export interface DenSpawn {
+  id: number;
+  x: number;
+  y: number;
+  unit: string;
+  count: number;
+  respawn: number;
+  /** Named leader of the pack. */
+  unique?: string;
+  /** A single super unique instead of a pack. */
+  boss?: string;
 }
 
 export interface TowerSpawn {
@@ -89,6 +104,8 @@ export interface ActDef {
   paths?: PathDef[];
   /** Blood river drawn across the map. It does not block movement. */
   river?: { x: number; y: number }[];
+  /** Neutral packs in the wilderness. They respawn on their own timer. */
+  dens?: DenSpawn[];
   /** The whole rectangle is walkable, not only the road shoulder. */
   roam?: boolean;
   /** Town names drawn over each base. The base unit name stays the Worldstone. */
