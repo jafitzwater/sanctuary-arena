@@ -302,14 +302,28 @@ export class InputController {
  * quick pair, pinch, and the legacy iOS gesture events. Pointer handlers for
  * Attack and skills run before touchstart, so those taps still register.
  */
+function inScrollingPanel(event: Event): boolean {
+  const node = event.target;
+  const el = node instanceof Element ? node : node instanceof Node ? node.parentElement : null;
+  return !!el?.closest('#shop, #tree, #help, #title, #end');
+}
+
 function installZoomLock(): void {
   let lastStart = 0;
   document.addEventListener(
     'touchstart',
     (event) => {
       const now = performance.now();
-      if (event.touches.length > 1 || now - lastStart < 320) event.preventDefault();
+      const pinch = event.touches.length > 1;
+      const doubleTap = now - lastStart < 320;
       lastStart = now;
+      if (pinch) {
+        event.preventDefault();
+        return;
+      }
+      // Panels must be able to scroll and to accept a second tap. The viewport
+      // and touch-action: manipulation already suppress double-tap zoom there.
+      if (doubleTap && !inScrollingPanel(event)) event.preventDefault();
     },
     { passive: false, capture: true },
   );
@@ -318,8 +332,9 @@ function installZoomLock(): void {
     'touchend',
     (event) => {
       const now = performance.now();
-      if (now - lastEnd < 320) event.preventDefault();
+      const quick = now - lastEnd < 320;
       lastEnd = now;
+      if (quick && !inScrollingPanel(event)) event.preventDefault();
     },
     { passive: false, capture: true },
   );

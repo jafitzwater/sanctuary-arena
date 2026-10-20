@@ -14,7 +14,7 @@ That URL updates when this branch is merged to `main` and the Pages workflow fin
 
 Destroy **Andariel's altar**. If the **Rogue Encampment** falls, you lose. You respawn beside the campfire after a short timer. Gold comes from last hits, hero kills, destroyed towers, and a slow trickle. Spend it at Akara while you are inside the Encampment (or while you are dead).
 
-Bash starts on Q. Shout, Stun, Leap Attack, Battle Orders, and Whirlwind unlock at levels 2, 4, 6, 8, and 10. A newly unlocked skill fills an empty belt slot. Only four skills are equipped. **T** or **Points** opens the list: spend a skill point with **+** (ranks go from 1 to 5), spend the five stat points per level on strength, dexterity, vitality, or energy, then drag a skill onto Q W E R or tap a skill and then a slot. The gold badge is the number of unspent points.
+Bash starts on Q. Shout, Stun, Leap Attack, Battle Orders, and Whirlwind unlock at levels 2, 4, 6, 8, and 10. A newly unlocked skill fills an empty belt slot. Only four skills are equipped. A gold **+** on a skill button spends a skill point (ranks go from 1 to 5), including a skill that was just slotted at rank 0. **T** or **Points** opens a compact stats panel: four big **+** buttons for strength, dexterity, vitality, and energy (five points each level after level 1). The Loadout tab is where you drag a skill onto Q W E R, or tap a skill and then a slot. The gold badge on Points is the number of unspent skill and stat points.
 
 | Skill | Level | Rank 1 | Each further rank |
 | --- | --- | --- | --- |
@@ -25,19 +25,21 @@ Bash starts on Q. Shout, Stun, Leap Attack, Battle Orders, and Whirlwind unlock 
 | Battle Orders | 8 | +6% maximum life for 8s, 18 mana, 16s | +6% life |
 | Whirlwind | 10 | Spin, each hit 32% damage, 22 mana, 11s | +4% damage per hit, +4 mana |
 
-Akara sells one weapon, one armor, one helm, and one belt. A new piece replaces the old one and refunds half the old price. Club is cheap at level 1. Short Sword (40 strength) at level 3. Falchion (55 strength) at level 5. Two-Handed Sword (65 strength, 30 dexterity) at level 8. Armor and helms follow the same levels. You carry 3 health potions and 3 mana potions. A Sash (level 2) raises that to 4. A Belt (level 6, 45 strength) raises it to 5. Strength adds melee damage. Dexterity adds a little armor and attack speed. Vitality adds life and energy adds mana for every class.
+Akara sells one weapon, one armor, one helm, and one belt. A new piece replaces the old one and refunds half the old price. Club is cheap at level 1. Short Sword (40 strength) at level 3. Falchion (50 strength) at level 5 — a level 5 Barbarian who put every stat point into strength (base 30 + 20) can equip it. Two-Handed Sword (65 strength, 30 dexterity) at level 8. Armor and helms follow the same levels, except studded leather and the helm still ask for 55 strength. You carry 3 health potions and 3 mana potions. A Sash (level 2) raises that to 4. A Belt (level 6, 45 strength) raises it to 5. Strength adds melee damage. Dexterity adds a little armor and attack speed. Vitality adds life and energy adds mana for every class.
+
+The shop follows the mobile MOBA pattern (Wild Rift, Mobile Legends, Pokémon Unite) and the desktop League shop: a recommended-item chip near the HUD buys in one tap when you can afford it and you are in camp, the shop has category tabs beside a large icon grid, and tapping an icon only opens the detail with one Buy button. Tap the dimmed backdrop or the **×** to close. On a phone the fight pauses while Shop, Points, or Help is open.
 
 ### Touch (landscape)
 
 Turn the phone sideways. Portrait shows a rotate hint and pauses the match. The touch layout follows a Diablo Immortal thumb pattern. A wide desktop window keeps the classic bottom belt and the red and blue orbs.
 
-- Portrait, life bar, and mana bar sit at the top left. The target's name and health sit top center when something is selected or in reach. The minimap is top right, with Tree, Shop, Help, and Sound beside it.
+- Portrait, life bar, and mana bar sit at the top left. The target's name and health sit top center when something is selected or in reach. The minimap is top right, with Points, Shop, Help, and Sound beside it. Under those buttons, a recommended-item chip lights up when you can buy the next piece in camp.
 - The stick is the large control at the bottom left and the only way to move, including diagonally along the isometric ground. Tapping the map does not walk or chase.
-- **Attack** is the big round button in the bottom-right corner. It strikes whatever is already in reach. Exactly four skills arc around it. A dark sweep and a number show the cooldown. A blue rim means you are short on mana. Locked skills stay in the Points list until their level.
+- **Attack** is the big round button in the bottom-right corner (about 80px on an 844×390 phone). Exactly four skills, at least 64px, arc around it with a clear gap so a thumb does not hit the wrong button. A dark sweep and a number show the cooldown. A blue rim means you are short on mana. A gold **+** on a skill spends a point. Skills that are still locked by level stay out of the arc until they unlock.
 - Smaller round **HP** and **MP** buttons sit above the arc and show potion counts.
-- **Shop** always opens Akara's list. Outside the Rogue Encampment the button reads **Camp**, the panel stays open, and buys stay disabled until you walk back.
+- **Shop** opens a panel with category tabs (Recommended, Potions, Weapons, Armor, Helms, Belts), a large icon grid, and a detail column with one Buy button. Outside the Rogue Encampment the menu button reads **Camp**, the panel can stay open, and Buy reads Camp until you walk back. Tap the dimmed area or **×** to close. Points is a short stats sheet, with Loadout as the second tab.
 
-The page sets `minimum-scale=1`, `maximum-scale=1`, and `user-scalable=no`. The game surface uses `touch-action: none`. A second tap within a third of a second, a pinch, and iOS `gesturestart` / `gesturechange` / `gestureend` are cancelled so mashing Attack or a skill cannot zoom the page on iOS Safari or Android Chrome. Shop, help, and the skill tree still scroll vertically.
+The page sets `minimum-scale=1`, `maximum-scale=1`, and `user-scalable=no`. The game surface uses `touch-action: none`. A second tap within a third of a second, a pinch, and iOS `gesturestart` / `gesturechange` / `gestureend` are cancelled so mashing Attack or a skill cannot zoom the page on iOS Safari or Android Chrome. A single tap inside Shop, Points, or Help is not cancelled, so those panels can scroll. The category grid is short enough that a phone usually does not need to scroll.
 
 ### Mouse and keyboard
 
@@ -45,7 +47,7 @@ The page sets `minimum-scale=1`, `maximum-scale=1`, and `user-scalable=no`. The 
 - Arrow keys move as well.
 - **Q W E R** and **1–4** cast the four belt slots. An empty slot opens Points. **Shift** plus a belt key ranks that skill up.
 - **Space** attacks the nearest enemy (and chases one if you are standing still).
-- **T** opens skills and stats. **B** opens and closes the shop. **5** drinks a health potion, **6** a mana potion. **Esc** closes panels. You can carry 3 of each potion. A Sash raises that to 4, and a Belt raises it to 5.
+- **T** opens stats and the loadout. **B** opens and closes the shop. **5** drinks a health potion, **6** a mana potion. **Esc** closes panels. You can carry 3 of each potion. A Sash raises that to 4, and a Belt raises it to 5. The recommended chip at the lower left buys the next affordable item while you are in camp.
 
 ## Run locally
 
@@ -71,7 +73,7 @@ src/game/data/d2/        1.13c JSON (CharStats, Barbarian skills, Act I items, m
 src/game/data/classes/   ClassDef modules (stats, skill list, colors)
 src/game/data/acts/      ActDef modules (lane, bases, towers, waves, theme)
 src/game/data/units.ts   Minions and monsters referenced by wave tables
-src/game/data/items.ts   Shop catalog (potions plus the Act I JSON)
+src/game/data/items.ts   Short shop catalog (four gear slots and two potions)
 src/game/skills/         Skill id → behavior
 src/game/art/sheets.ts   Sprite slots keyed by PlrMode token. Swap a URL to change art.
 src/game/sim.ts          Match loop: movement, waves, combat, gold
@@ -141,9 +143,17 @@ node tools/import-d2.mjs
 
 ### Sprites
 
-The Spriters Resource hosts Diablo II and Lord of Destruction sheets (Barbarian by mode and weapon class, Act I monsters, Rogues, and town tiles) at <https://www.spriters-resource.com/pc_computer/diablo2diablo2lordofdestruction/>. Those are Blizzard assets. This personal, non-commercial project would bundle them for private testing only, with no runtime hotlink. Downloads from that host answered with a Cloudflare challenge (`403` / "Just a moment...") from this environment, including direct asset URLs, so the sheets are not in the repo.
+The Spriters Resource hosts Diablo II and Lord of Destruction sheets (Barbarian by mode and weapon class, Act I monsters, Rogues, and town tiles) at <https://www.spriters-resource.com/pc_computer/diablo2diablo2lordofdestruction/>. Those are Blizzard assets. This personal, non-commercial project does not hotlink them.
 
-The frames under `src/assets/art/` are original stand-ins, including run, get-hit, death, cast, and the quill rat. `src/game/art/sheets.ts` is the swap point: replace a URL there and the renderer picks it up. DCC and COF files are not extracted.
+Sheets supplied for private testing (Barbarian light, medium, and heavy; Fallen; Fallen Shaman; a light zombie; a Rogue mercenary; Akara, Kashya, and Warriv; Act I town, outdoor, and graveyard floors) were cropped with `tools/slice-sprites.py`. The automatic cuts split weapons off bodies and sometimes packed more than one figure into a cell, so those atlases are not in the build and the characters on screen are still the generated frames. `src/game/art/sheets.ts` is the swap point. DCC and COF files are not extracted. The plain rat sheet is not used for the quill rat.
+
+Generated stand-ins, drawn for this project to match the Diablo II shapes rather than ripped from the sheets:
+
+- Life orb, mana orb, and belt frame: `src/assets/art/ui/`
+- Bash, Shout, Stun, Leap Attack, Battle Orders, and Whirlwind icons, plus weapon, armor, helm, belt, and potion icons: `src/assets/art/icons/` (`src/game/art/icons.ts`)
+- Blood Raven and the quill rat, idle and walk: `src/assets/art/generated/`
+
+The rest of the Barbarian, Fallen, zombie, Rogue, and prop frames under `src/assets/art/` are the earlier generated set.
 
 ## Known gaps
 
@@ -151,5 +161,5 @@ The frames under `src/assets/art/` are original stand-ins, including run, get-hi
 - The match uses six Barbarian skills and a four-slot belt, not the full 30-skill tree. The 1.13c JSON is still in the repo as the reference for names and raw numbers. Ranks stop at 5. Battle Orders raises life only. Shout raises defense for a few seconds.
 - Cooldowns and monster damage are scaled for a short match. Exceptional and elite items are not in the shop. Dual wield uses the slower swing and about half the offhand damage.
 - Blood Raven kites and retreats; she does not cast a skill kit. The quill rat has one pose. Rogue archers reuse Blood Raven's bow pose with a blue tint.
-- Art is generated pixel sprites in the PlrMode layout, not 16-direction BA sheets. The Spriters Resource download was blocked, as noted above. Trees are drawn in code. Audio is synthesized, not the Diablo II soundtrack.
+- Art is generated pixel sprites in the PlrMode layout, not 16-direction BA sheets. The supplied Spriters Resource sheets did not slice into whole figures, so they are not bundled. Trees are drawn in code. Audio is synthesized, not the Diablo II soundtrack. Town floor tiles and the town NPCs are not drawn into the lane yet.
 - The isometric camera shows the lane from a 2:1 angle. Movement on the stick and arrow keys follows the screen, not the raw map axes.

@@ -78,8 +78,10 @@ export class Renderer {
     zombie: loadImage(monsterSheets.zombie),
     zombieWalk: loadImage(monsterSheets.zombieWalk),
     raven: loadImage(monsterSheets.raven),
+    ravenWalk: loadImage(monsterSheets.ravenWalk),
     rogue: loadImage(monsterSheets.rogue),
     quill: loadImage(monsterSheets.quill),
+    quillWalk: loadImage(monsterSheets.quillWalk),
     tent: loadImage(propSheets.tent),
     fire: loadImage(propSheets.fire),
     wall: loadImage(propSheets.wall),
@@ -508,10 +510,10 @@ export class Renderer {
     }
     if (unit.defId === 'fallen') return moving ? (step ? this.art.fallenWalk : this.art.fallen) : this.art.fallen;
     if (unit.defId === 'zombie') return moving ? (step ? this.art.zombieWalk : this.art.zombie) : this.art.zombie;
-    if (unit.defId === 'quillrat') return this.art.quill;
+    if (unit.defId === 'quillrat') return moving ? (step ? this.art.quillWalk : this.art.quill) : this.art.quill;
     if (unit.defId === 'rogue') return this.art.rogue;
     if (unit.defId === 'rogue-archer') return this.archer ?? this.art.rogue;
-    if (unit.defId === 'blood-raven') return this.art.raven;
+    if (unit.defId === 'blood-raven') return moving ? (step ? this.art.ravenWalk : this.art.raven) : this.art.raven;
     if (unit.defId === 'tower') return unit.alive ? this.art.tower : null;
     if (unit.defId === 'base-ally') return unit.alive ? this.art.tent : null;
     if (unit.defId === 'base-enemy') return unit.alive ? this.art.altar : null;

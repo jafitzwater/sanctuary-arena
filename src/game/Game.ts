@@ -136,9 +136,14 @@ export class Game {
     this.time += dt;
     this.renderer.resize();
     const playing = this.mode === 'play' && !portrait();
+    const menu = this.hud.treeOpen || this.hud.shopOpen || this.hud.helpOpen;
+    const paused = menu && document.body.classList.contains('touch');
     if (playing) {
-      const input = this.input.snapshot();
-      updateSim(this.sim, input, dt);
+      const raw = this.input.snapshot();
+      const input = paused
+        ? { ...raw, moveX: 0, moveY: 0, attack: false, destX: null, destY: null, targetId: null, cast: null, potion: null }
+        : raw;
+      updateSim(this.sim, input, paused ? 0 : dt);
       if (this.sim.phase !== 'playing') {
         this.mode = 'end';
         this.hud.shopOpen = false;

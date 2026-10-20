@@ -15,9 +15,11 @@ import fallen from '../../assets/art/monsters/fallen.png';
 import fallenWalk from '../../assets/art/monsters/fallen-walk.png';
 import zombie from '../../assets/art/monsters/zombie.png';
 import zombieWalk from '../../assets/art/monsters/zombie-walk.png';
-import raven from '../../assets/art/monsters/raven.png';
+import raven from '../../assets/art/generated/blood-raven.png';
+import ravenWalk from '../../assets/art/generated/blood-raven-walk.png';
 import rogue from '../../assets/art/monsters/rogue.png';
-import quill from '../../assets/art/monsters/quillrat.png';
+import quill from '../../assets/art/generated/quillrat.png';
+import quillWalk from '../../assets/art/generated/quillrat-walk.png';
 import tent from '../../assets/art/props/tent.png';
 import fire from '../../assets/art/props/fire.png';
 import wall from '../../assets/art/props/wall.png';
@@ -29,9 +31,9 @@ import altar from '../../assets/art/props/andariel.png';
  * The Barbarian token is BA. Weapon class from Weapons.txt picks A1 (1HS / 1HT / HTH)
  * or A2 (2HS / 2HT / STF). Replace any URL here to swap a sheet without touching combat.
  *
- * These frames are original generated art. The Spriters Resource Diablo II sheets
- * (https://www.spriters-resource.com/pc_computer/diablo2diablo2lordofdestruction/)
- * answered with a Cloudflare challenge from this environment, so they are not bundled.
+ * Character frames under src/assets/art/barbarian and monsters/ are original generated art.
+ * Blood Raven and the quill rat use the stand-ins in src/assets/art/generated.
+ * Spriters Resource sheets were not clean enough to ship; see the README.
  */
 export const barbarianSheets = {
   token: 'BA',
@@ -54,8 +56,10 @@ export const monsterSheets = {
   zombie,
   zombieWalk,
   raven,
+  ravenWalk,
   rogue,
   quill,
+  quillWalk,
 };
 
 export const propSheets = {

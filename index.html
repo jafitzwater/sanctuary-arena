@@ -38,11 +38,11 @@
           <div class="help-grid">
             <div>
               <h3>Touch</h3>
-              <p>The large stick on the left is the only way to move. Tapping the map does nothing. Attack sits in the bottom-right corner, with four skill slots in an arc. Points spends skill and stat points. Drag a skill onto a slot, or tap a skill and then a slot. Shop opens anywhere; Akara only sells inside the Encampment.</p>
+              <p>The large stick on the left is the only way to move. Attack sits in the bottom-right corner with four skill slots. A gold + on a skill spends a point. Shop uses category tabs and an icon grid. The chip by the HUD is a one-tap buy for the next recommended item.</p>
             </div>
             <div>
               <h3>Mouse and keys</h3>
-              <p>Click the ground to move. Click an enemy to attack. Arrow keys also move. Q W E R cast the four belt skills (Shift+key ranks one up). T opens the skill tree. Space attacks. B opens the shop. 5 and 6 drink potions.</p>
+              <p>Click the ground to move. Click an enemy to attack. Arrow keys also move. Q W E R cast the four belt skills (Shift+key ranks one up). T opens stats and the loadout. Space attacks. B opens the shop. 5 and 6 drink potions.</p>
             </div>
           </div>
         </details>
@@ -94,6 +94,11 @@
           <div id="stick-knob"></div>
         </div>
 
+        <button id="quick-buy" type="button" hidden>
+          <img id="quick-buy-icon" alt="" />
+          <b id="quick-buy-cost"></b>
+        </button>
+
         <div id="belt">
           <div id="skills"></div>
           <button id="attack-btn" type="button">Attack</button>
@@ -109,27 +114,45 @@
         <p id="skill-hint"></p>
 
         <section id="tree" hidden role="dialog" aria-modal="true" aria-labelledby="tree-heading">
-          <div class="sheet">
+          <div class="sheet stats-sheet">
             <header>
-              <h2 id="tree-heading">Skills</h2>
-              <button id="tree-close" type="button">Close</button>
+              <h2 id="tree-heading">Stats</h2>
+              <button id="tree-close" class="x-btn" type="button" aria-label="Close">×</button>
             </header>
+            <div class="sheet-tabs" role="tablist">
+              <button id="tab-stats" type="button" role="tab" data-tab="stats">Stats</button>
+              <button id="tab-skills" type="button" role="tab" data-tab="skills">Loadout</button>
+            </div>
             <p id="tree-points"></p>
-            <div id="attr-row"></div>
-            <p id="equip-hint"></p>
-            <div id="belt-pick"></div>
-            <div id="tree-cols"></div>
+            <div class="pane" id="pane-stats" data-pane="stats">
+              <div id="attr-row"></div>
+            </div>
+            <div class="pane" id="pane-skills" data-pane="skills" hidden>
+              <p id="equip-hint"></p>
+              <div id="belt-pick"></div>
+              <div id="tree-cols"></div>
+            </div>
           </div>
         </section>
 
         <section id="shop" hidden role="dialog" aria-modal="true" aria-labelledby="shop-heading">
-          <div class="sheet">
+          <div class="sheet shop-sheet">
             <header>
-              <h2 id="shop-heading">Akara's Goods</h2>
-              <button id="shop-close" type="button">Close</button>
+              <h2 id="shop-heading">Akara</h2>
+              <button id="shop-close" class="x-btn" type="button" aria-label="Close">×</button>
             </header>
             <p id="shop-note"></p>
-            <div id="shop-grid"></div>
+            <div class="shop-body">
+              <nav id="shop-cats" aria-label="Item categories"></nav>
+              <div id="shop-grid"></div>
+              <aside id="shop-detail">
+                <img id="shop-detail-icon" alt="" />
+                <h3 id="shop-detail-name"></h3>
+                <p id="shop-detail-desc"></p>
+                <p id="shop-detail-meta"></p>
+                <button id="shop-buy" type="button">Buy</button>
+              </aside>
+            </div>
           </div>
         </section>
 
@@ -142,7 +165,7 @@
             <div class="help-grid">
               <div>
                 <h3>Touch</h3>
-                <p>Move only with the large stick on the left. Tapping the ground does not walk you. The big Attack button is in the bottom-right corner, with four skill slots around it. Round HP and MP buttons sit above the arc. Points (the badge turns gold when you have points) spends skill and stat points. Drag a skill onto Q W E R, or tap a skill and then a slot. Life and mana are the bars beside your portrait. Akara only sells inside the Rogue Encampment.</p>
+                <p>Move only with the large stick on the left. Tapping the ground does not walk you. Attack is the big button in the bottom-right corner, with four skills around it. A gold + on a skill spends a point. Points opens stats and the loadout. Shop is a category list and an icon grid; tap an icon, then Buy. The recommended item beside the HUD buys in one tap inside camp. Tap the dimmed area or × to close. The fight pauses while a panel is open.</p>
               </div>
               <div>
                 <h3>Mouse and keyboard</h3>
