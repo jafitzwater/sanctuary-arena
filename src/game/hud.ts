@@ -1,8 +1,19 @@
 import portraitUrl from '../assets/art/barbarian/idle.png';
+import { itemIcon, skillIcon } from './art/icons';
 import { ITEMS, potionCap, type ItemDef } from './data/items';
 import { inShopRange, manaCost, MAX_LEVEL, xpToNext } from './combat';
 import { player } from './query';
 import type { Sim } from './types';
+
+type MenuTab = 'skills' | 'stats';
+type ShopCat = 'recommended' | 'consumable' | 'weapon' | 'armor' | 'helm' | 'belt';
+
+const GEAR_PATHS: { slot: 'weapon' | 'armor' | 'helm' | 'belt'; ids: string[] }[] = [
+  { slot: 'weapon', ids: ['clb', 'ssd', 'flc', '2hs'] },
+  { slot: 'armor', ids: ['qui', 'lea', 'stu', 'rng'] },
+  { slot: 'helm', ids: ['cap', 'skp', 'hlm', 'fhl'] },
+  { slot: 'belt', ids: ['lbl', 'mbl'] },
+];
 
 type Mode = 'title' | 'play' | 'end';
 
@@ -24,9 +35,16 @@ export class Hud {
   shopOpen = false;
   helpOpen = false;
   treeOpen = false;
+  tab: MenuTab = 'stats';
   beltSlot = 0;
   pendingSkill: string | null = null;
   private built = false;
+  private sawTree = false;
+  private sawShop = false;
+  private shopCat: ShopCat = 'recommended';
+  private shopPick: string | null = null;
+  private quickId: string | null = null;
+  private shopGridKey = '';
   private drag: { id: string; pointer: number; x: number; y: number; moved: boolean } | null = null;
   private ghost: HTMLElement | null = null;
 
@@ -46,6 +64,32 @@ export class Hud {
     });
     this.arm('#shop-close', () => {
       this.shopOpen = false;
+    });
+    this.arm('#shop-buy', () => {
+      if (this.shopPick) this.onBuy?.(this.shopPick);
+    });
+    this.arm('#quick-buy', () => {
+      if (this.quickId) this.onBuy?.(this.quickId);
+    });
+    for (const id of ['skills', 'stats'] as const) {
+      this.arm(`#tab-${id}`, () => {
+        this.tab = id;
+      });
+    }
+    this.root.querySelector('#shop')?.addEventListener('pointerdown', (event) => {
+      if (event.target === event.currentTarget) this.shopOpen = false;
+    });
+    this.root.querySelector('#tree')?.addEventListener('pointerdown', (event) => {
+      if (event.target === event.currentTarget) this.treeOpen = false;
+    });
+    this.tap(this.root.querySelector('#shop-cats'), '[data-cat]', (button) => {
+      const cat = button.dataset.cat;
+      if (cat === 'recommended' || cat === 'consumable' || cat === 'weapon' || cat === 'armor' || cat === 'helm' || cat === 'belt') {
+        this.shopCat = cat;
+      }
+    });
+    this.tap(this.root.querySelector('#shop-grid'), '[data-pick]', (button) => {
+      if (button.dataset.pick) this.shopPick = button.dataset.pick;
     });
     this.arm('#help-close', () => {
       this.helpOpen = false;
@@ -119,15 +163,8 @@ export class Hud {
         this.onUpgrade?.(row.dataset.skill);
         return;
       }
-      pointer.preventDefault();
-      row.setPointerCapture(pointer.pointerId);
+      // Leave the pointer with the scroller until the gesture is clearly a sideways drag.
       this.drag = { id: row.dataset.skill, pointer: pointer.pointerId, x: pointer.clientX, y: pointer.clientY, moved: false };
-    });
-    this.root.querySelector('#shop-grid')?.addEventListener('pointerdown', (event) => {
-      const button = (event.target as HTMLElement).closest<HTMLElement>('[data-buy]');
-      if (!button?.dataset.buy) return;
-      event.preventDefault();
-      this.onBuy?.(button.dataset.buy);
     });
   }
 
@@ -196,16 +233,17 @@ export class Hud {
     } else death.hidden = true;
 
     const near = !hero.alive || inShopRange(sim, hero);
-    const shop = this.q('#shop');
-    shop.hidden = !this.shopOpen;
-    shop.classList.toggle('far', !near);
+    const shopJust = this.shopOpen && !this.sawShop;
+    if (this.treeOpen && !this.sawTree) this.tab = sim.statPoints > 0 ? 'stats' : 'skills';
+    this.sawShop = this.shopOpen;
+    this.sawTree = this.treeOpen;
     const note = this.q('#shop-note');
-    const stats = `Str ${sim.attributes.str} · Dex ${sim.attributes.dex}. Potions ${potionCap(sim.loadout.belt)} each.`;
+    const stats = `Str ${sim.attributes.str} · Dex ${sim.attributes.dex} · potions ${potionCap(sim.loadout.belt)}`;
     note.textContent = near
       ? hero.alive
-        ? `Akara will trade while you stand in the Encampment. ${stats}`
-        : `You may trade while you wait to return. ${stats}`
-      : `Outside the Rogue Encampment. Walk back to camp — Akara will not sell out here. ${stats}`;
+        ? `In camp. A new piece replaces the old one. ${stats}`
+        : `You can trade while you wait to return. ${stats}`
+      : `Outside camp. Walk back before Akara will sell. ${stats}`;
     const shopBtn = this.root.querySelector<HTMLButtonElement>('#shop-btn');
     if (shopBtn) {
       const touch = document.body.classList.contains('touch');
@@ -213,13 +251,24 @@ export class Hud {
     }
     this.syncTarget(sim, focusId);
     this.syncSkills(sim);
-    this.syncShop(sim, near);
+    this.syncShop(sim, near, shopJust);
     this.text('#potion-hp-count', String(sim.potions.health));
     this.text('#potion-mp-count', String(sim.potions.mana));
     const help = this.q('#help');
     help.hidden = !this.helpOpen;
     const tree = this.q('#tree');
     tree.hidden = !this.treeOpen;
+    const shop = this.q('#shop');
+    shop.hidden = !this.shopOpen;
+    shop.classList.toggle('far', this.shopOpen && !near);
+    for (const id of ['skills', 'stats'] as const) {
+      this.root.querySelector(`#tab-${id}`)?.classList.toggle('on', this.tab === id);
+      this.root.querySelector(`#tab-${id}`)?.setAttribute('aria-selected', this.tab === id ? 'true' : 'false');
+      const pane = this.root.querySelector<HTMLElement>(`#pane-${id}`);
+      if (pane) pane.hidden = this.tab !== id;
+    }
+    const heading = this.root.querySelector('#tree-heading');
+    if (heading) heading.textContent = this.tab === 'stats' ? 'Stats' : 'Loadout';
     const treeBtn = this.root.querySelector<HTMLButtonElement>('#tree-btn');
     if (treeBtn) {
       const pts = sim.skillPoints + sim.statPoints;
@@ -227,7 +276,7 @@ export class Hud {
       treeBtn.textContent = pts > 0 ? `+${pts}` : touch ? 'Pts' : 'Points';
       treeBtn.classList.toggle('has-points', pts > 0);
     }
-    if (!this.treeOpen) this.pendingSkill = null;
+    if (!this.treeOpen || this.tab !== 'skills') this.pendingSkill = null;
     this.syncTree(sim);
   }
 
@@ -271,6 +320,7 @@ export class Hud {
       button.dataset.slot = String(slot);
       button.innerHTML = `
         <span class="sweep" data-sweep="${slot}"></span>
+        <img class="sicon" alt="" data-sicon="${slot}" hidden />
         <span class="key">${keys[slot]}</span>
         <span class="sname" data-sname="${slot}"></span>
         <span class="rank" data-rank="${slot}"></span>
@@ -296,6 +346,12 @@ export class Hud {
       button.dataset.cast = id;
       const name = button.querySelector('[data-sname]');
       if (name) name.textContent = skill ? skill.short || skill.name : '+';
+      const icon = button.querySelector<HTMLImageElement>('[data-sicon]');
+      if (icon) {
+        const src = skill ? skillIcon(skill.id) : '';
+        icon.hidden = !src;
+        if (src) icon.src = src;
+      }
       button.title = skill?.description ?? 'Empty belt slot.';
       const rank = skill ? (sim.skillRanks[skill.id] ?? 0) : 0;
       const cd = skill ? (sim.cooldowns[skill.id] ?? 0) : 0;
@@ -317,7 +373,7 @@ export class Hud {
         } else cdEl.hidden = true;
       }
       const plus = button.querySelector<HTMLElement>('[data-upgrade]');
-      const canLearn = !!skill && sim.skillPoints > 0 && sim.level >= skill.unlockLevel && rank > 0 && rank < skill.maxRank;
+      const canLearn = !!skill && sim.skillPoints > 0 && sim.level >= skill.unlockLevel && rank < skill.maxRank;
       if (plus) {
         plus.hidden = !canLearn;
         plus.dataset.upgrade = skill && canLearn ? skill.id : '';
@@ -343,60 +399,164 @@ export class Hud {
   }
 
   private buildShop(): void {
-    const host = this.root.querySelector('#shop-grid');
-    if (!host) return;
-    const groups: { title: string; slot: ItemDef['slot'] }[] = [
-      { title: 'Potions', slot: 'consumable' },
-      { title: 'Weapons', slot: 'weapon' },
-      { title: 'Armor', slot: 'armor' },
-      { title: 'Helms', slot: 'helm' },
-      { title: 'Belts', slot: 'belt' },
-      { title: 'Shields', slot: 'shield' },
+    const cats = this.root.querySelector('#shop-cats');
+    if (!cats) return;
+    const labels: { id: ShopCat; label: string }[] = [
+      { id: 'recommended', label: 'Recommended' },
+      { id: 'consumable', label: 'Potions' },
+      { id: 'weapon', label: 'Weapons' },
+      { id: 'armor', label: 'Armor' },
+      { id: 'helm', label: 'Helms' },
+      { id: 'belt', label: 'Belts' },
     ];
-    host.innerHTML = groups
-      .map((group) => {
-        const items = ITEMS.filter((item) => item.slot === group.slot);
-        if (!items.length) return '';
-        return `<h3 class="shop-h">${group.title}</h3>${items
-          .map(
-            (item) => `
-      <button type="button" class="item" data-buy="${item.id}">
-        <span class="item-top"><span class="item-name">${item.name}</span><span class="item-cost">${item.cost}g</span></span>
-        <span class="item-desc">${item.description}</span>
-      </button>`,
-          )
-          .join('')}`;
-      })
+    cats.innerHTML = labels
+      .map((cat) => `<button type="button" data-cat="${cat.id}" role="tab">${cat.label}</button>`)
       .join('');
   }
 
-  private syncShop(sim: Sim, near: boolean): void {
-    for (const item of ITEMS) {
-      const button = this.root.querySelector<HTMLButtonElement>(`[data-buy="${item.id}"]`);
-      if (!button) continue;
-      const owned = this.owned(sim, item);
-      const equippedId =
-        item.slot === 'weapon' || item.slot === 'armor' || item.slot === 'helm' || item.slot === 'belt'
-          ? sim.loadout[item.slot]
-          : null;
-      const previous = equippedId ? ITEMS.find((entry) => entry.id === equippedId) : undefined;
-      const refund = previous && previous.id !== item.id ? Math.floor(previous.cost * 0.5) : 0;
-      const price = Math.max(0, item.cost - refund);
-      const broke = sim.gold < price;
-      const needStr = (item.reqStr ?? 0) > sim.attributes.str;
-      const needDex = (item.reqDex ?? 0) > sim.attributes.dex;
-      const locked = (item.unlockLevel ?? 1) > sim.level;
-      button.disabled = !near || owned || broke || needStr || needDex || locked;
-      button.classList.toggle('owned', owned);
-      const cost = button.querySelector('.item-cost');
-      if (cost) {
-        if (owned) cost.textContent = 'Owned';
-        else if (locked) cost.textContent = `Lv ${item.unlockLevel}`;
-        else if (needStr) cost.textContent = `Str ${item.reqStr}`;
-        else if (needDex) cost.textContent = `Dex ${item.reqDex}`;
-        else cost.textContent = refund > 0 ? `${price}g` : `${item.cost}g`;
-      }
+  private syncShop(sim: Sim, near: boolean, justOpened: boolean): void {
+    const recommended = this.recommended(sim);
+    const ready = recommended.find((item) => this.affordable(this.quote(sim, item), near));
+    const fallback = recommended.find((item) => !item.consumable) ?? recommended[0] ?? null;
+    const quick = ready ?? fallback;
+    this.quickId = quick?.id ?? null;
+    this.paintQuick(sim, quick, near);
+    if (justOpened) {
+      this.shopCat = 'recommended';
+      this.shopPick = quick?.id ?? null;
+      this.shopGridKey = '';
     }
+    const list = this.shopCat === 'recommended' ? recommended : ITEMS.filter((item) => item.slot === this.shopCat);
+    if (!list.some((item) => item.id === this.shopPick)) this.shopPick = list[0]?.id ?? null;
+    const key = `${this.shopCat}:${list.map((item) => item.id).join(',')}`;
+    const host = this.root.querySelector('#shop-grid');
+    if (host && key !== this.shopGridKey) {
+      this.shopGridKey = key;
+      host.innerHTML = list.length
+        ? list
+            .map(
+              (item) => `
+        <button type="button" class="shop-icon" data-pick="${item.id}" aria-label="${item.name}">
+          <img alt="" src="${itemIcon(item.id)}" />
+          <small></small>
+        </button>`,
+            )
+            .join('')
+        : '<p class="shop-empty">Nothing else to buy.</p>';
+      host.scrollTop = 0;
+    }
+    this.root.querySelectorAll<HTMLButtonElement>('#shop-cats button').forEach((button) => {
+      const on = button.dataset.cat === this.shopCat;
+      button.classList.toggle('on', on);
+      button.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    host?.querySelectorAll<HTMLButtonElement>('[data-pick]').forEach((button) => {
+      const item = ITEMS.find((entry) => entry.id === button.dataset.pick);
+      if (!item) return;
+      const quote = this.quote(sim, item);
+      button.classList.toggle('on', item.id === this.shopPick);
+      button.classList.toggle('owned', quote.owned);
+      const price = button.querySelector('small');
+      if (price) price.textContent = this.shortPrice(item, quote);
+    });
+    const pick = list.find((item) => item.id === this.shopPick) ?? null;
+    const icon = this.root.querySelector<HTMLImageElement>('#shop-detail-icon');
+    if (icon) {
+      icon.hidden = !pick;
+      if (pick) icon.src = itemIcon(pick.id);
+    }
+    this.text('#shop-detail-name', pick?.name ?? 'Akara');
+    this.text('#shop-detail-desc', pick?.description ?? 'Stand in the Encampment and pick a category.');
+    const quote = pick ? this.quote(sim, pick) : null;
+    const bits = pick && quote
+      ? [
+          pick.reqStr ? `Str ${pick.reqStr}` : '',
+          pick.reqDex ? `Dex ${pick.reqDex}` : '',
+          (pick.unlockLevel ?? 1) > 1 ? `Level ${pick.unlockLevel}` : '',
+          quote.owned ? 'Equipped' : `${quote.price} gold`,
+        ].filter(Boolean)
+      : [];
+    this.text('#shop-detail-meta', bits.join(' · '));
+    const buy = this.root.querySelector<HTMLButtonElement>('#shop-buy');
+    if (buy) {
+      const ok = !!pick && !!quote && this.affordable(quote, near);
+      buy.disabled = !ok;
+      buy.textContent = pick && quote ? this.buyLabel(pick, quote, near) : 'Buy';
+    }
+  }
+
+  private paintQuick(sim: Sim, item: ItemDef | null, near: boolean): void {
+    const chip = this.root.querySelector<HTMLButtonElement>('#quick-buy');
+    if (!chip) return;
+    if (!item) {
+      chip.hidden = true;
+      return;
+    }
+    const quote = this.quote(sim, item);
+    const ok = this.affordable(quote, near);
+    chip.hidden = false;
+    chip.disabled = !ok;
+    chip.classList.toggle('ready', ok);
+    const icon = chip.querySelector('img');
+    if (icon) icon.src = itemIcon(item.id);
+    const cost = chip.querySelector('b');
+    if (cost) cost.textContent = ok ? `${quote.price}g` : this.shortPrice(item, quote);
+    chip.setAttribute('aria-label', ok ? `Buy ${item.name} for ${quote.price} gold` : `${item.name}, ${this.buyLabel(item, quote, near)}`);
+  }
+
+  private recommended(sim: Sim): ItemDef[] {
+    const gear: ItemDef[] = [];
+    for (const path of GEAR_PATHS) {
+      const owned = sim.loadout[path.slot];
+      const index = owned ? path.ids.indexOf(owned) : -1;
+      const next = ITEMS.find((item) => item.id === path.ids[index + 1]);
+      if (!next || (next.unlockLevel ?? 1) > sim.level) continue;
+      gear.push(next);
+    }
+    const cap = potionCap(sim.loadout.belt);
+    const pots = ITEMS.filter((item) => !!item.consumable && sim.potions[item.consumable!] < cap);
+    return [...gear, ...pots];
+  }
+
+  private quote(sim: Sim, item: ItemDef): { price: number; owned: boolean; broke: boolean; needStr: boolean; needDex: boolean; locked: boolean; full: boolean } {
+    const owned = this.owned(sim, item);
+    const equippedId =
+      item.slot === 'weapon' || item.slot === 'armor' || item.slot === 'helm' || item.slot === 'belt' ? sim.loadout[item.slot] : null;
+    const previous = equippedId ? ITEMS.find((entry) => entry.id === equippedId) : undefined;
+    const refund = previous && previous.id !== item.id ? Math.floor(previous.cost * 0.5) : 0;
+    const price = item.consumable ? item.cost : Math.max(0, item.cost - refund);
+    return {
+      price,
+      owned,
+      broke: sim.gold < price,
+      needStr: (item.reqStr ?? 0) > sim.attributes.str,
+      needDex: (item.reqDex ?? 0) > sim.attributes.dex,
+      locked: (item.unlockLevel ?? 1) > sim.level,
+      full: item.consumable ? sim.potions[item.consumable] >= potionCap(sim.loadout.belt) : false,
+    };
+  }
+
+  private affordable(quote: { owned: boolean; broke: boolean; needStr: boolean; needDex: boolean; locked: boolean; full: boolean }, near: boolean): boolean {
+    return near && !quote.owned && !quote.broke && !quote.needStr && !quote.needDex && !quote.locked && !quote.full;
+  }
+
+  private buyLabel(item: ItemDef, quote: { price: number; owned: boolean; broke: boolean; needStr: boolean; needDex: boolean; locked: boolean; full: boolean }, near: boolean): string {
+    if (quote.owned) return 'Owned';
+    if (quote.locked) return `Lv ${item.unlockLevel}`;
+    if (quote.needStr) return `Str ${item.reqStr}`;
+    if (quote.needDex) return `Dex ${item.reqDex}`;
+    if (quote.full) return 'Full';
+    if (!near) return 'Camp';
+    return `Buy ${quote.price}g`;
+  }
+
+  private shortPrice(item: ItemDef, quote: { price: number; owned: boolean; needStr: boolean; needDex: boolean; locked: boolean; full: boolean }): string {
+    if (quote.owned) return 'Have';
+    if (quote.locked) return `Lv ${item.unlockLevel}`;
+    if (quote.needStr) return `Str ${item.reqStr}`;
+    if (quote.needDex) return `Dex ${item.reqDex}`;
+    if (quote.full) return 'Full';
+    return `${quote.price}g`;
   }
 
   private owned(sim: Sim, item: ItemDef): boolean {
@@ -412,9 +572,12 @@ export class Hud {
     const cols = this.root.querySelector('#tree-cols');
     if (!attrs || !picks || !cols) return;
     const keys = ['str', 'dex', 'vit', 'energy'] as const;
-    const labels = { str: 'Str', dex: 'Dex', vit: 'Vit', energy: 'Energy' };
+    const long = { str: 'Strength', dex: 'Dexterity', vit: 'Vitality', energy: 'Energy' };
     attrs.innerHTML = keys
-      .map((key) => `<button type="button" data-attr="${key}"><b data-attr-val="${key}">${labels[key]}</b></button>`)
+      .map(
+        (key) =>
+          `<button type="button" data-attr="${key}"><span class="attr-copy"><b>${long[key]}</b><span data-attr-val="${key}">0</span></span><span class="spend">+</span></button>`,
+      )
       .join('');
     picks.innerHTML = ['Q', 'W', 'E', 'R']
       .map((key, index) => `<button type="button" data-slot-pick="${index}">${key} <span data-pick-name="${index}"></span></button>`)
@@ -423,7 +586,8 @@ export class Hud {
       .map(
         (skill) => `
         <button type="button" class="tree-node" data-skill="${skill.id}" title="${skill.description.replace(/"/g, '&quot;')}">
-          <span class="tn-name">${skill.name}</span>
+          <img class="sicon" alt="" src="${skillIcon(skill.id)}" />
+          <span class="tn-name">${skill.short || skill.name}</span>
           <span class="tn-meta" data-node-meta="${skill.id}"></span>
           <span class="plus" data-upgrade="${skill.id}" hidden>+</span>
         </button>`,
@@ -434,7 +598,7 @@ export class Hud {
   private syncTree(sim: Sim): void {
     this.text(
       '#tree-points',
-      `${sim.skillPoints} skill point${sim.skillPoints === 1 ? '' : 's'} · ${sim.statPoints} stat point${sim.statPoints === 1 ? '' : 's'} · potions ${potionCap(sim.loadout.belt)}`,
+      `${sim.skillPoints} skill · ${sim.statPoints} stat${document.body.classList.contains('touch') && (this.treeOpen || this.shopOpen) ? ' · paused' : ''}`,
     );
     const pending = sim.classDef.skills.find((skill) => skill.id === this.pendingSkill);
     this.text(
@@ -445,8 +609,9 @@ export class Hud {
     );
     for (const key of ['str', 'dex', 'vit', 'energy'] as const) {
       const node = this.root.querySelector(`[data-attr-val="${key}"]`);
-      const label = key === 'str' ? 'Str' : key === 'dex' ? 'Dex' : key === 'vit' ? 'Vit' : 'Energy';
-      if (node) node.textContent = `${label} ${sim.attributes[key]}${sim.statPoints > 0 ? ' +' : ''}`;
+      if (node) node.textContent = String(sim.attributes[key]);
+      const spend = this.root.querySelector<HTMLElement>(`[data-attr="${key}"] .spend`);
+      if (spend) spend.hidden = sim.statPoints <= 0;
     }
     const keys = ['Q', 'W', 'E', 'R'];
     sim.belt.forEach((id, slot) => {
@@ -464,10 +629,8 @@ export class Hud {
       const meta = this.root.querySelector(`[data-node-meta="${skill.id}"]`);
       const where = sim.belt.indexOf(skill.id);
       if (meta) {
-        const place = where >= 0 ? ` · on ${keys[where]}` : '';
-        meta.textContent = unlocked
-          ? `${rank}/${skill.maxRank} · ${skill.mana} mana${place}`
-          : `Locked until level ${skill.unlockLevel}`;
+        const place = where >= 0 ? ` ${keys[where]}` : '';
+        meta.textContent = unlocked ? `${rank}/${skill.maxRank}${place}` : `Lv ${skill.unlockLevel}`;
       }
       const node = this.root.querySelector<HTMLButtonElement>(`[data-skill="${skill.id}"]`);
       node?.classList.toggle('locked', !unlocked);
@@ -482,8 +645,21 @@ export class Hud {
     if (!this.drag || event.pointerId !== this.drag.pointer || !this.ghost) return;
     const dx = event.clientX - this.drag.x;
     const dy = event.clientY - this.drag.y;
-    if (dx * dx + dy * dy > 64) this.drag.moved = true;
-    if (!this.drag.moved) return;
+    if (!this.drag.moved) {
+      if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) {
+        this.drag = null;
+        return;
+      }
+      if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy)) return;
+      this.drag.moved = true;
+      const row = this.root.querySelector<HTMLElement>(`[data-skill="${this.drag.id}"]`);
+      try {
+        row?.setPointerCapture(event.pointerId);
+      } catch {
+        /* the row may already have released */
+      }
+    }
+    event.preventDefault();
     const skill = this.drag.id;
     const name = this.root.querySelector(`[data-skill="${skill}"] .tn-name`)?.textContent ?? skill;
     this.ghost.hidden = false;
@@ -507,6 +683,27 @@ export class Hud {
     if (raw == null) return;
     this.onAssign?.(drag.id, Number(raw));
     this.pendingSkill = null;
+  }
+
+  /** A short press selects. A drag keeps the scroller. */
+  private tap(host: Element | null, selector: string, fn: (el: HTMLElement) => void): void {
+    if (!host) return;
+    let start: { x: number; y: number } | null = null;
+    host.addEventListener('pointerdown', (event) => {
+      const pointer = event as PointerEvent;
+      if (pointer.button !== 0) return;
+      start = { x: pointer.clientX, y: pointer.clientY };
+    });
+    host.addEventListener('pointerup', (event) => {
+      const pointer = event as PointerEvent;
+      const origin = start;
+      start = null;
+      if (!origin) return;
+      if (Math.hypot(pointer.clientX - origin.x, pointer.clientY - origin.y) > 12) return;
+      const el = (event.target as HTMLElement).closest<HTMLElement>(selector);
+      if (!el || !host.contains(el)) return;
+      fn(el);
+    });
   }
 
   private q(sel: string): HTMLElement {
