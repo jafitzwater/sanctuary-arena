@@ -38,7 +38,7 @@
           <div class="help-grid">
             <div>
               <h3>Touch</h3>
-              <p>Stick on the left moves. Attack and skills sit on the right. Tap the ground to walk, or tap an enemy to chase them. Shop at the Encampment. Drink potions with the two small buttons.</p>
+              <p>Stick on the left moves. Attack and skills sit on the belt. Tap the ground to walk, or tap an enemy to chase them. Shop opens anywhere; Akara only sells inside the Encampment. The red orb is life, the blue orb is mana.</p>
             </div>
             <div>
               <h3>Mouse and keys</h3>
@@ -50,13 +50,9 @@
 
       <div id="hud" hidden>
         <header id="topbar">
-          <div class="portrait" aria-hidden="true">B</div>
-          <div class="vitals">
-            <div class="bar hp"><span id="hp-fill"></span><em id="hp-text"></em></div>
-            <div class="bar mp"><span id="mp-fill"></span><em id="mp-text"></em></div>
-            <div class="bar xp"><span id="xp-fill"></span></div>
-          </div>
+          <div class="portrait" aria-hidden="true"><img id="portrait-img" alt="" /></div>
           <div class="stat"><b id="level">1</b><small>lv</small></div>
+          <div class="xp-wrap" aria-hidden="true"><div class="bar xp"><span id="xp-fill"></span></div></div>
           <div class="stat gold"><b id="gold">0</b><small>gold</small></div>
           <div class="stat slim"><span id="kd"></span><span id="cs"></span></div>
           <div class="stat slim"><span id="clock">0:00</span><span id="loadout">Unarmed</span></div>
@@ -72,12 +68,24 @@
         <p id="tip" hidden></p>
         <p id="death" hidden></p>
 
+        <div id="orb-hp" class="orb" aria-label="Life">
+          <div class="orb-liquid" id="hp-fill"></div>
+          <div class="orb-glass"></div>
+          <em id="hp-text"></em>
+        </div>
+        <div id="orb-mp" class="orb mana" aria-label="Mana">
+          <div class="orb-liquid" id="mp-fill"></div>
+          <div class="orb-glass"></div>
+          <em id="mp-text"></em>
+        </div>
+
         <div id="stick" aria-hidden="true">
           <div id="stick-knob"></div>
         </div>
 
-        <div id="cluster">
+        <div id="belt">
           <div id="skills"></div>
+          <button id="attack-btn" type="button">Attack</button>
           <div class="side-col">
             <button id="potion-hp" type="button" aria-label="Drink health potion">
               <span>HP</span><b id="potion-hp-count">0</b><small>5</small>
@@ -86,9 +94,8 @@
               <span>MP</span><b id="potion-mp-count">0</b><small>6</small>
             </button>
           </div>
-          <button id="attack-btn" type="button">Attack</button>
-          <p id="skill-hint"></p>
         </div>
+        <p id="skill-hint"></p>
 
         <section id="shop" hidden role="dialog" aria-modal="true" aria-labelledby="shop-heading">
           <div class="sheet">
@@ -110,7 +117,7 @@
             <div class="help-grid">
               <div>
                 <h3>Touch</h3>
-                <p>Move with the stick. Hold Attack to strike whatever is in reach, or tap an enemy to lock onto them. Skill buttons are on the right. A glowing + spends a skill point. Open the shop inside the Rogue Encampment. HP and MP buttons drink potions.</p>
+                <p>Move with the stick. Hold Attack to strike whatever is in reach, or tap an enemy to lock onto them. Skills sit on the belt. A glowing + spends a skill point. Shop always opens; Akara only sells inside the Rogue Encampment, and the panel says so when you are outside. HP and MP buttons drink potions. The red orb is life and the blue orb is mana.</p>
               </div>
               <div>
                 <h3>Mouse and keyboard</h3>

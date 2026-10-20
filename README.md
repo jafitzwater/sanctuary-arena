@@ -2,13 +2,11 @@
 
 A personal, non-commercial browser MOBA with a Diablo II theme. This proof of concept is one lane on Act I: the Barbarian walks from the Rogue Encampment, across the Blood Moor, to Andariel's altar in the Catacombs.
 
-All art is drawn in the canvas with shapes. No game assets are shipped.
-
-The live site is intended for GitHub Pages:
+The look is an original isometric take on Act I: a Blood Moor ground texture, a Barbarian with idle, walk, attack, whirlwind, and leap frames, Fallen, zombies, Rogues, Blood Raven, camp tents, a palisade, campfires, and an Andariel altar. Sprites are generated for this personal project and bundled under `src/assets/art/`. They are not ripped from Diablo II or from the browser game D2 Vampire Survivors, and the page does not hotlink any art or audio. Sound effects and the ambient bed are synthesized in the browser (`src/game/audio.ts`).
 
 **https://jafitzwater.github.io/sanctuary-arena/**
 
-That URL starts working after this branch is merged to `main`, the deploy workflow has run, and Pages is set to deploy from GitHub Actions (see below).
+That URL updates when this branch is merged to `main` and the Pages workflow finishes.
 
 ## How to play
 
@@ -27,11 +25,11 @@ The Barbarian starts with Bash. Leap, War Cry, and Whirlwind unlock at levels 2,
 
 Turn the phone sideways. Portrait shows a rotate hint and pauses the match.
 
-- The stick on the left moves.
-- **Attack** strikes whatever is in reach. Tap an enemy to lock onto them, then walk in with the stick.
+- The red orb (bottom left) is life. The blue orb (bottom right) is mana. The stick sits above the life orb and moves you on the screen, including diagonally along the isometric ground.
+- **Attack** and the skill belt sit along the bottom. Attack strikes whatever is in reach. Tap an enemy to lock onto them, then walk in with the stick.
 - Tap empty ground to walk there when you are not using the stick.
-- The four round buttons cast skills. A gold **+** spends a skill point (tap the main button to learn a skill you do not know yet).
-- **HP** / **MP** drink potions. **Shop** opens Akara's goods. Buttons are sized for thumbs.
+- The four belt buttons cast skills. A gold **+** spends a skill point (tap the main button to learn a skill you do not know yet).
+- **HP** / **MP** drink potions. **Shop** always opens Akara's list. Outside the Rogue Encampment the button reads **Shop · camp**, the panel stays open, and it says she will not sell until you walk back. Buys stay disabled out there. Buttons are sized for thumbs and respond to the tap itself, not a delayed click.
 
 The page sets `maximum-scale=1` and `user-scalable=no`, and touch scrolling is swallowed outside the shop and help sheets so the browser does not zoom or pull the page.
 
@@ -69,7 +67,8 @@ src/game/data/units.ts   Minions and monsters referenced by wave tables
 src/game/data/items.ts   Shop catalog
 src/game/skills/         Skill id → behavior
 src/game/sim.ts          Match loop: movement, waves, combat, gold
-src/game/render.ts       Procedural map and sprites
+src/game/render.ts       Isometric ground, sprites, and minimap
+src/assets/art/          Bundled original sprites and the Blood Moor texture
 src/game/input.ts        Mouse, keyboard, virtual stick
 src/game/hud.ts          DOM HUD and shop
 src/game/Game.ts         Composition root. This is the file that picks the act and class.
@@ -84,7 +83,7 @@ The other six Diablo II classes (Amazon, Necromancer, Paladin, Sorceress, Druid,
 1. Add `src/game/data/classes/<id>.ts` exporting a `ClassDef`: base stats, per-level growth, and a `skills` array (`id`, key, cooldown, mana, unlock level, max rank, description).
 2. Register it in `src/game/data/classes/index.ts`.
 3. Add handlers in `src/game/skills/` and register each skill id in `src/game/skills/index.ts`. Handlers receive the sim, the hero, the rank, and an aim point. They should call `damageUnit` from `combat.ts` rather than inventing a second damage path.
-4. Draw the champion in `drawSprite` inside `src/game/render.ts` (the `defId` is the class id).
+4. Draw the champion in `sheetFor` inside `src/game/render.ts` (the `defId` is the class id). Drop frames in `src/assets/art/` and credit them in this file.
 5. Point `createMatch` in `src/game/Game.ts` at the new class, or add a picker on the title screen later.
 
 Avoid binding skill keys to the arrow keys. Digits 1–4 are the alternate hotkeys; 5 and 6 drink potions.
@@ -95,8 +94,8 @@ Acts II–V are another `ActDef`:
 
 1. Add `src/game/data/acts/act2.ts` (and so on) with a lane polyline, plaza radius, jungle shoulder, two bases, towers sitting on the lane, a wave table of unit ids, an enemy champion, and a `theme`.
 2. Register it in `src/game/data/acts/index.ts`.
-3. New monsters go in `src/game/data/units.ts` as ids the wave table can name, plus a branch in `drawSprite`.
-4. New scenery: set `theme.decor` to a new id and handle it in `paintMap` in `render.ts`. Unknown decor still draws the road, plazas, and props.
+3. New monsters go in `src/game/data/units.ts` as ids the wave table can name, plus a branch in `sheetFor` in `render.ts`.
+4. New scenery: extend `buildScenery` / `paintRoad` in `render.ts`. Unknown props still draw as trees.
 5. Pass the act into `createMatch` from `Game.ts`.
 
 The walkable ground is the road, a jungle shoulder beside it, and a plaza around each base. That keeps one lane without a path that walks around every tower. Towers should stay on the polyline so minions march into them.
@@ -105,18 +104,12 @@ The walkable ground is the road, a jungle shoulder beside it, and a plaza around
 
 `.github/workflows/pages.yml` builds on pull requests, and on a push to `main` it publishes `dist/` with GitHub Pages actions. The Vite `base` is `/sanctuary-arena/`, so script and style URLs resolve under the project site.
 
-Pages is not turned on yet (`has_pages` is false, and the token used here cannot change repository settings). The owner needs to:
-
-1. Merge this branch to `main`.
-2. Open **Settings → Pages → Build and deployment**.
-3. Set **Source** to **GitHub Actions** (not "Deploy from a branch").
-4. If GitHub asks to approve the `github-pages` environment, approve it.
-
-The first green run of "Deploy GitHub Pages" on `main` is what creates https://jafitzwater.github.io/sanctuary-arena/. Private Pages needs GitHub Pro, which this account has.
+Merging to `main` runs the deploy workflow and updates https://jafitzwater.github.io/sanctuary-arena/. Pages should stay set to **GitHub Actions** as the source.
 
 ## Known gaps
 
 - One class and one act. No fog of war, no jungle camps, no inhibitors, no item actives beyond potions.
 - Blood Raven kites and retreats; she does not cast a skill kit.
 - Balance is tuned for a short proof-of-concept match, not a 30-minute game.
-- Art is procedural shapes, so characters read as icons more than illustrations.
+- Art is original generated pixel sprites (eight Barbarian frames, two-step Fallen and zombie walks, one pose each for the Rogue, Blood Raven, and props) rather than Diablo II's full 16-direction sheets. Rogue archers reuse Blood Raven's bow pose with a blue tint. Trees are drawn in code. Audio is synthesized, not the Diablo II soundtrack.
+- The isometric camera shows the lane from a 2:1 angle. Movement on the stick and arrow keys follows the screen, not the raw map axes.

@@ -1,10 +1,8 @@
 import { act1 } from './data/acts/act1';
 import { barbarian } from './data/classes/barbarian';
-import { inShopRange } from './combat';
 import { AudioBus } from './audio';
 import { Hud } from './hud';
 import { InputController } from './input';
-import { player } from './query';
 import { Renderer } from './render';
 import { createMatch, updateSim } from './sim';
 import type { Sim } from './types';
@@ -79,8 +77,7 @@ export class Game {
     this.input.attach();
     this.syncTouchClass();
     window.addEventListener('resize', () => this.syncTouchClass());
-    const coarse = window.matchMedia('(pointer: coarse), (hover: none)');
-    coarse.addEventListener('change', () => this.syncTouchClass());
+    window.matchMedia('(pointer: coarse)').addEventListener('change', () => this.syncTouchClass());
     this.renderer.resize();
     this.renderer.updateCamera(this.sim, 'title', 0, 0);
     this.hud.sync(this.sim, this.mode);
@@ -107,10 +104,6 @@ export class Game {
     if (playing) {
       const input = this.input.snapshot();
       updateSim(this.sim, input, dt);
-      if (this.hud.shopOpen) {
-        const hero = player(this.sim);
-        if (hero.alive && !inShopRange(this.sim, hero)) this.hud.shopOpen = false;
-      }
       if (this.sim.phase !== 'playing') {
         this.mode = 'end';
         this.hud.shopOpen = false;
@@ -130,8 +123,15 @@ export class Game {
   };
 
   private syncTouchClass(): void {
-    const coarse = window.matchMedia('(pointer: coarse), (hover: none)').matches;
-    const phoneLandscape = window.innerHeight <= 520 && window.innerWidth > window.innerHeight;
+    // Phones report a coarse pointer. A short landscape window also gets the
+    // stick so a phone-sized browser (including responsive mode that still
+    // reports a fine pointer) is playable. Hover-none alone is not enough:
+    // some desktop and headless browsers report it without being touch devices.
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    const phoneLandscape =
+      window.innerWidth <= 1024 &&
+      window.innerHeight <= 540 &&
+      window.innerWidth > window.innerHeight;
     document.body.classList.toggle('touch', coarse || phoneLandscape);
   }
 }

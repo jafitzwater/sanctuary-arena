@@ -1,3 +1,4 @@
+import { screenVectorToWorld } from './iso';
 import { byId, inRange, player } from './query';
 import type { FrameInput, Sim } from './types';
 import type { Vec } from './math';
@@ -103,7 +104,7 @@ export class InputController {
       'touchmove',
       (event) => {
         const target = event.target as HTMLElement | null;
-        if (target?.closest('#shop, #help, #title, #end')) return;
+        if (target?.closest('#shop, #help, #title, #end, #topbar, #belt')) return;
         event.preventDefault();
       },
       { passive: false },
@@ -112,12 +113,15 @@ export class InputController {
 
   snapshot(): FrameInput {
     const sim = this.hooks.getSim();
-    let x = this.joyActive ? this.joyX : 0;
-    let y = this.joyActive ? this.joyY : 0;
-    if (this.keys.has('ArrowLeft')) x -= 1;
-    if (this.keys.has('ArrowRight')) x += 1;
-    if (this.keys.has('ArrowUp')) y -= 1;
-    if (this.keys.has('ArrowDown')) y += 1;
+    let sx = this.joyActive ? this.joyX : 0;
+    let sy = this.joyActive ? this.joyY : 0;
+    if (this.keys.has('ArrowLeft')) sx -= 1;
+    if (this.keys.has('ArrowRight')) sx += 1;
+    if (this.keys.has('ArrowUp')) sy -= 1;
+    if (this.keys.has('ArrowDown')) sy += 1;
+    const worldDir = screenVectorToWorld(sx, sy);
+    let x = worldDir.x;
+    let y = worldDir.y;
     const mag = Math.hypot(x, y);
     if (mag > 1) {
       x /= mag;

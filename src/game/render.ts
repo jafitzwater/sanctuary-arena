@@ -1,14 +1,35 @@
+import moorUrl from '../assets/art/moor.png';
+import barbIdle from '../assets/art/barbarian/idle.png';
+import barbWalk1 from '../assets/art/barbarian/walk1.png';
+import barbWalk2 from '../assets/art/barbarian/walk2.png';
+import barbAtk1 from '../assets/art/barbarian/atk1.png';
+import barbAtk2 from '../assets/art/barbarian/atk2.png';
+import barbWhirl from '../assets/art/barbarian/whirl.png';
+import barbLeap from '../assets/art/barbarian/leap.png';
+import barbNorth from '../assets/art/barbarian/north.png';
+import fallenUrl from '../assets/art/monsters/fallen.png';
+import fallenWalkUrl from '../assets/art/monsters/fallen-walk.png';
+import zombieUrl from '../assets/art/monsters/zombie.png';
+import zombieWalkUrl from '../assets/art/monsters/zombie-walk.png';
+import ravenUrl from '../assets/art/monsters/raven.png';
+import rogueUrl from '../assets/art/monsters/rogue.png';
+import tentUrl from '../assets/art/props/tent.png';
+import fireUrl from '../assets/art/props/fire.png';
+import wallUrl from '../assets/art/props/wall.png';
+import towerUrl from '../assets/art/props/watchtower.png';
+import altarUrl from '../assets/art/props/andariel.png';
 import type { ActDef } from './data/acts/types';
+import { projectIso, unprojectIso } from './iso';
 import { distToPolyline, Rng, type Vec } from './math';
 import { player } from './query';
 import type { Camera, Sim, Unit } from './types';
 
-interface Prop {
-  kind: 'tree' | 'dead' | 'rock' | 'grave' | 'bone' | 'tent' | 'pillar' | 'cart' | 'stump';
+interface Scenery {
+  kind: 'tree' | 'dead' | 'tent' | 'wall';
   x: number;
   y: number;
   s: number;
-  rot: number;
+  flip: boolean;
 }
 
 export interface DrawOpts {
@@ -18,26 +39,81 @@ export interface DrawOpts {
   time: number;
 }
 
+const BAKE_HW = 0.85;
+const PAD = 64;
+/** World units visible across the screen. Larger means a wider, smaller-sprite view. */
+const WORLD_ACROSS = 1040;
+
+type Sheet = HTMLImageElement | HTMLCanvasElement;
+
+function loadImage(src: string): HTMLImageElement {
+  const img = new Image();
+  img.decoding = 'async';
+  img.src = src;
+  return img;
+}
+
+/**
+ * Isometric view of the Blood Moor. The ground is baked once; characters are
+ * original generated sprites drawn as billboards so they are not skewed.
+ */
 export class Renderer {
   camera: Camera = { x: 0, y: 0, viewW: 800, viewH: 500, zoom: 1, cssW: 800, cssH: 500, dpr: 1 };
   private ctx: CanvasRenderingContext2D;
   private mapCanvas: HTMLCanvasElement | null = null;
   private mapKey = '';
-  private props: Prop[] = [];
+  private scenery: Scenery[] = [];
   private snapped = false;
+  private focusX = 0;
+  private focusY = 0;
+  private camBakeX = 0;
+  private camBakeY = 0;
+  private scale = 1;
+  private ox = 0;
+  private oy = 0;
   private reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  private gait = new Map<number, { x: number; y: number; d: number }>();
+  private archer: HTMLCanvasElement | null = null;
+
+  private readonly moor = loadImage(moorUrl);
+  private readonly art = {
+    idle: loadImage(barbIdle),
+    walk1: loadImage(barbWalk1),
+    walk2: loadImage(barbWalk2),
+    atk1: loadImage(barbAtk1),
+    atk2: loadImage(barbAtk2),
+    whirl: loadImage(barbWhirl),
+    leap: loadImage(barbLeap),
+    north: loadImage(barbNorth),
+    fallen: loadImage(fallenUrl),
+    fallenWalk: loadImage(fallenWalkUrl),
+    zombie: loadImage(zombieUrl),
+    zombieWalk: loadImage(zombieWalkUrl),
+    raven: loadImage(ravenUrl),
+    rogue: loadImage(rogueUrl),
+    tent: loadImage(tentUrl),
+    fire: loadImage(fireUrl),
+    wall: loadImage(wallUrl),
+    tower: loadImage(towerUrl),
+    altar: loadImage(altarUrl),
+  };
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Canvas 2D is unavailable');
     this.ctx = ctx;
+    const bump = () => {
+      this.mapKey = '';
+    };
+    this.moor.onload = bump;
+    for (const img of Object.values(this.art)) img.onload = bump;
   }
 
   resize(): void {
     const rect = this.canvas.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const cssW = Math.max(1, rect.width);
     const cssH = Math.max(1, rect.height);
+    const dpr = Math.min(window.devicePixelRatio || 1, cssW < 1100 ? 1.5 : 2);
     const width = Math.round(cssW * dpr);
     const height = Math.round(cssH * dpr);
     if (this.canvas.width !== width || this.canvas.height !== height) {
@@ -47,80 +123,131 @@ export class Renderer {
     this.camera.cssW = cssW;
     this.camera.cssH = cssH;
     this.camera.dpr = dpr;
-    this.camera.viewH = Math.max(380, Math.min(600, cssH * 0.92));
-    this.camera.viewW = this.camera.viewH * (cssW / cssH);
-    this.camera.zoom = cssH / this.camera.viewH;
+    const hw = cssW / WORLD_ACROSS;
+    this.camera.viewW = WORLD_ACROSS;
+    this.camera.viewH = cssH / (hw * 0.5);
+    this.camera.zoom = hw;
   }
 
   screenToWorld(sx: number, sy: number): Vec {
-    return {
-      x: this.camera.x + sx / this.camera.zoom,
-      y: this.camera.y + sy / this.camera.zoom,
-    };
+    return unprojectIso(
+      this.camBakeX + sx / this.scale,
+      this.camBakeY + sy / this.scale,
+      BAKE_HW,
+      this.ox,
+      this.oy,
+    );
   }
 
   updateCamera(sim: Sim, mode: DrawOpts['mode'], dt: number, time: number): void {
     const focus = this.focus(sim, mode, time);
-    const desiredX = focus.x - this.camera.viewW / 2;
-    const desiredY = focus.y - this.camera.viewH / 2;
-    const maxX = Math.max(0, sim.map.width - this.camera.viewW);
-    const maxY = Math.max(0, sim.map.height - this.camera.viewH);
-    const clampedX = Math.max(0, Math.min(maxX, desiredX));
-    const clampedY = Math.max(0, Math.min(maxY, desiredY));
     if (!this.snapped) {
-      this.camera.x = clampedX;
-      this.camera.y = clampedY;
+      this.focusX = focus.x;
+      this.focusY = focus.y;
       this.snapped = true;
     } else {
       const t = 1 - Math.exp(-dt * 6);
-      this.camera.x += (clampedX - this.camera.x) * t;
-      this.camera.y += (clampedY - this.camera.y) * t;
+      this.focusX += (focus.x - this.focusX) * t;
+      this.focusY += (focus.y - this.focusY) * t;
     }
+    let fx = this.focusX;
+    let fy = this.focusY;
     if (!this.reduceMotion && sim.shake > 0) {
-      this.camera.x += Math.sin(time * 42) * sim.shake;
-      this.camera.y += Math.cos(time * 37) * sim.shake * 0.6;
+      fx += Math.sin(time * 42) * sim.shake;
+      fy += Math.cos(time * 37) * sim.shake * 0.6;
     }
+    const hw = BAKE_HW;
+    this.ox = sim.map.height * hw + PAD;
+    this.oy = PAD;
+    const projected = projectIso(fx, fy, hw, this.ox, this.oy);
+    this.scale = this.camera.zoom / hw;
+    this.camBakeX = projected.x - this.camera.cssW / 2 / this.scale;
+    this.camBakeY = projected.y - this.camera.cssH * 0.56 / this.scale;
+    this.camera.x = fx - this.camera.viewW / 2;
+    this.camera.y = fy - this.camera.viewH / 2;
   }
 
   draw(sim: Sim, opts: DrawOpts): void {
     this.ensureMap(sim.map);
+    this.ensureArcher();
     const ctx = this.ctx;
-    const { dpr, zoom } = this.camera;
-    ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, -this.camera.x * dpr * zoom, -this.camera.y * dpr * zoom);
+    const { dpr, cssW, cssH } = this.camera;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = true;
-    if (this.mapCanvas) ctx.drawImage(this.mapCanvas, 0, 0);
-    this.drawFires(ctx, sim, opts.time);
-    const hero = player(sim);
-    if (opts.attack && hero.alive && opts.mode === 'play') {
-      ctx.strokeStyle = 'rgba(230, 211, 161, 0.2)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(hero.x, hero.y, hero.attackRange, 0, Math.PI * 2);
-      ctx.stroke();
+    ctx.fillStyle = '#070605';
+    ctx.fillRect(0, 0, cssW, cssH);
+    if (this.mapCanvas) {
+      const srcW = cssW / this.scale;
+      const srcH = cssH / this.scale;
+      ctx.drawImage(this.mapCanvas, this.camBakeX, this.camBakeY, srcW, srcH, 0, 0, cssW, cssH);
     }
-    const units = [...sim.units].sort((a, b) => kindOrder(a) - kindOrder(b) || a.y - b.y);
-    for (const unit of units) this.drawUnit(ctx, unit, opts);
+
+    const u = this.spriteScale();
+    const layers: { depth: number; paint: () => void }[] = [];
+    for (const prop of this.scenery) {
+      layers.push({
+        depth: prop.x + prop.y,
+        paint: () => this.drawScenery(ctx, prop, u),
+      });
+    }
+    const camp = sim.map.playerBase;
+    const lair = sim.map.enemyBase;
+    const flicker = 0.82 + Math.sin(opts.time * 11) * 0.18;
+    layers.push({
+      depth: camp.x + 70 + camp.y + 24,
+      paint: () => this.drawFire(ctx, camp.x + 70, camp.y + 24, 54 * u * flicker),
+    });
+    layers.push({
+      depth: lair.x - 90 + lair.y + 30,
+      paint: () => this.drawFire(ctx, lair.x - 90, lair.y + 30, 48 * u * flicker),
+    });
+
+    const hero = player(sim);
+    const units = sim.units.filter((unit) => unit.alive || unit.corpse > 0 || unit.kind !== 'minion');
+    for (const unit of units) {
+      layers.push({
+        depth: unit.x + unit.y + (unit.kind === 'base' ? -8 : 0),
+        paint: () => this.drawUnit(ctx, unit, opts, u),
+      });
+    }
+    layers.sort((a, b) => a.depth - b.depth);
+    for (const layer of layers) layer.paint();
+
     for (const shot of sim.projectiles) {
+      const p = this.project(shot.x, shot.y);
       ctx.fillStyle = shot.color;
       ctx.beginPath();
-      ctx.arc(shot.x, shot.y, shot.radius + 1, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y, 4.5, 2.4, 0, 0, Math.PI * 2);
       ctx.fill();
     }
     for (const fx of sim.fx) this.drawFx(ctx, fx);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const vignette = ctx.createRadialGradient(
-      this.camera.cssW / 2,
-      this.camera.cssH / 2,
-      this.camera.cssH * 0.35,
-      this.camera.cssW / 2,
-      this.camera.cssH / 2,
-      this.camera.cssH * 0.75,
-    );
+
+    if (opts.attack && hero.alive && opts.mode === 'play') {
+      this.strokeEllipse(hero.x, hero.y, hero.attackRange, 'rgba(230, 211, 161, 0.28)');
+    }
+    if (Math.hypot(hero.x - camp.x, hero.y - camp.y) < sim.map.fountainRadius && hero.alive) {
+      this.strokeEllipse(camp.x, camp.y, sim.map.fountainRadius, 'rgba(230, 190, 110, 0.22)');
+    }
+
+    this.drawLabel(camp.x, camp.y - 230, 'Rogue Encampment', '#e6d3a1');
+    this.drawLabel(lair.x, lair.y - 230, 'Catacombs', '#e7b2a4');
+
+    const vignette = ctx.createRadialGradient(cssW / 2, cssH / 2, cssH * 0.2, cssW / 2, cssH / 2, cssH * 0.78);
     vignette.addColorStop(0, 'rgba(0,0,0,0)');
-    vignette.addColorStop(1, 'rgba(0,0,0,0.38)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0.55)');
     ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, this.camera.cssW, this.camera.cssH);
+    ctx.fillRect(0, 0, cssW, cssH);
     this.drawMinimap(sim, opts.targetId);
+  }
+
+  private spriteScale(): number {
+    const { cssW, cssH } = this.camera;
+    return Math.max(0.58, Math.min(1.15, Math.min(cssW, cssH * 1.85) / 980));
+  }
+
+  private project(x: number, y: number): Vec {
+    const p = projectIso(x, y, BAKE_HW, this.ox, this.oy);
+    return { x: (p.x - this.camBakeX) * this.scale, y: (p.y - this.camBakeY) * this.scale };
   }
 
   private focus(sim: Sim, mode: DrawOpts['mode'], time: number): Vec {
@@ -137,114 +264,356 @@ export class Renderer {
     }
     const hero = player(sim);
     return {
-      x: hero.x + Math.cos(hero.facing) * 36,
-      y: hero.y + Math.sin(hero.facing) * 24,
+      x: hero.x + Math.cos(hero.facing) * 28,
+      y: hero.y + Math.sin(hero.facing) * 18,
     };
   }
 
   private ensureMap(map: ActDef): void {
-    if (this.mapCanvas && this.mapKey === map.id) return;
+    const ready = this.moor.complete && this.moor.naturalWidth > 0;
+    const key = `${map.id}:${ready ? this.moor.naturalWidth : 0}`;
+    if (this.mapCanvas && this.mapKey === key) return;
+    const hw = BAKE_HW;
+    const width = Math.ceil((map.width + map.height) * hw + PAD * 2);
+    const height = Math.ceil((map.width + map.height) * hw * 0.5 + PAD * 2);
     const canvas = document.createElement('canvas');
-    canvas.width = map.width;
-    canvas.height = map.height;
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    this.props = buildProps(map);
-    paintMap(ctx, map, this.props);
+    const ox = map.height * hw + PAD;
+    const oy = PAD;
+    ctx.fillStyle = '#100c09';
+    ctx.fillRect(0, 0, width, height);
+    ctx.setTransform(hw, hw * 0.5, -hw, hw * 0.5, ox, oy);
+    ctx.imageSmoothingEnabled = true;
+    if (ready) {
+      const pattern = ctx.createPattern(this.moor, 'repeat');
+      if (pattern) ctx.fillStyle = pattern;
+    } else ctx.fillStyle = '#1a1410';
+    ctx.fillRect(-200, -200, map.width + 400, map.height + 400);
+    ctx.fillStyle = 'rgba(8, 6, 4, 0.38)';
+    ctx.fillRect(0, 0, map.width, map.height);
+    this.paintRoad(ctx, map);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.scenery = buildScenery(map);
     this.mapCanvas = canvas;
-    this.mapKey = map.id;
+    this.mapKey = key;
   }
 
-  private drawFires(ctx: CanvasRenderingContext2D, sim: Sim, time: number): void {
-    const flicker = 0.75 + Math.sin(time * 9) * 0.25;
-    const camp = sim.map.playerBase;
-    drawFire(ctx, camp.x + 70, camp.y - 78, 10 * flicker, '#e6a15a');
-    const lair = sim.map.enemyBase;
-    drawFire(ctx, lair.x - 90, lair.y + 64, 12 * flicker, '#d24532');
-    drawFire(ctx, lair.x - 40, lair.y - 80, 8 * flicker, '#9a2218');
-    const ally = player(sim);
-    if (Math.hypot(ally.x - camp.x, ally.y - camp.y) < sim.map.fountainRadius) {
-      ctx.strokeStyle = 'rgba(230, 190, 110, 0.28)';
-      ctx.lineWidth = 3;
+  private paintRoad(ctx: CanvasRenderingContext2D, map: ActDef): void {
+    const camp = map.playerBase;
+    const lair = map.enemyBase;
+    ctx.fillStyle = 'rgba(92, 68, 40, 0.22)';
+    ctx.beginPath();
+    ctx.arc(camp.x, camp.y, map.plaza, 0, Math.PI * 2);
+    ctx.fill();
+    const crypt = ctx.createRadialGradient(lair.x, lair.y, 30, lair.x, lair.y, map.plaza);
+    crypt.addColorStop(0, 'rgba(18, 36, 22, 0.72)');
+    crypt.addColorStop(1, 'rgba(18, 36, 22, 0)');
+    ctx.fillStyle = crypt;
+    ctx.beginPath();
+    ctx.arc(lair.x, lair.y, map.plaza, 0, Math.PI * 2);
+    ctx.fill();
+
+    trace(ctx, map.lane);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#241910';
+    ctx.lineWidth = map.laneWidth + map.jungle * 1.4;
+    ctx.stroke();
+    ctx.strokeStyle = '#3a2b22';
+    ctx.lineWidth = map.laneWidth + 18;
+    ctx.stroke();
+    ctx.strokeStyle = '#5a4032';
+    ctx.lineWidth = map.laneWidth * 0.72;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(120, 36, 28, 0.28)';
+    ctx.lineWidth = map.laneWidth * 0.28;
+    ctx.stroke();
+
+    const stain = ctx.createLinearGradient(map.width * 0.45, 0, map.width, 0);
+    stain.addColorStop(0, 'rgba(70, 12, 14, 0)');
+    stain.addColorStop(1, 'rgba(48, 8, 16, 0.4)');
+    ctx.fillStyle = stain;
+    ctx.fillRect(0, 0, map.width, map.height);
+
+    const rng = new Rng(71);
+    for (let i = 0; i < 80; i++) {
+      const x = rng.range(200, map.width - 80);
+      const y = rng.range(80, map.height - 80);
+      if (distToPolyline({ x, y }, map.lane) > map.laneWidth * 0.35) continue;
+      ctx.fillStyle = rng.next() > 0.5 ? 'rgba(90, 18, 16, 0.35)' : 'rgba(40, 28, 18, 0.4)';
       ctx.beginPath();
-      ctx.arc(camp.x, camp.y, sim.map.fountainRadius, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.ellipse(x, y, rng.range(10, 28), rng.range(6, 14), 0, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
-  private drawUnit(ctx: CanvasRenderingContext2D, unit: Unit, opts: DrawOpts): void {
-    if (!unit.alive && unit.kind === 'minion' && unit.corpse <= 0) return;
-    ctx.save();
-    ctx.translate(unit.x, unit.y);
+  private ensureArcher(): void {
+    const src = this.art.raven;
+    if (this.archer || !src.complete || !src.naturalWidth) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = src.naturalWidth;
+    canvas.height = src.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(src, 0, 0);
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.fillStyle = 'rgba(86, 122, 168, 0.42)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    this.archer = canvas;
+  }
+
+  private drawScenery(ctx: CanvasRenderingContext2D, prop: Scenery, u: number): void {
+    const p = this.project(prop.x, prop.y);
+    if (p.x < -140 || p.y < -180 || p.x > this.camera.cssW + 140 || p.y > this.camera.cssH + 40) return;
+    if (prop.kind === 'tent') {
+      this.blit(ctx, this.art.tent, p.x, p.y, 92 * u * prop.s, prop.flip);
+      return;
+    }
+    if (prop.kind === 'wall') {
+      this.blit(ctx, this.art.wall, p.x, p.y, 70 * u * prop.s, prop.flip);
+      return;
+    }
+    this.drawTree(ctx, p.x, p.y, prop.s * u, prop.kind === 'dead');
+  }
+
+  private drawTree(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, dead: boolean): void {
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath();
-    ctx.ellipse(0, 8, unit.radius * 0.95, unit.radius * 0.42, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, y, 14 * s, 6 * s, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
+    ctx.fillStyle = dead ? '#3a3228' : '#2a2118';
+    ctx.fillRect(x - 3 * s, y - 22 * s, 6 * s, 22 * s);
+    ctx.fillStyle = dead ? '#4e4638' : '#1a2c22';
+    ctx.beginPath();
+    ctx.moveTo(x, y - 48 * s);
+    ctx.lineTo(x + 16 * s, y - 16 * s);
+    ctx.lineTo(x - 16 * s, y - 16 * s);
+    ctx.closePath();
+    ctx.fill();
+    if (!dead) {
+      ctx.fillStyle = '#24382c';
+      ctx.beginPath();
+      ctx.moveTo(x - 4 * s, y - 34 * s);
+      ctx.lineTo(x + 12 * s, y - 18 * s);
+      ctx.lineTo(x - 14 * s, y - 20 * s);
+      ctx.fill();
+    }
+  }
 
+  private drawFire(ctx: CanvasRenderingContext2D, x: number, y: number, height: number): void {
+    const p = this.project(x, y);
+    if (p.x < -40 || p.y < -80 || p.x > this.camera.cssW + 40 || p.y > this.camera.cssH + 20) return;
+    ctx.fillStyle = 'rgba(255, 120, 40, 0.18)';
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, height * 0.55, height * 0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    this.blit(ctx, this.art.fire, p.x, p.y, height, false);
+  }
+
+  private drawUnit(ctx: CanvasRenderingContext2D, unit: Unit, opts: DrawOpts, u: number): void {
+    const p = this.project(unit.x, unit.y);
+    if (p.x < -160 || p.y < -200 || p.x > this.camera.cssW + 160 || p.y > this.camera.cssH + 60) return;
+    const gait = this.gaitOf(unit);
+    let y = p.y;
+    if (unit.leap) {
+      const t = Math.min(1, unit.leap.t / unit.leap.dur);
+      y -= Math.sin(t * Math.PI) * 48 * u;
+    } else if (gait.moving && !this.reduceMotion) {
+      y += Math.sin(gait.d / 14) * 2.2;
+    }
+    const height = this.unitHeight(unit) * u;
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y + 2, height * 0.26, height * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
     if (opts.targetId === unit.id && unit.alive) {
       ctx.strokeStyle = '#f0e2bc';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(unit.x, unit.y, unit.radius + 8, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y, height * 0.32, height * 0.13, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
-
     ctx.save();
-    ctx.translate(unit.x, unit.y);
-    if (unit.leap) {
-      const p = Math.min(1, unit.leap.t / unit.leap.dur);
-      ctx.translate(0, -Math.sin(p * Math.PI) * 52);
-    }
-    if (!unit.alive) ctx.globalAlpha = unit.kind === 'minion' ? 0.45 : 0.7;
+    if (!unit.alive) ctx.globalAlpha = 0.55;
     else if (unit.invuln > 0 && Math.sin(opts.time * 28) > 0) ctx.globalAlpha = 0.55;
+    if (!unit.alive && (unit.kind === 'minion' || unit.kind === 'champion')) {
+      ctx.translate(p.x, y);
+      ctx.scale(1, 0.55);
+      ctx.translate(-p.x, -y);
+    }
+    const sheet = this.sheetFor(unit, gait.moving, gait.d);
+    const flip = Math.cos(unit.facing) < -0.12;
+    if (sheet) this.blit(ctx, sheet, p.x, y, height, flip);
+    else this.fallback(ctx, unit, p.x, y, height);
     if (unit.whirlT > 0) {
-      ctx.save();
-      ctx.rotate(opts.time * 14);
-      ctx.strokeStyle = 'rgba(240, 226, 188, 0.85)';
+      ctx.strokeStyle = 'rgba(240, 220, 170, 0.8)';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(0, 0, unit.radius + 14, 0.2, 1.6);
+      ctx.ellipse(p.x, y - height * 0.45, height * 0.55, height * 0.22, opts.time * 6, 0, Math.PI * 1.4);
       ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(0, 0, unit.radius + 14, Math.PI + 0.2, Math.PI + 1.6);
-      ctx.stroke();
-      ctx.restore();
     }
-    if (unit.kind === 'champion' || unit.kind === 'minion') ctx.rotate(unit.facing);
-    drawSprite(ctx, unit, opts.time);
     ctx.restore();
-
     if (unit.buffT > 0 && unit.alive) {
-      ctx.strokeStyle = 'rgba(230, 211, 161, 0.7)';
+      ctx.strokeStyle = 'rgba(230, 211, 161, 0.75)';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(unit.x, unit.y, unit.radius + 5, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y, height * 0.34, height * 0.14, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
-    if (unit.alive && (unit.kind !== 'minion' || unit.hp < unit.maxHp)) drawBar(ctx, unit);
+    if (unit.alive && (unit.kind !== 'minion' || unit.hp < unit.maxHp)) this.drawBar(unit, p.x, y, height);
     if (unit.stun > 0 && unit.alive) {
       ctx.fillStyle = '#f0e2bc';
-      ctx.font = '12px Georgia, serif';
+      ctx.font = '14px Georgia, serif';
       ctx.textAlign = 'center';
-      ctx.fillText('✶', unit.x, unit.y - unit.radius - 18);
+      ctx.fillText('✶', p.x, y - height - 8);
     }
+  }
+
+  private unitHeight(unit: Unit): number {
+    switch (unit.defId) {
+      case 'barbarian':
+        return 102;
+      case 'blood-raven':
+        return 96;
+      case 'fallen':
+        return 64;
+      case 'zombie':
+        return 92;
+      case 'rogue':
+      case 'rogue-archer':
+        return 86;
+      case 'tower':
+        return unit.alive ? 128 : 70;
+      case 'base-ally':
+        return unit.alive ? 140 : 80;
+      case 'base-enemy':
+        return unit.alive ? 156 : 90;
+      default:
+        return 70;
+    }
+  }
+
+  private sheetFor(unit: Unit, moving: boolean, phase: number): Sheet | null {
+    const step = Math.floor(phase / 22) % 2 === 0;
+    if (unit.defId === 'barbarian') {
+      if (unit.whirlT > 0) return this.art.whirl;
+      if (unit.leap) return this.art.leap;
+      if (unit.swing > 0.45) return this.art.atk1;
+      if (unit.swing > 0) return this.art.atk2;
+      const north = Math.sin(unit.facing) < -0.62 && Math.abs(Math.cos(unit.facing)) < 0.72;
+      if (!moving && north) return this.art.north;
+      if (moving) return step ? this.art.walk1 : this.art.walk2;
+      return this.art.idle;
+    }
+    if (unit.defId === 'fallen') return moving ? (step ? this.art.fallenWalk : this.art.fallen) : this.art.fallen;
+    if (unit.defId === 'zombie') return moving ? (step ? this.art.zombieWalk : this.art.zombie) : this.art.zombie;
+    if (unit.defId === 'rogue') return this.art.rogue;
+    if (unit.defId === 'rogue-archer') return this.archer ?? this.art.rogue;
+    if (unit.defId === 'blood-raven') return this.art.raven;
+    if (unit.defId === 'tower') return unit.alive ? this.art.tower : null;
+    if (unit.defId === 'base-ally') return unit.alive ? this.art.tent : null;
+    if (unit.defId === 'base-enemy') return unit.alive ? this.art.altar : null;
+    return null;
+  }
+
+  private fallback(ctx: CanvasRenderingContext2D, unit: Unit, x: number, y: number, height: number): void {
+    ctx.fillStyle = unit.alive ? unit.color : '#3a342c';
+    ctx.beginPath();
+    ctx.ellipse(x, y - height * 0.35, height * 0.28, height * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  private gaitOf(unit: Unit): { moving: boolean; d: number } {
+    const prev = this.gait.get(unit.id);
+    let d = prev?.d ?? 0;
+    let moving = false;
+    if (prev) {
+      const step = Math.hypot(unit.x - prev.x, unit.y - prev.y);
+      moving = step > 0.4;
+      if (moving) d += step;
+    }
+    this.gait.set(unit.id, { x: unit.x, y: unit.y, d });
+    return { moving, d };
+  }
+
+  private blit(ctx: CanvasRenderingContext2D, img: Sheet, x: number, y: number, height: number, flip: boolean): void {
+    const iw = img instanceof HTMLImageElement ? img.naturalWidth : img.width;
+    const ih = img instanceof HTMLImageElement ? img.naturalHeight : img.height;
+    if (!iw || !ih) return;
+    const w = (iw / ih) * height;
+    ctx.save();
+    ctx.translate(x, y);
+    if (flip) ctx.scale(-1, 1);
+    ctx.drawImage(img, -w / 2, -height, w, height);
+    ctx.restore();
+  }
+
+  private drawBar(unit: Unit, x: number, footY: number, height: number): void {
+    const ctx = this.ctx;
+    const w = unit.kind === 'base' ? 74 : unit.kind === 'champion' ? 54 : 34;
+    const y = footY - height - (unit.kind === 'minion' ? 6 : 16);
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, 6);
+    ctx.fillStyle = unit.team === 'ally' ? '#9a2a22' : '#9a2a22';
+    ctx.fillRect(x - w / 2, y, w, 4);
+    ctx.fillStyle = unit.team === 'ally' ? '#c6d28a' : '#e4553c';
+    ctx.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, unit.hp / unit.maxHp)), 4);
+    if (unit.kind === 'champion' || unit.kind === 'base') {
+      ctx.fillStyle = '#f0e2bc';
+      ctx.font = '13px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(unit.name, x, y - 4);
+    }
+  }
+
+  private drawLabel(x: number, y: number, text: string, color: string): void {
+    const p = this.project(x, y);
+    if (p.x < 0 || p.y < 0 || p.x > this.camera.cssW || p.y > this.camera.cssH) return;
+    const ctx = this.ctx;
+    ctx.fillStyle = color;
+    ctx.font = '20px Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(text, p.x, p.y);
+  }
+
+  private strokeEllipse(x: number, y: number, radius: number, color: string): void {
+    const c = this.project(x, y);
+    const e = this.project(x + radius, y);
+    const rx = Math.abs(e.x - c.x);
+    const ry = rx * 0.5;
+    const ctx = this.ctx;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   private drawFx(ctx: CanvasRenderingContext2D, fx: Sim['fx'][number]): void {
     const alpha = Math.max(0, 1 - fx.t / fx.life);
+    const p = this.project(fx.x, fx.y);
     ctx.save();
     ctx.globalAlpha = alpha;
     if (fx.kind === 'text' && fx.text) {
       ctx.fillStyle = fx.color;
       ctx.font = 'bold 16px Georgia, serif';
       ctx.textAlign = 'center';
-      ctx.fillText(fx.text, fx.x, fx.y);
+      ctx.fillText(fx.text, p.x, p.y);
     } else if (fx.kind === 'ring') {
+      const edge = this.project(fx.x + fx.r * (0.35 + fx.t / fx.life), fx.y);
       ctx.strokeStyle = fx.color;
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(fx.x, fx.y, fx.r * (0.35 + fx.t / fx.life), 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y, Math.abs(edge.x - p.x), Math.abs(edge.x - p.x) * 0.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (fx.kind === 'slash') {
+      ctx.strokeStyle = fx.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, 18, 8, fx.facing ?? 0, 0, Math.PI * 1.2);
       ctx.stroke();
     }
     ctx.restore();
@@ -267,9 +636,9 @@ export class Renderer {
     const sx = w / map.width;
     const sy = h / map.height;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#16110e';
+    ctx.fillStyle = '#120e0b';
     ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = '#5a4634';
+    ctx.strokeStyle = '#6a5340';
     ctx.lineWidth = 3;
     ctx.beginPath();
     map.lane.forEach((point, index) => {
@@ -285,7 +654,7 @@ export class Renderer {
       const y = unit.y * sy;
       ctx.fillStyle = unit.team === 'ally' ? '#e6d3a1' : '#e15a4a';
       const r = unit.kind === 'minion' ? 2 : unit.kind === 'champion' ? 4 : 3;
-      if (!unit.alive) ctx.globalAlpha = 0.4;
+      ctx.globalAlpha = unit.alive ? 1 : 0.4;
       ctx.fillRect(x - r / 2, y - r / 2, r, r);
       ctx.globalAlpha = 1;
       if (unit.id === targetId) {
@@ -293,399 +662,13 @@ export class Renderer {
         ctx.strokeRect(x - 3, y - 3, 6, 6);
       }
     }
-    ctx.strokeStyle = 'rgba(240, 226, 188, 0.45)';
+    ctx.strokeStyle = 'rgba(240, 226, 188, 0.55)';
     ctx.lineWidth = 1;
     ctx.strokeRect(this.camera.x * sx, this.camera.y * sy, this.camera.viewW * sx, this.camera.viewH * sy);
   }
 }
 
-function kindOrder(unit: Unit): number {
-  if (unit.kind === 'base') return 0;
-  if (unit.kind === 'tower') return 1;
-  if (!unit.alive) return 2;
-  if (unit.kind === 'minion') return 3;
-  return 4;
-}
-
-function drawBar(ctx: CanvasRenderingContext2D, unit: Unit): void {
-  const w = unit.kind === 'base' ? 64 : unit.kind === 'champion' ? 48 : 30;
-  const x = unit.x - w / 2;
-  const y = unit.y - unit.radius - (unit.kind === 'champion' || unit.kind === 'base' ? 22 : 14);
-  ctx.fillStyle = 'rgba(0,0,0,0.65)';
-  ctx.fillRect(x - 1, y - 1, w + 2, 6);
-  ctx.fillStyle = unit.team === 'ally' ? '#86c378' : '#d25a4c';
-  ctx.fillRect(x, y, w * Math.max(0, Math.min(1, unit.hp / unit.maxHp)), 4);
-  if (unit.kind === 'champion' || unit.kind === 'base') {
-    ctx.fillStyle = '#f0e2bc';
-    ctx.font = '12px Georgia, serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(unit.name, unit.x, y - 4);
-  }
-}
-
-function drawFire(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {
-  ctx.fillStyle = color;
-  ctx.globalAlpha = 0.9;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#f6e2a8';
-  ctx.beginPath();
-  ctx.arc(x, y + 1, r * 0.45, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-}
-
-function ink(unit: Unit, color: string): string {
-  return unit.hitFlash > 0 ? '#f7f4ef' : color;
-}
-
-function drawSprite(ctx: CanvasRenderingContext2D, unit: Unit, time: number): void {
-  switch (unit.defId) {
-    case 'barbarian':
-      drawBarbarian(ctx, unit);
-      break;
-    case 'blood-raven':
-      drawRaven(ctx, unit, time);
-      break;
-    case 'fallen':
-      drawFallen(ctx, unit);
-      break;
-    case 'zombie':
-      drawZombie(ctx, unit);
-      break;
-    case 'rogue':
-      drawRogue(ctx, unit, false);
-      break;
-    case 'rogue-archer':
-      drawRogue(ctx, unit, true);
-      break;
-    case 'tower':
-      drawTower(ctx, unit);
-      break;
-    case 'base-ally':
-      drawCamp(ctx, unit);
-      break;
-    case 'base-enemy':
-      drawAltar(ctx, unit, time);
-      break;
-    default:
-      ctx.fillStyle = ink(unit, unit.color);
-      ctx.beginPath();
-      ctx.arc(0, 0, unit.radius, 0, Math.PI * 2);
-      ctx.fill();
-      break;
-  }
-}
-
-function drawBarbarian(ctx: CanvasRenderingContext2D, unit: Unit): void {
-  const swing = unit.swing;
-  ctx.fillStyle = ink(unit, '#6b4228');
-  ctx.beginPath();
-  ctx.ellipse(-2, 1, 16, 12, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = ink(unit, '#6e2a22');
-  ctx.beginPath();
-  ctx.ellipse(2, 0, 11, 10, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#e6d3a1';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(2, 1, 7, 0.3, Math.PI - 0.2);
-  ctx.stroke();
-  ctx.fillStyle = ink(unit, '#c48a62');
-  ctx.beginPath();
-  ctx.arc(10, -1, 6.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = ink(unit, '#c5ccd6');
-  ctx.beginPath();
-  ctx.arc(10, -2, 7, Math.PI * 1.08, Math.PI * 1.92);
-  ctx.fill();
-  ctx.fillStyle = ink(unit, '#f0e2bc');
-  ctx.beginPath();
-  ctx.moveTo(6, -6);
-  ctx.lineTo(1, -16);
-  ctx.lineTo(10, -6);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(14, -6);
-  ctx.lineTo(20, -15);
-  ctx.lineTo(15, -5);
-  ctx.fill();
-  ctx.save();
-  ctx.translate(2, 8);
-  ctx.rotate(-0.7 + swing * 2.5);
-  ctx.strokeStyle = '#6b4428';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(20, 0);
-  ctx.stroke();
-  ctx.fillStyle = ink(unit, '#d5dbe4');
-  ctx.beginPath();
-  ctx.moveTo(14, -2);
-  ctx.lineTo(28, -8);
-  ctx.lineTo(26, 6);
-  ctx.lineTo(14, 3);
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawRaven(ctx: CanvasRenderingContext2D, unit: Unit, time: number): void {
-  ctx.fillStyle = ink(unit, '#4a1520');
-  ctx.beginPath();
-  ctx.ellipse(-2, 2, 14, 12, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = ink(unit, '#6e2430');
-  ctx.beginPath();
-  ctx.moveTo(12, 2);
-  ctx.lineTo(2, -12);
-  ctx.lineTo(-8, 2);
-  ctx.fill();
-  ctx.fillStyle = ink(unit, '#e6d3c4');
-  ctx.beginPath();
-  ctx.arc(8, 0, 5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#e0c07a';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(14, 6, 9, -0.8 + Math.sin(time * 6) * 0.1, 0.9);
-  ctx.stroke();
-}
-
-function drawFallen(ctx: CanvasRenderingContext2D, unit: Unit): void {
-  ctx.fillStyle = ink(unit, '#8d1d24');
-  ctx.beginPath();
-  ctx.ellipse(-1, 2, 10, 7, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = ink(unit, '#e07a3a');
-  ctx.beginPath();
-  ctx.arc(7, 0, 4.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = ink(unit, '#f0d0a0');
-  ctx.beginPath();
-  ctx.moveTo(4, -3);
-  ctx.lineTo(2, -10);
-  ctx.lineTo(7, -3);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(9, -3);
-  ctx.lineTo(13, -10);
-  ctx.lineTo(11, -2);
-  ctx.fill();
-  ctx.strokeStyle = '#5a2a18';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(4, 6);
-  ctx.lineTo(16, 10);
-  ctx.stroke();
-}
-
-function drawZombie(ctx: CanvasRenderingContext2D, unit: Unit): void {
-  ctx.fillStyle = ink(unit, '#4e6848');
-  ctx.beginPath();
-  ctx.ellipse(-2, 3, 14, 10, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = ink(unit, '#6d8a5e');
-  ctx.beginPath();
-  ctx.arc(8, 1, 6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = ink(unit, '#8eae7c');
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(6, 4);
-  ctx.lineTo(18, 8);
-  ctx.stroke();
-}
-
-function drawRogue(ctx: CanvasRenderingContext2D, unit: Unit, archer: boolean): void {
-  ctx.fillStyle = ink(unit, archer ? '#31485e' : '#3e5e78');
-  ctx.beginPath();
-  ctx.ellipse(0, 2, 11, 9, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = ink(unit, '#243646');
-  ctx.beginPath();
-  ctx.moveTo(10, 1);
-  ctx.lineTo(2, -11);
-  ctx.lineTo(-6, 1);
-  ctx.fill();
-  ctx.fillStyle = '#e6d3a1';
-  ctx.fillRect(8, -2, 3, 3);
-  if (archer) {
-    ctx.strokeStyle = '#e6d3a1';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(12, 2, 8, -1, 1);
-    ctx.stroke();
-  } else {
-    ctx.strokeStyle = '#d7dde6';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(6, 6);
-    ctx.lineTo(18, -2);
-    ctx.stroke();
-  }
-}
-
-function drawTower(ctx: CanvasRenderingContext2D, unit: Unit): void {
-  const r = unit.radius;
-  if (!unit.alive) {
-    ctx.fillStyle = '#4a453e';
-    ctx.fillRect(-r * 0.7, -r * 0.2, r * 1.5, r * 0.7);
-    ctx.fillStyle = '#3a342c';
-    ctx.beginPath();
-    ctx.moveTo(-r, 4);
-    ctx.lineTo(0, -r * 0.4);
-    ctx.lineTo(r * 0.8, 8);
-    ctx.fill();
-    return;
-  }
-  ctx.fillStyle = '#5c574f';
-  roundRect(ctx, -r, -r * 0.15, r * 2, r * 1.25, 3);
-  ctx.fill();
-  ctx.fillStyle = '#7d786e';
-  ctx.fillRect(-r * 0.72, -r * 1.15, r * 1.44, r);
-  ctx.fillStyle = '#3e3a34';
-  for (let i = -2; i <= 2; i++) {
-    ctx.fillRect(i * r * 0.28 - 2, -r * 1.28, 5, 8);
-  }
-  ctx.strokeStyle = '#2a241c';
-  ctx.beginPath();
-  ctx.moveTo(r * 0.2, -r * 1.3);
-  ctx.lineTo(r * 0.2, -r * 1.85);
-  ctx.stroke();
-  ctx.fillStyle = unit.team === 'ally' ? '#d4b46a' : '#c44536';
-  ctx.beginPath();
-  ctx.moveTo(r * 0.2, -r * 1.8);
-  ctx.lineTo(r * 0.95, -r * 1.55);
-  ctx.lineTo(r * 0.2, -r * 1.35);
-  ctx.fill();
-}
-
-function drawCamp(ctx: CanvasRenderingContext2D, unit: Unit): void {
-  const r = unit.radius;
-  ctx.fillStyle = unit.alive ? '#6a5038' : '#3a3028';
-  roundRect(ctx, -r, -r * 0.7, r * 2, r * 1.5, 6);
-  ctx.fill();
-  ctx.fillStyle = unit.alive ? '#8d6844' : '#4a4036';
-  ctx.beginPath();
-  ctx.moveTo(-r - 6, -r * 0.2);
-  ctx.lineTo(0, -r * 1.35);
-  ctx.lineTo(r + 6, -r * 0.2);
-  ctx.fill();
-  ctx.fillStyle = unit.alive ? '#d4b46a' : '#666';
-  ctx.fillRect(-4, -r * 1.55, 8, r * 0.55);
-  ctx.beginPath();
-  ctx.moveTo(0, -r * 1.7);
-  ctx.lineTo(22, -r * 1.25);
-  ctx.lineTo(0, -r * 1.05);
-  ctx.fill();
-  ctx.strokeStyle = '#e6d3a1';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(-r + 8, -4, 16, 18);
-}
-
-function drawAltar(ctx: CanvasRenderingContext2D, unit: Unit, time: number): void {
-  const r = unit.radius;
-  ctx.fillStyle = unit.alive ? '#2a2420' : '#1a1614';
-  ctx.beginPath();
-  ctx.ellipse(0, 8, r * 1.15, r * 0.55, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = unit.alive ? '#3a332c' : '#2a2622';
-  roundRect(ctx, -r * 0.7, -r * 0.85, r * 1.4, r * 1.2, 4);
-  ctx.fill();
-  ctx.fillStyle = unit.alive ? '#c44536' : '#553';
-  ctx.globalAlpha = unit.alive ? 0.85 + Math.sin(time * 4) * 0.15 : 0.4;
-  ctx.beginPath();
-  ctx.arc(0, -4, 10, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = '#e8d7b0';
-  ctx.beginPath();
-  ctx.moveTo(-16, -r * 0.2);
-  ctx.lineTo(-28, -r * 1.1);
-  ctx.lineTo(-6, -r * 0.35);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(16, -r * 0.2);
-  ctx.lineTo(28, -r * 1.1);
-  ctx.lineTo(6, -r * 0.35);
-  ctx.fill();
-}
-
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-function paintMap(ctx: CanvasRenderingContext2D, map: ActDef, props: Prop[]): void {
-  ctx.fillStyle = map.theme.groundDeep;
-  ctx.fillRect(0, 0, map.width, map.height);
-  const rng = new Rng(99);
-  for (let i = 0; i < 2200; i++) {
-    ctx.fillStyle = rng.next() > 0.5 ? '#221c17' : '#181410';
-    ctx.fillRect(rng.range(0, map.width), rng.range(0, map.height), rng.range(2, 7), rng.range(2, 5));
-  }
-  ctx.fillStyle = map.theme.shoulder;
-  for (const base of [map.playerBase, map.enemyBase]) {
-    ctx.beginPath();
-    ctx.arc(base.x, base.y, map.plaza, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  traceLane(ctx, map.lane);
-  ctx.strokeStyle = map.theme.shoulder;
-  ctx.lineWidth = map.laneWidth + map.jungle * 2;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.stroke();
-  ctx.strokeStyle = map.theme.roadEdge;
-  ctx.lineWidth = map.laneWidth + 28;
-  ctx.stroke();
-  ctx.strokeStyle = map.theme.road;
-  ctx.lineWidth = map.laneWidth;
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(214, 176, 120, 0.28)';
-  ctx.lineWidth = 10;
-  ctx.stroke();
-
-  const stain = ctx.createLinearGradient(map.width * 0.35, 0, map.width * 0.7, 0);
-  stain.addColorStop(0, 'rgba(90, 20, 18, 0)');
-  stain.addColorStop(0.5, 'rgba(90, 20, 18, 0.28)');
-  stain.addColorStop(1, 'rgba(20, 40, 28, 0.05)');
-  ctx.strokeStyle = stain;
-  ctx.lineWidth = map.laneWidth * 0.7;
-  ctx.stroke();
-
-  for (const prop of props) drawProp(ctx, prop);
-
-  ctx.fillStyle = 'rgba(80, 140, 90, 0.08)';
-  ctx.beginPath();
-  ctx.arc(map.playerBase.x, map.playerBase.y, map.plaza * 0.95, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(40, 80, 50, 0.16)';
-  ctx.beginPath();
-  ctx.arc(map.enemyBase.x, map.enemyBase.y, map.plaza, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = 'rgba(230, 211, 161, 0.85)';
-  ctx.font = '42px Georgia, serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('Rogue Encampment', map.playerBase.x - 20, map.playerBase.y - map.plaza + 36);
-  ctx.textAlign = 'right';
-  ctx.fillStyle = 'rgba(214, 150, 140, 0.9)';
-  ctx.fillText('Catacombs', map.enemyBase.x + 10, map.enemyBase.y - map.plaza + 40);
-  ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(180, 60, 48, 0.55)';
-  ctx.font = '36px Georgia, serif';
-  ctx.fillText('Blood Moor', map.width / 2, 180);
-}
-
-function traceLane(ctx: CanvasRenderingContext2D, lane: Vec[]): void {
+function trace(ctx: CanvasRenderingContext2D, lane: Vec[]): void {
   ctx.beginPath();
   lane.forEach((point, index) => {
     if (index === 0) ctx.moveTo(point.x, point.y);
@@ -693,113 +676,46 @@ function traceLane(ctx: CanvasRenderingContext2D, lane: Vec[]): void {
   });
 }
 
-function buildProps(map: ActDef): Prop[] {
+function buildScenery(map: ActDef): Scenery[] {
   const rng = new Rng(0xa11);
-  const props: Prop[] = [];
-  for (let i = 0; i < 90; i++) {
-    const x = rng.range(30, map.width - 30);
-    const y = rng.range(30, map.height - 30);
+  const props: Scenery[] = [];
+  for (let i = 0; i < 48; i++) {
+    const x = rng.range(40, map.width - 40);
+    const y = rng.range(40, map.height - 40);
     const road = distToPolyline({ x, y }, map.lane);
-    if (road < map.laneWidth * 0.48) continue;
-    if (Math.hypot(x - map.playerBase.x, y - map.playerBase.y) < map.plaza * 0.72) continue;
-    if (Math.hypot(x - map.enemyBase.x, y - map.enemyBase.y) < map.plaza * 0.72) continue;
-    const shoulder = road < map.laneWidth / 2 + map.jungle;
-    const roll = rng.next();
-    const prop: Prop = {
-      kind: 'tree',
-      x,
-      y,
-      s: rng.range(0.75, 1.35),
-      rot: rng.range(0, Math.PI * 2),
-    };
-    if (shoulder) {
-      prop.kind = roll < 0.45 ? 'stump' : roll < 0.75 ? 'rock' : 'grave';
-      prop.s *= 0.8;
-    } else if (x > map.width * 0.62) {
-      prop.kind = roll < 0.4 ? 'dead' : roll < 0.7 ? 'bone' : 'pillar';
-    } else if (roll < 0.55) prop.kind = 'tree';
-    else if (roll < 0.75) prop.kind = 'dead';
-    else if (roll < 0.9) prop.kind = 'rock';
-    else prop.kind = 'grave';
-    props.push(prop);
+    if (road < map.laneWidth * 0.55) continue;
+    if (Math.hypot(x - map.playerBase.x, y - map.playerBase.y) < map.plaza * 0.9) continue;
+    if (Math.hypot(x - map.enemyBase.x, y - map.enemyBase.y) < map.plaza * 0.7) continue;
+    const dead = x > map.width * 0.62 || rng.next() > 0.7;
+    props.push({ kind: dead ? 'dead' : 'tree', x, y, s: rng.range(0.75, 1.45), flip: rng.next() > 0.5 });
   }
   const camp = map.playerBase;
   props.push(
-    { kind: 'tent', x: camp.x + 120, y: camp.y - 150, s: 1.1, rot: 0.2 },
-    { kind: 'tent', x: camp.x - 30, y: camp.y - 160, s: 0.9, rot: -0.3 },
-    { kind: 'cart', x: camp.x + 150, y: camp.y + 120, s: 1, rot: 0.4 },
+    { kind: 'tent', x: camp.x - 30, y: camp.y - 175, s: 1.05, flip: false },
+    { kind: 'tent', x: camp.x + 155, y: camp.y - 140, s: 0.92, flip: true },
+    { kind: 'tent', x: camp.x + 130, y: camp.y + 155, s: 0.84, flip: false },
   );
-  const lair = map.enemyBase;
-  props.push(
-    { kind: 'pillar', x: lair.x - 150, y: lair.y - 130, s: 1.2, rot: 0 },
-    { kind: 'pillar', x: lair.x - 180, y: lair.y + 110, s: 1.1, rot: 0 },
-    { kind: 'bone', x: lair.x + 40, y: lair.y + 140, s: 1.3, rot: 1 },
-    { kind: 'bone', x: lair.x - 40, y: lair.y + 150, s: 1, rot: 2 },
-  );
-  return props;
-}
-
-function drawProp(ctx: CanvasRenderingContext2D, prop: Prop): void {
-  ctx.save();
-  ctx.translate(prop.x, prop.y);
-  ctx.rotate(prop.rot);
-  const s = prop.s;
-  if (prop.kind === 'tree' || prop.kind === 'dead') {
-    ctx.fillStyle = '#2c241c';
-    ctx.fillRect(-3 * s, -2 * s, 6 * s, 18 * s);
-    ctx.fillStyle = prop.kind === 'dead' ? '#5a564c' : '#1c3828';
-    ctx.beginPath();
-    ctx.moveTo(0, -48 * s);
-    ctx.lineTo(18 * s, -4 * s);
-    ctx.lineTo(-18 * s, -4 * s);
-    ctx.fill();
-    if (prop.kind === 'tree') {
-      ctx.fillStyle = '#244433';
-      ctx.beginPath();
-      ctx.arc(-6 * s, -24 * s, 12 * s, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  } else if (prop.kind === 'rock' || prop.kind === 'stump') {
-    ctx.fillStyle = prop.kind === 'stump' ? '#3a2c22' : '#4a463e';
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 14 * s, 9 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (prop.kind === 'grave') {
-    ctx.fillStyle = '#6a645c';
-    roundRect(ctx, -7 * s, -16 * s, 14 * s, 22 * s, 6 * s);
-    ctx.fill();
-  } else if (prop.kind === 'bone') {
-    ctx.strokeStyle = '#d9d0c0';
-    ctx.lineWidth = 3 * s;
-    ctx.beginPath();
-    ctx.moveTo(-8 * s, 4 * s);
-    ctx.lineTo(8 * s, -6 * s);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(-6 * s, -6 * s);
-    ctx.lineTo(6 * s, 6 * s);
-    ctx.stroke();
-  } else if (prop.kind === 'tent') {
-    ctx.fillStyle = '#6e2e2a';
-    ctx.beginPath();
-    ctx.moveTo(0, -28 * s);
-    ctx.lineTo(26 * s, 10 * s);
-    ctx.lineTo(-26 * s, 10 * s);
-    ctx.fill();
-    ctx.fillStyle = '#e6d3a1';
-    ctx.fillRect(-3 * s, -6 * s, 6 * s, 16 * s);
-  } else if (prop.kind === 'cart') {
-    ctx.fillStyle = '#5a3a28';
-    ctx.fillRect(-16 * s, -8 * s, 32 * s, 14 * s);
-    ctx.fillStyle = '#2a241c';
-    ctx.beginPath();
-    ctx.arc(-10 * s, 8 * s, 5 * s, 0, Math.PI * 2);
-    ctx.arc(10 * s, 8 * s, 5 * s, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (prop.kind === 'pillar') {
-    ctx.fillStyle = '#4e564e';
-    ctx.fillRect(-6 * s, -28 * s, 12 * s, 40 * s);
-    ctx.fillRect(-10 * s, -32 * s, 20 * s, 6 * s);
+  for (let i = 0; i < 16; i++) {
+    const angle = (i / 16) * Math.PI * 2;
+    if (Math.cos(angle) > 0.42) continue;
+    props.push({
+      kind: 'wall',
+      x: camp.x + Math.cos(angle) * 290,
+      y: camp.y + Math.sin(angle) * 200,
+      s: 0.82 + (i % 3) * 0.08,
+      flip: i % 2 === 0,
+    });
   }
-  ctx.restore();
+  const lair = map.enemyBase;
+  for (let i = 0; i < 7; i++) {
+    const angle = (i / 7) * Math.PI * 2;
+    props.push({
+      kind: 'dead',
+      x: lair.x + Math.cos(angle) * 240,
+      y: lair.y + Math.sin(angle) * 160,
+      s: 1.25,
+      flip: i % 2 === 0,
+    });
+  }
+  return props;
 }
