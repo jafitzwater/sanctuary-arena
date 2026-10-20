@@ -65,10 +65,10 @@ export function grantXp(sim: Sim, amount: number): void {
   }
 }
 
-/** Put a newly unlocked skill into the first empty Q W E R slot. */
+/** Put a learned skill (rank 1 or higher) into the first empty Q W E R slot. */
 export function fillEmptyBelt(sim: Sim): void {
   for (const skill of sim.classDef.skills) {
-    if (sim.level < skill.unlockLevel) continue;
+    if ((sim.skillRanks[skill.id] ?? 0) < 1) continue;
     if (sim.belt.includes(skill.id)) continue;
     const slot = sim.belt.findIndex((entry) => !entry);
     if (slot < 0) return;
@@ -356,6 +356,7 @@ export function tryUpgrade(sim: Sim, id: string): boolean {
   }
   sim.skillRanks[id] = rank + 1;
   sim.skillPoints -= 1;
+  if (rank === 0) fillEmptyBelt(sim);
   recomputeHero(sim);
   banner(sim, `${def.name} is rank ${rank + 1}.`);
   sfx(sim, 'level');
@@ -380,6 +381,10 @@ export function tryAssignBelt(sim: Sim, id: string, slot: number): void {
   if (!def || slot < 0 || slot > 3) return;
   if (sim.level < def.unlockLevel) {
     banner(sim, `${def.name} unlocks at level ${def.unlockLevel}.`);
+    return;
+  }
+  if ((sim.skillRanks[def.id] ?? 0) < 1) {
+    banner(sim, `${def.name} needs a skill point before it can be equipped.`);
     return;
   }
   const from = sim.belt.indexOf(id);

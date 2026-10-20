@@ -712,6 +712,7 @@ body.touch #stick { display: block; }
 .tree-node .tn-name { color: var(--gold); }
 .tree-node .tn-meta { font-size: 12px; color: #d9c7a2; }
 .tree-node.locked { opacity: 0.55; }
+.tree-node.unlearned { cursor: default; }
 .tree-node.on-belt { border-color: #86c378; }
 .tree-node .plus {
   position: absolute;
@@ -985,6 +986,12 @@ body.touch #shop-buy,
 body.touch .x-btn,
 body.touch .sheet-tabs button { min-height: 48px; }
 body.touch #attr-row button { min-height: 76px; }
+body.touch #belt-pick { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+body.touch #belt-pick button { min-height: 44px; font-size: 13px; padding: 4px 2px; }
+body.touch .tree-node { min-height: 72px; padding: 4px 2px; }
+body.touch .tree-node .sicon { width: 32px; height: 32px; }
+body.touch .tree-node .tn-name { font-size: 12px; }
+body.touch .tree-node .tn-meta { font-size: 11px; }
 body.touch #shop-note { margin: 2px 0 6px; font-size: 13px; }
 body.touch .sheet-tabs { margin: 4px 0; }
 body.touch .sheet-tabs button { min-height: 40px; }
