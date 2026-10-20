@@ -123,7 +123,9 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
     sim.phase = unit.team === 'enemy' ? 'victory' : 'defeat';
     banner(
       sim,
-      sim.phase === 'victory' ? "Andariel's altar falls silent" : 'The Rogue Encampment has fallen',
+      sim.phase === 'victory'
+        ? (sim.map.victory ?? "Andariel's altar falls silent")
+        : (sim.map.defeat ?? 'The Rogue Encampment has fallen'),
       6,
     );
     sfx(sim, sim.phase === 'victory' ? 'win' : 'lose');

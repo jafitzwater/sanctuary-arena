@@ -5,13 +5,27 @@ export interface WaveGroup {
   count: number;
 }
 
+export type PathId = 'north' | 'center' | 'south';
+
+export interface PathDef {
+  id: PathId;
+  name: string;
+  road: string;
+  edge: string;
+  lane: { x: number; y: number }[];
+  ally: WaveGroup[];
+  enemy: WaveGroup[];
+}
+
 export interface TowerSpawn {
   team: Team;
-  /** 1 is the inner tower (closer to its base, tougher). 2 is the outer tower. */
-  tier: 1 | 2;
+  /** 1 is a seal or inner tower, 2 is an outer tower, 3 is a Worldstone guardian. */
+  tier: 1 | 2 | 3;
   x: number;
   y: number;
   name: string;
+  path?: PathId;
+  role?: 'outer' | 'inner' | 'seal' | 'guardian';
 }
 
 export interface BaseSpawn {
@@ -47,7 +61,7 @@ export interface EnemyChampionDef {
 
 export interface ActTheme {
   /** Renderer scenery set. Add a new id in render.ts when a new act needs new props. */
-  decor: 'act1-moor';
+  decor: 'act1-moor' | 'sanctuary';
   ground: string;
   groundDeep: string;
   shoulder: string;
@@ -71,6 +85,17 @@ export interface ActDef {
   width: number;
   height: number;
   lane: { x: number; y: number }[];
+  /** When set, minions march every path. `lane` stays the central road. */
+  paths?: PathDef[];
+  /** Blood river drawn across the map. It does not block movement. */
+  river?: { x: number; y: number }[];
+  /** The whole rectangle is walkable, not only the road shoulder. */
+  roam?: boolean;
+  /** Town names drawn over each base. The base unit name stays the Worldstone. */
+  towns?: { ally: string; enemy: string };
+  victory?: string;
+  defeat?: string;
+  march?: string;
   /** Width of the cobble road. */
   laneWidth: number;
   /** Extra walkable ground on each side of the road. */
@@ -105,7 +130,8 @@ export interface TowerTier {
   xp: number;
 }
 
-export const TOWER_TIERS: Record<1 | 2, TowerTier> = {
+export const TOWER_TIERS: Record<1 | 2 | 3, TowerTier> = {
   1: { hp: 677, ad: 30, armor: 18, range: 330, interval: 0.95, radius: 40, gold: 220, xp: 140 },
   2: { hp: 492, ad: 23, armor: 12, range: 300, interval: 1.05, radius: 36, gold: 160, xp: 90 },
+  3: { hp: 820, ad: 28, armor: 20, range: 300, interval: 1, radius: 42, gold: 260, xp: 160 },
 };

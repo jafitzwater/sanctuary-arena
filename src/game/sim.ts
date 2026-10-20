@@ -106,6 +106,7 @@ function blankUnit(sim: Sim, partial: Pick<Unit, 'defId' | 'kind' | 'team' | 'na
     ranged: partial.ranged ?? false,
     projectileSpeed: partial.projectileSpeed ?? 420,
     waypoint: partial.waypoint ?? 0,
+    path: partial.path ?? 0,
     targetId: null,
     facing: partial.facing ?? 0,
     swing: 0,
@@ -188,6 +189,7 @@ function spawnTower(sim: Sim, spec: ActDef['towers'][number]): Unit {
     xp: tier.xp,
     ranged: true,
     projectileSpeed: 560,
+    path: pathIndex(sim, spec.path),
     color: spec.team === 'ally' ? '#d4b46a' : '#c44536',
     accent: spec.team === 'ally' ? '#f4e7c3' : '#ffb4a8',
   });
@@ -248,17 +250,18 @@ function spawnEnemyChampion(sim: Sim): Unit {
     xp: spec.xp,
     ranged: true,
     projectileSpeed: spec.projectileSpeed,
-    waypoint: sim.map.lane.length - 2,
+    waypoint: (sim.map.paths?.[1]?.lane ?? sim.map.lane).length - 2,
+    path: sim.map.paths ? 1 : 0,
     facing: Math.PI,
     color: spec.color,
     accent: spec.accent,
   });
 }
 
-export function spawnMinion(sim: Sim, defId: string, team: Team, x: number, y: number): Unit {
+export function spawnMinion(sim: Sim, defId: string, team: Team, x: number, y: number, path = 0): Unit {
   const def = unitDef(defId);
   const spot = clampToPlayable(sim.map, x, y);
-  const lane = sim.map.lane;
+  const lane = laneAt(sim, path);
   return blankUnit(sim, {
     defId,
     kind: 'minion',
@@ -281,6 +284,7 @@ export function spawnMinion(sim: Sim, defId: string, team: Team, x: number, y: n
     ranged: def.ranged,
     projectileSpeed: def.projectileSpeed || 440,
     waypoint: team === 'ally' ? 1 : lane.length - 2,
+    path,
     facing: team === 'ally' ? 0 : Math.PI,
     color: def.color,
     accent: def.accent,
@@ -475,7 +479,7 @@ function updateMinion(sim: Sim, unit: Unit, dt: number): void {
     return;
   }
   unit.targetId = null;
-  const lane = sim.map.lane;
+  const lane = laneAt(sim, unit.path);
   const forward = unit.team === 'ally';
   const finalIndex = forward ? lane.length - 1 : 0;
   if (unit.waypoint === finalIndex) {
@@ -750,7 +754,7 @@ function waves(sim: Sim, dt: number): void {
   sim.waveIn = sim.map.waves.interval;
   if (!sim.announcedWave) {
     sim.announcedWave = true;
-    banner(sim, 'The Fallen march across the Blood Moor.');
+    banner(sim, sim.map.march ?? 'The Fallen march across the Blood Moor.');
   }
 }
 
@@ -769,15 +773,42 @@ function reviveChampion(sim: Sim, unit: Unit): void {
   unit.targetId = null;
   unit.respawn = 0;
   unit.invuln = unit.id === sim.playerId ? 1.5 : 0.4;
-  unit.waypoint = unit.team === 'ally' ? 1 : sim.map.lane.length - 2;
+  unit.waypoint = unit.team === 'ally' ? 1 : laneAt(sim, unit.path).length - 2;
   if (unit.id === sim.playerId) banner(sim, 'You return to the Encampment.');
+}
+
+function pathIndex(sim: Sim, id?: string): number {
+  if (!id || !sim.map.paths) return 0;
+  const index = sim.map.paths.findIndex((path) => path.id === id);
+  return index < 0 ? 0 : index;
+}
+
+function laneAt(sim: Sim, path: number): { x: number; y: number }[] {
+  const lanes = sim.map.paths?.map((entry) => entry.lane);
+  if (!lanes?.length) return sim.map.lane;
+  return lanes[Math.min(lanes.length - 1, Math.max(0, path))] ?? sim.map.lane;
 }
 
 function spawnWave(sim: Sim, team: Team): void {
   const alive = sim.units.filter((unit) => unit.alive && unit.kind === 'minion' && unit.team === team).length;
-  if (alive >= 16) return;
-  const groups = team === 'ally' ? sim.map.waves.ally : sim.map.waves.enemy;
-  const lane = sim.map.lane;
+  if (alive >= 18) return;
+  if (sim.map.paths?.length) {
+    sim.map.paths.forEach((path, index) => {
+      const groups = team === 'ally' ? path.ally : path.enemy;
+      spawnOnLane(sim, team, path.lane, index, groups);
+    });
+    return;
+  }
+  spawnOnLane(sim, team, sim.map.lane, 0, team === 'ally' ? sim.map.waves.ally : sim.map.waves.enemy);
+}
+
+function spawnOnLane(
+  sim: Sim,
+  team: Team,
+  lane: { x: number; y: number }[],
+  path: number,
+  groups: { unit: string; count: number }[],
+): void {
   const origin = team === 'ally' ? lane[0] : lane[lane.length - 1];
   const next = team === 'ally' ? lane[1] : lane[lane.length - 2];
   const dx = next.x - origin.x;
@@ -798,6 +829,7 @@ function spawnWave(sim: Sim, team: Team): void {
         team,
         origin.x + fx * (78 + row * 36) + px * col * 30,
         origin.y + fy * (78 + row * 36) + py * col * 30,
+        path,
       );
       index += 1;
     }

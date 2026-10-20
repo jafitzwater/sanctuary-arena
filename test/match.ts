@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { projectIso, screenVectorToWorld, unprojectIso } from '../src/game/iso';
 import { distToPolyline } from '../src/game/math';
 import { act1 } from '../src/game/data/acts/act1';
+import { sanctuary } from '../src/game/data/acts/sanctuary';
 import { getAct } from '../src/game/data/acts';
 import { barbarian } from '../src/game/data/classes/barbarian';
 import { getClass } from '../src/game/data/classes';
@@ -264,6 +265,33 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
     assert.ok(Number.isFinite(unit.x) && Number.isFinite(unit.y), unit.name);
   }
   assert.equal(sim.phase, 'playing', 'a hands-off half minute should still be on the moor');
+}
+
+{
+  const sim = createMatch(sanctuary, barbarian, 1);
+  assert.equal(sim.map.paths?.length, 3);
+  assert.equal(sim.map.roam, true);
+  const towers = sim.units.filter((unit) => unit.kind === 'tower');
+  assert.equal(towers.length, 22);
+  const laneTowers = sanctuary.towers.filter((tower) => tower.role !== 'guardian');
+  assert.equal(laneTowers.length, 18);
+  for (const spec of laneTowers) {
+    const path = sanctuary.paths?.find((entry) => entry.id === spec.path);
+    if (!path) throw new Error(`${spec.name} has no path`);
+    const gap = distToPolyline(spec, path.lane);
+    assert.ok(gap < 80, `${spec.name} is ${gap.toFixed(1)}px off ${path.name}`);
+  }
+  const hero = player(sim);
+  hero.x = 2200;
+  hero.y = 1400;
+  updateSim(sim, emptyInput(), 0.1);
+  assert.ok(Math.hypot(hero.x - 2200, hero.y - 1400) < 40, 'the wilderness between paths stays walkable');
+  step(sim, emptyInput(), sanctuary.waves.first + 0.25);
+  const minions = sim.units.filter((unit) => unit.kind === 'minion' && unit.alive);
+  for (const index of [0, 1, 2]) {
+    assert.ok(minions.some((unit) => unit.path === index && unit.team === 'ally'), `ally path ${index}`);
+    assert.ok(minions.some((unit) => unit.path === index && unit.team === 'enemy'), `enemy path ${index}`);
+  }
 }
 
 console.log('match tests passed');
