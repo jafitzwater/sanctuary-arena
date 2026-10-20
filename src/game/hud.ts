@@ -109,7 +109,9 @@ export class Hud {
 
   setMuteLabel(muted: boolean): void {
     const button = this.root.querySelector<HTMLButtonElement>('#mute-btn');
-    if (button) button.textContent = muted ? 'Sound off' : 'Sound on';
+    if (!button) return;
+    const touch = document.body.classList.contains('touch');
+    button.textContent = muted ? (touch ? 'Muted' : 'Sound off') : touch ? 'Sound' : 'Sound on';
   }
 
   sync(sim: Sim, mode: Mode, focusId: number | null = null): void {
@@ -266,8 +268,8 @@ export class Hud {
       const skill = sim.classDef.skills.find((entry) => entry.id === id);
       button.dataset.cast = id;
       const name = button.querySelector('[data-sname]');
-      if (name) name.textContent = skill ? skill.name : 'Empty';
-      button.title = skill?.description ?? 'Empty belt slot';
+      if (name) name.textContent = skill ? skill.name : '+';
+      button.title = skill?.description ?? 'Empty belt slot. Open the tree to assign a skill.';
       const rank = skill ? (sim.skillRanks[skill.id] ?? 0) : 0;
       const cd = skill ? (sim.cooldowns[skill.id] ?? 0) : 0;
       const cost = skill && rank > 0 ? manaCost(skill, rank) : 0;
