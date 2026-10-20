@@ -5,7 +5,7 @@ import { act1 } from '../src/game/data/acts/act1';
 import { getAct } from '../src/game/data/acts';
 import { barbarian } from '../src/game/data/classes/barbarian';
 import { getClass } from '../src/game/data/classes';
-import { grantXp, MAX_LEVEL, tryUpgrade, damageUnit } from '../src/game/combat';
+import { grantXp, MAX_LEVEL, tryAssignBelt, trySpendAttribute, tryUpgrade, damageUnit } from '../src/game/combat';
 import { SKILLS } from '../src/game/skills';
 import { findBase, player } from '../src/game/query';
 import { createMatch, spawnMinion, updateSim } from '../src/game/sim';
@@ -129,9 +129,9 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   input.buy = 'health-potion';
   updateSim(sim, input, 0);
   assert.equal(sim.potions.health, 1);
-  input.buy = 'hand-axe';
+  input.buy = 'hax';
   updateSim(sim, input, 0);
-  assert.equal(sim.loadout.weapon, 'hand-axe');
+  assert.equal(sim.loadout.weapon, 'hax');
   assert.ok(hero.ad >= barbarian.stats.ad + 16);
   input.buy = null;
   input.potion = 'health';
@@ -147,7 +147,7 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   hero.y = 820;
   sim.gold = 500;
   const input = emptyInput();
-  input.buy = 'leather-armor';
+  input.buy = 'lea';
   updateSim(sim, input, 0);
   assert.equal(sim.loadout.armor, null);
   assert.equal(Math.floor(sim.gold), 500);
@@ -162,6 +162,24 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   assert.equal(sim.skillRanks.leap, 1);
   grantXp(sim, 100000);
   assert.equal(sim.level, MAX_LEVEL);
+}
+
+{
+  const sim = createMatch(act1, barbarian, 1);
+  assert.deepEqual(sim.belt, ['bash', '', '', '']);
+  tryAssignBelt(sim, 'leap', 1);
+  assert.equal(sim.belt[1], '');
+  sim.skillPoints = 1;
+  sim.level = 2;
+  assert.equal(tryUpgrade(sim, 'leap'), true);
+  tryAssignBelt(sim, 'leap', 1);
+  assert.equal(sim.belt[0], 'bash');
+  assert.equal(sim.belt[1], 'leap');
+  sim.statPoints = 1;
+  const str = sim.attributes.str;
+  trySpendAttribute(sim, 'str');
+  assert.equal(sim.attributes.str, str + 1);
+  assert.equal(sim.statPoints, 0);
 }
 
 {

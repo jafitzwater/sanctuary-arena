@@ -1,0 +1,102 @@
+[
+  {
+    "name": "Death",
+    "token": "DT",
+    "code": "DT"
+  },
+  {
+    "name": "Neutral",
+    "token": "NU",
+    "code": "NU"
+  },
+  {
+    "name": "Walk",
+    "token": "WL",
+    "code": "WL"
+  },
+  {
+    "name": "Run",
+    "token": "RN",
+    "code": "RN"
+  },
+  {
+    "name": "Get Hit",
+    "token": "GH",
+    "code": "GH"
+  },
+  {
+    "name": "Town Neutral",
+    "token": "TN",
+    "code": "TN"
+  },
+  {
+    "name": "Town Walk",
+    "token": "TW",
+    "code": "TW"
+  },
+  {
+    "name": "Attack1",
+    "token": "A1",
+    "code": "A1"
+  },
+  {
+    "name": "Attack2",
+    "token": "A2",
+    "code": "A2"
+  },
+  {
+    "name": "Block",
+    "token": "BL",
+    "code": "BL"
+  },
+  {
+    "name": "Cast",
+    "token": "SC",
+    "code": "SC"
+  },
+  {
+    "name": "Throw",
+    "token": "TH",
+    "code": "TH"
+  },
+  {
+    "name": "Kick",
+    "token": "KK",
+    "code": "KK"
+  },
+  {
+    "name": "Skill1",
+    "token": "S1",
+    "code": "S1"
+  },
+  {
+    "name": "Skill2",
+    "token": "S2",
+    "code": "S2"
+  },
+  {
+    "name": "Skill3",
+    "token": "S3",
+    "code": "S3"
+  },
+  {
+    "name": "Skill4",
+    "token": "S4",
+    "code": "S4"
+  },
+  {
+    "name": "Dead",
+    "token": "DD",
+    "code": "DD"
+  },
+  {
+    "name": "Sequence",
+    "token": "GH",
+    "code": "SQ"
+  },
+  {
+    "name": "Knock back",
+    "token": "GH",
+    "code": "KB"
+  }
+]

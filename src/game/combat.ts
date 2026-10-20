@@ -1,4 +1,5 @@
 import { itemById, potionItem, POTION_CAP, type ItemDef, type PotionKind } from './data/items';
+import type { SkillDef } from './data/classes/types';
 import { dist } from './math';
 import { player } from './query';
 import type { Fx, Sim, Unit } from './types';
@@ -36,28 +37,29 @@ export function ring(sim: Sim, x: number, y: number, r: number, color: string): 
   pushFx(sim, { kind: 'ring', x, y, r, color, life: 0.4, t: 0 });
 }
 
+export function manaCost(def: SkillDef, rank: number): number {
+  const raw = def.mana + def.manaPerRank * Math.max(0, rank - 1);
+  return Math.max(def.minMana, Math.round(raw));
+}
+
 export function grantXp(sim: Sim, amount: number): void {
   if (amount <= 0 || sim.level >= MAX_LEVEL) return;
   sim.xp += amount;
-  const hero = player(sim);
   const stats = sim.classDef.stats;
   let gained = false;
   while (sim.level < MAX_LEVEL && sim.xp >= xpToNext(sim.level)) {
     sim.xp -= xpToNext(sim.level);
     sim.level += 1;
     sim.skillPoints += 1;
-    hero.maxHp += stats.hpPerLevel;
-    hero.hp += stats.hpPerLevel;
-    hero.maxMana += stats.manaPerLevel;
-    hero.mana += stats.manaPerLevel;
-    hero.ad += stats.adPerLevel;
-    hero.armor += stats.armorPerLevel;
-    hero.hp = Math.min(hero.maxHp, hero.hp + hero.maxHp * 0.08);
+    sim.statPoints += stats.statPointsPerLevel;
     gained = true;
   }
   if (sim.level >= MAX_LEVEL) sim.xp = 0;
   if (gained) {
-    banner(sim, `Level ${sim.level} — a skill point was gained`);
+    recomputeHero(sim);
+    const hero = player(sim);
+    hero.hp = Math.min(hero.maxHp, hero.hp + hero.maxHp * 0.08);
+    banner(sim, `Level ${sim.level} — skill and stat points were gained`);
     sfx(sim, 'level');
   }
 }
@@ -127,25 +129,204 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
 }
 
 function award(sim: Sim, unit: Unit): void {
-  sim.gold += unit.gold;
+  const hero = player(sim);
+  let gold = unit.gold;
+  if (hero.findGold > 0 && unit.kind === 'minion') {
+    gold += hero.findGold;
+    hero.findGold = 0;
+  }
+  sim.gold += gold;
   grantXp(sim, unit.xp);
-  floater(sim, unit.x, unit.y - 24, `+${unit.gold}`, '#e6c864');
+  floater(sim, unit.x, unit.y - 24, `+${gold}`, '#e6c864');
   sfx(sim, 'coin');
 }
 
-export function applyItemStats(hero: Unit, item: ItemDef, sign: 1 | -1): void {
-  hero.ad += sign * (item.ad ?? 0);
-  hero.armor += sign * (item.armor ?? 0);
-  hero.maxHp += sign * (item.hp ?? 0);
-  hero.hp += sign * (item.hp ?? 0);
-  hero.maxMana += sign * (item.mana ?? 0);
-  hero.mana += sign * (item.mana ?? 0);
+const MASTERY: Record<string, string> = {
+  swor: 'sword-mastery',
+  axe: 'axe-mastery',
+  taxe: 'axe-mastery',
+  mace: 'mace-mastery',
+  club: 'mace-mastery',
+  hamm: 'mace-mastery',
+  pole: 'pole-arm-mastery',
+  spea: 'spear-mastery',
+  tkni: 'throwing-mastery',
+  jave: 'throwing-mastery',
+};
+
+function masteryMul(sim: Sim, type: string): number {
+  const ids = [MASTERY[type]];
+  if (type === 'taxe' || type === 'tkni' || type === 'jave') ids.push('throwing-mastery');
+  let best = 0;
+  for (const id of ids) {
+    if (!id) continue;
+    best = Math.max(best, sim.skillRanks[id] ?? 0);
+  }
+  return 1 + best * 0.06;
+}
+
+function swingTime(wsm: number): number {
+  return Math.min(1.2, Math.max(0.45, 0.78 * (1 + wsm / 100)));
+}
+
+export function heroNumbers(sim: Sim, timers: { bo: boolean; berserk: boolean }): {
+  hp: number;
+  mana: number;
+  ad: number;
+  armor: number;
+  moveSpeed: number;
+  attackInterval: number;
+  attackRange: number;
+  wclass: string;
+} {
+  const stats = sim.classDef.stats;
+  const lvl = Math.max(0, sim.level - 1);
+  const extraVit = sim.attributes.vit - stats.vit;
+  const extraEn = sim.attributes.energy - stats.energy;
+  const extraStr = sim.attributes.str - stats.str;
+  const extraDex = sim.attributes.dex - stats.dex;
+  let hp = stats.hp + lvl * stats.hpPerLevel + extraVit * stats.hpPerVit;
+  let mana = stats.mana + lvl * stats.manaPerLevel + extraEn * stats.manaPerEnergy;
+  let ad = stats.ad + extraStr * stats.adPerStr;
+  let armor = stats.armor + extraDex * stats.armorPerDex;
+  let move = stats.moveSpeed;
+  let interval = stats.attackInterval;
+  let range = stats.attackRange;
+  let wclass = 'HTH';
+
+  const main = sim.loadout.weapon ? itemById(sim.loadout.weapon) : undefined;
+  const off = sim.loadout.offhand ? itemById(sim.loadout.offhand) : undefined;
+  const wieldTwo = !!main?.twoHanded && (!main.oneOrTwo || !off);
+  if (main) {
+    const weaponAd = wieldTwo ? (main.ad ?? 0) : (main.adOne || main.ad || 0);
+    ad += weaponAd * masteryMul(sim, main.weaponType ?? '');
+    wclass = (wieldTwo ? main.wclass2 || main.wclass : main.wclass) || '1HS';
+    interval = swingTime(main.speed ?? 0);
+    if (wieldTwo && (wclass === 'STF' || wclass === '2HT')) range = 96;
+  }
+  if (off?.slot === 'weapon') {
+    const offAd = off.adOff || Math.round((off.adOne || off.ad || 0) * 0.5);
+    ad += offAd * masteryMul(sim, off.weaponType ?? '');
+    interval = Math.max(interval, swingTime(off.speed ?? 0));
+  } else if (off?.slot === 'shield') {
+    armor += off.armor ?? 0;
+  }
+  for (const id of [sim.loadout.armor, sim.loadout.helm, sim.loadout.belt]) {
+    if (!id) continue;
+    const piece = itemById(id);
+    if (!piece) continue;
+    armor += piece.armor ?? 0;
+    hp += piece.hp ?? 0;
+    mana += piece.mana ?? 0;
+  }
+
+  const speedRank = sim.skillRanks['increased-speed'] ?? 0;
+  move *= 1 + speedRank * 0.035;
+  interval *= 1 - Math.min(0.2, speedRank * 0.02);
+  interval *= 1 - Math.min(0.15, Math.max(0, extraDex) * 0.004);
+  armor += (sim.skillRanks['iron-skin'] ?? 0) * 3;
+  armor += sim.skillRanks['natural-resistance'] ?? 0;
+
+  if (timers.bo) {
+    const rank = Math.max(1, sim.skillRanks['battle-orders'] ?? 1);
+    const mul = 1.12 + rank * 0.03;
+    hp *= mul;
+    mana *= mul;
+  }
+  if (timers.berserk) armor *= 0.25;
+
+  return {
+    hp: Math.max(1, Math.round(hp)),
+    mana: Math.max(0, Math.round(mana)),
+    ad: Math.max(1, Math.round(ad)),
+    armor: Math.round(armor),
+    moveSpeed: move,
+    attackInterval: Math.min(1.2, Math.max(0.4, interval)),
+    attackRange: range,
+    wclass,
+  };
+}
+
+export function recomputeHero(sim: Sim): void {
+  const hero = player(sim);
+  const prevHp = hero.maxHp;
+  const prevMana = hero.maxMana;
+  const built = heroNumbers(sim, { bo: hero.boT > 0, berserk: hero.berserkT > 0 });
+  hero.maxHp = built.hp;
+  hero.maxMana = built.mana;
+  hero.ad = built.ad;
+  hero.armor = built.armor;
+  hero.moveSpeed = built.moveSpeed;
+  hero.attackInterval = built.attackInterval;
+  hero.attackRange = built.attackRange;
+  hero.wclass = built.wclass;
+  if (built.hp > prevHp) hero.hp += built.hp - prevHp;
+  if (built.mana > prevMana) hero.mana += built.mana - prevMana;
   hero.hp = Math.max(1, Math.min(hero.maxHp, hero.hp));
   hero.mana = Math.max(0, Math.min(hero.maxMana, hero.mana));
 }
 
 export function inShopRange(sim: Sim, unit: Unit): boolean {
   return dist(unit, sim.map.playerBase) <= sim.map.shopRadius;
+}
+
+function meetsReq(sim: Sim, item: ItemDef): boolean {
+  const needStr = item.reqStr ?? 0;
+  const needDex = item.reqDex ?? 0;
+  if (sim.attributes.str < needStr) {
+    banner(sim, `Need ${needStr} strength.`);
+    return false;
+  }
+  if (sim.attributes.dex < needDex) {
+    banner(sim, `Need ${needDex} dexterity.`);
+    return false;
+  }
+  return true;
+}
+
+function equipWeapon(sim: Sim, item: ItemDef): boolean {
+  const main = sim.loadout.weapon ? itemById(sim.loadout.weapon) : undefined;
+  const off = sim.loadout.offhand ? itemById(sim.loadout.offhand) : undefined;
+  const exclusive = !!item.twoHanded && !item.oneOrTwo;
+  if (exclusive) {
+    if (sim.loadout.weapon === item.id && !off) {
+      banner(sim, 'Already equipped.');
+      return false;
+    }
+    sim.loadout.weapon = item.id;
+    sim.loadout.offhand = null;
+    return true;
+  }
+  if (!main) {
+    sim.loadout.weapon = item.id;
+    return true;
+  }
+  const mainLocks = !!main.twoHanded && !main.oneOrTwo;
+  if (mainLocks) {
+    sim.loadout.weapon = item.id;
+    sim.loadout.offhand = null;
+    return true;
+  }
+  if (!off) {
+    sim.loadout.offhand = item.id;
+    return true;
+  }
+  sim.loadout.weapon = item.id;
+  return true;
+}
+
+function equipShield(sim: Sim, item: ItemDef): boolean {
+  const main = sim.loadout.weapon ? itemById(sim.loadout.weapon) : undefined;
+  if (main?.twoHanded && !main.oneOrTwo) {
+    banner(sim, 'A two-handed weapon leaves no hand free.');
+    return false;
+  }
+  if (sim.loadout.offhand === item.id) {
+    banner(sim, 'Already equipped.');
+    return false;
+  }
+  sim.loadout.offhand = item.id;
+  return true;
 }
 
 export function tryBuy(sim: Sim, id: string): void {
@@ -172,26 +353,21 @@ export function tryBuy(sim: Sim, id: string): void {
     banner(sim, `Bought ${item.name}.`);
     return;
   }
-  if (item.slot === 'weapon') {
-    if (sim.loadout.weapon === item.id) {
+  if (!meetsReq(sim, item)) return;
+  let equipped = false;
+  if (item.slot === 'weapon') equipped = equipWeapon(sim, item);
+  else if (item.slot === 'shield') equipped = equipShield(sim, item);
+  else if (item.slot === 'armor' || item.slot === 'helm' || item.slot === 'belt') {
+    if (sim.loadout[item.slot] === item.id) {
       banner(sim, 'Already equipped.');
       return;
     }
-    if (sim.loadout.weapon) {
-      const previous = itemById(sim.loadout.weapon);
-      if (previous) applyItemStats(hero, previous, -1);
-    }
-    sim.loadout.weapon = item.id;
-    applyItemStats(hero, item, 1);
-  } else if (item.slot === 'armor' || item.slot === 'helm') {
-    if (sim.loadout[item.slot]) {
-      banner(sim, 'Already owned.');
-      return;
-    }
     sim.loadout[item.slot] = item.id;
-    applyItemStats(hero, item, 1);
+    equipped = true;
   }
+  if (!equipped) return;
   sim.gold -= item.cost;
+  recomputeHero(sim);
   sfx(sim, 'coin');
   banner(sim, `Bought ${item.name}.`);
 }
@@ -232,14 +408,51 @@ export function tryUpgrade(sim: Sim, id: string): boolean {
     banner(sim, `${def.name} unlocks at level ${def.unlockLevel}.`);
     return false;
   }
+  for (const req of def.prereqs) {
+    if ((sim.skillRanks[req] ?? 0) < 1) {
+      const name = sim.classDef.skills.find((skill) => skill.id === req)?.name ?? req;
+      banner(sim, `${def.name} requires ${name}.`);
+      return false;
+    }
+  }
   if (sim.skillPoints <= 0) {
     banner(sim, 'No skill points.');
     return false;
   }
   sim.skillRanks[id] = rank + 1;
   sim.skillPoints -= 1;
+  recomputeHero(sim);
   banner(sim, `${def.name} is rank ${rank + 1}.`);
   sfx(sim, 'level');
   return true;
+}
+
+export function trySpendAttribute(sim: Sim, key: 'str' | 'dex' | 'vit' | 'energy'): void {
+  if (sim.statPoints <= 0) {
+    banner(sim, 'No stat points.');
+    return;
+  }
+  sim.attributes[key] += 1;
+  sim.statPoints -= 1;
+  recomputeHero(sim);
+  sfx(sim, 'level');
+}
+
+const BELT_KEYS = ['Q', 'W', 'E', 'R'];
+
+export function tryAssignBelt(sim: Sim, id: string, slot: number): void {
+  const def = sim.classDef.skills.find((skill) => skill.id === id);
+  if (!def || slot < 0 || slot > 3) return;
+  if (def.passive) {
+    banner(sim, `${def.name} is passive.`);
+    return;
+  }
+  if ((sim.skillRanks[id] ?? 0) <= 0) {
+    banner(sim, `Learn ${def.name} before belting it.`);
+    return;
+  }
+  sim.belt = sim.belt.map((entry) => (entry === id ? '' : entry));
+  sim.belt[slot] = id;
+  banner(sim, `${def.name} is on ${BELT_KEYS[slot]}.`);
 }
 

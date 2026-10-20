@@ -8,6 +8,8 @@ interface InputHooks {
   getWorld: (sx: number, sy: number) => Vec;
   isPlaying: () => boolean;
   toggleShop: () => void;
+  toggleTree: () => void;
+  openTree: (slot: number) => void;
   closeOverlays: () => void;
 }
 
@@ -25,6 +27,9 @@ export class InputController {
   buy: string | null = null;
   potion: 'health' | 'mana' | null = null;
   upgrade: string | null = null;
+  attribute: FrameInput['attribute'] = null;
+  assignSkill: string | null = null;
+  assignSlot = 0;
   aimX = 0;
   aimY = 0;
 
@@ -56,7 +61,7 @@ export class InputController {
     window.addEventListener('blur', () => this.releaseAll(knob));
     window.addEventListener('pointermove', (event) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest('#stick, #cluster, #topbar, #shop, #help, #minimap')) return;
+      if (target?.closest('#stick, #cluster, #topbar, #shop, #help, #tree, #minimap')) return;
       this.pointerX = event.clientX;
       this.pointerY = event.clientY;
       this.pointerSeen = true;
@@ -109,7 +114,7 @@ export class InputController {
           return;
         }
         const target = event.target as HTMLElement | null;
-        if (target?.closest('#shop, #help, #title, #end, #topbar, #belt')) return;
+        if (target?.closest('#shop, #help, #tree, #title, #end, #topbar, #belt')) return;
         event.preventDefault();
       },
       { passive: false },
@@ -174,6 +179,9 @@ export class InputController {
       buy: this.buy,
       potion: this.potion,
       upgrade: this.upgrade,
+      attribute: this.attribute,
+      assignSkill: this.assignSkill,
+      assignSlot: this.assignSlot,
     };
   }
 
@@ -182,6 +190,9 @@ export class InputController {
     this.buy = null;
     this.potion = null;
     this.upgrade = null;
+    this.attribute = null;
+    this.assignSkill = null;
+    this.assignSlot = 0;
   }
 
   private onKeyDown(event: KeyboardEvent): void {
@@ -201,17 +212,25 @@ export class InputController {
     }
     if (!event.repeat) {
       const sim = this.hooks.getSim();
-      const skill = sim?.classDef.skills.find(
-        (entry) => entry.key.toLowerCase() === event.key.toLowerCase() || entry.digit === event.key,
-      );
-      if (skill) {
+      const slot = beltSlot(event.key);
+      if (slot >= 0 && sim) {
         event.preventDefault();
-        if (event.shiftKey) this.upgrade = skill.id;
-        else this.cast = skill.id;
+        const id = sim.belt[slot] ?? '';
+        if (!id) {
+          this.hooks.openTree(slot);
+          return;
+        }
+        if (event.shiftKey) this.upgrade = id;
+        else this.cast = id;
         return;
       }
       if (event.key === '5') this.potion = 'health';
       if (event.key === '6') this.potion = 'mana';
+      if (event.key === 't' || event.key === 'T') {
+        event.preventDefault();
+        this.hooks.toggleTree();
+        return;
+      }
       if (event.key === 'b' || event.key === 'B') {
         event.preventDefault();
         this.hooks.toggleShop();
@@ -308,6 +327,13 @@ function installZoomLock(): void {
   for (const name of ['gesturestart', 'gesturechange', 'gestureend', 'gesturemove']) {
     document.addEventListener(name, (event) => event.preventDefault(), { passive: false, capture: true });
   }
+}
+
+const BELT_KEYS = ['q', 'w', 'e', 'r', '1', '2', '3', '4'];
+
+function beltSlot(key: string): number {
+  const index = BELT_KEYS.indexOf(key.toLowerCase());
+  return index < 0 ? -1 : index % 4;
 }
 
 function pickEnemy(sim: Sim, x: number, y: number): Sim['units'][number] | null {

@@ -1,4 +1,6 @@
-export type ItemSlot = 'consumable' | 'weapon' | 'armor' | 'helm';
+import rawItems from './d2/items-act1.json';
+
+export type ItemSlot = 'consumable' | 'weapon' | 'armor' | 'helm' | 'belt' | 'shield';
 export type PotionKind = 'health' | 'mana';
 
 export interface ItemDef {
@@ -11,15 +13,26 @@ export interface ItemDef {
   heal?: number;
   restoreMana?: number;
   ad?: number;
+  adOne?: number;
+  adOff?: number;
+  throwAd?: number;
   armor?: number;
   hp?: number;
   mana?: number;
+  reqStr?: number;
+  reqDex?: number;
+  speed?: number;
+  wclass?: string;
+  wclass2?: string;
+  twoHanded?: boolean;
+  oneOrTwo?: boolean;
+  thrown?: boolean;
+  weaponType?: string;
 }
 
 export const POTION_CAP = 5;
 
-/** Shop catalog. Add an entry here and the shop UI picks it up. */
-export const ITEMS: ItemDef[] = [
+const POTIONS: ItemDef[] = [
   {
     id: 'health-potion',
     name: 'Health Potion',
@@ -38,42 +51,10 @@ export const ITEMS: ItemDef[] = [
     restoreMana: 130,
     description: 'Drink to restore 130 mana. Carry up to 5.',
   },
-  {
-    id: 'hand-axe',
-    name: 'Hand Axe',
-    cost: 380,
-    slot: 'weapon',
-    ad: 16,
-    description: '+16 damage. Replaces your equipped weapon.',
-  },
-  {
-    id: 'battle-sword',
-    name: 'Battle Sword',
-    cost: 860,
-    slot: 'weapon',
-    ad: 34,
-    description: '+34 damage. Replaces your equipped weapon.',
-  },
-  {
-    id: 'leather-armor',
-    name: 'Leather Armor',
-    cost: 460,
-    slot: 'armor',
-    armor: 18,
-    hp: 150,
-    description: '+18 armor and +150 life.',
-  },
-  {
-    id: 'war-helm',
-    name: 'War Helm',
-    cost: 340,
-    slot: 'helm',
-    hp: 110,
-    mana: 40,
-    armor: 8,
-    description: '+110 life, +40 mana, and +8 armor.',
-  },
 ];
+
+/** Potions plus normal Act I bases imported from Weapons.txt and Armor.txt. */
+export const ITEMS: ItemDef[] = [...POTIONS, ...(rawItems as ItemDef[])];
 
 export function itemById(id: string): ItemDef | undefined {
   return ITEMS.find((item) => item.id === id);

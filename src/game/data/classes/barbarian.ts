@@ -1,9 +1,21 @@
-import type { ClassDef } from './types';
+import type { ClassDef, SkillDef } from './types';
+import classes from '../d2/charstats.json';
+import skills from '../d2/skills-barbarian.json';
+
+const row = classes.find((entry) => entry.id === 'barbarian');
+if (!row) throw new Error('Barbarian missing from CharStats import');
+
+const moba = row.moba;
+
+const skillList: SkillDef[] = skills.map((skill) => ({
+  ...skill,
+  key: '',
+  digit: '',
+}));
 
 /**
- * Melee bruiser. Skill keys are Q W E R, matching a typical MOBA row.
- * Desktop movement uses the mouse and the arrow keys so W can stay Leap.
- * A future class can pick different keys; wire the handlers in src/game/skills.
+ * Stats and the 30-skill tree are the 1.13c CharStats / Skills rows, scaled
+ * in tools/import-d2.mjs. Q W E R are belt slots, not fixed skills.
  */
 export const barbarian: ClassDef = {
   id: 'barbarian',
@@ -11,69 +23,37 @@ export const barbarian: ClassDef = {
   title: 'Warrior of Mount Arreat',
   role: 'melee',
   blurb:
-    'A melee brawler. Bash stuns, Leap crosses the moor, War Cry rallies nearby Rogues, and Whirlwind carves through a pack.',
+    'The 1.13c Barbarian tree: Combat Skills, Combat Masteries, and Warcries. Bash starts on Q. Press T to spend points and choose the other three belt skills.',
+  token: row.token || 'BA',
+  startingBelt: ['bash', '', '', ''],
   stats: {
-    hp: 760,
-    mana: 230,
-    ad: 66,
-    armor: 16,
-    moveSpeed: 268,
+    hp: moba.life,
+    mana: moba.mana,
+    ad: moba.baseAd,
+    armor: moba.baseArmor,
+    moveSpeed: moba.runSpeed,
     attackRange: 74,
-    attackInterval: 0.76,
+    attackInterval: 0.78,
     radius: 22,
-    hpPerLevel: 82,
-    manaPerLevel: 20,
-    adPerLevel: 7,
-    armorPerLevel: 1.5,
-    regenHp: 2.6,
-    regenMana: 4.6,
+    hpPerLevel: moba.hpPerLevel,
+    manaPerLevel: moba.manaPerLevel,
+    adPerLevel: 0,
+    armorPerLevel: 0,
+    regenHp: moba.regenHp,
+    regenMana: moba.regenMana,
+    str: moba.str,
+    dex: moba.dex,
+    vit: moba.vit,
+    energy: moba.energy,
+    hpPerVit: moba.hpPerVit,
+    manaPerEnergy: moba.manaPerEnergy,
+    statPointsPerLevel: moba.statPointsPerLevel,
+    adPerStr: moba.adPerStr,
+    armorPerDex: moba.armorPerDex,
+    walkSpeed: moba.walkSpeed,
+    runSpeed: moba.runSpeed,
   },
-  skills: [
-    {
-      id: 'bash',
-      name: 'Bash',
-      key: 'Q',
-      digit: '1',
-      cooldown: 6,
-      mana: 18,
-      maxRank: 4,
-      unlockLevel: 1,
-      description: 'Smash a nearby foe for heavy damage and a short stun. If nothing is in reach, your next attack bashes.',
-    },
-    {
-      id: 'leap',
-      name: 'Leap',
-      key: 'W',
-      digit: '2',
-      cooldown: 9,
-      mana: 22,
-      maxRank: 4,
-      unlockLevel: 2,
-      description: 'Jump toward the pointer or your facing, damaging and slowing enemies where you land.',
-    },
-    {
-      id: 'warcry',
-      name: 'War Cry',
-      key: 'E',
-      digit: '3',
-      cooldown: 13,
-      mana: 28,
-      maxRank: 4,
-      unlockLevel: 3,
-      description: 'A shout that empowers nearby allies and slows enemies around you.',
-    },
-    {
-      id: 'whirlwind',
-      name: 'Whirlwind',
-      key: 'R',
-      digit: '4',
-      cooldown: 11,
-      mana: 32,
-      maxRank: 3,
-      unlockLevel: 4,
-      description: 'Spin through the fight, striking everyone nearby. You can move while spinning.',
-    },
-  ],
+  skills: skillList,
   colors: {
     cloth: '#6e2a22',
     skin: '#c48a62',

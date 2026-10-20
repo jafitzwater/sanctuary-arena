@@ -1,0 +1,40 @@
+{
+  "game": "Diablo II",
+  "patch": "1.13c",
+  "generatedBy": "tools/import-d2.mjs",
+  "sources": [
+    {
+      "tables": "CharStats.txt, Skills.txt, SkillDesc.txt, Weapons.txt, Armor.txt, ItemTypes.txt, MonStats.txt, PlrMode.txt",
+      "repo": "https://github.com/fabd/diablo2/tree/master/code/d2_113_data",
+      "path": "tools/vendor/d2-113c"
+    },
+    {
+      "strings": "skillname/skillsd/skillld 126-155",
+      "repo": "https://github.com/blizzhackers/d2data/blob/master/json/localestrings-eng.json",
+      "path": "tools/vendor/d2-113c/strings.json"
+    }
+  ],
+  "scale": {
+    "fourths": 4,
+    "lifeScale": 6,
+    "manaScale": 8,
+    "manaCostScale": 2,
+    "speedUnit": 30,
+    "weaponAdScale": 4,
+    "armorDefScale": 1.2,
+    "monsterHpScale": 6,
+    "monsterDmgScale": 0.24,
+    "skillUnlockDivisor": 6
+  },
+  "notes": [
+    "CharStats LifePerLevel, ManaPerLevel, LifePerVitality, ManaPerMagic, and StatPerLevel are stored in fourths. Dividing by 4 is the displayed Diablo II value.",
+    "MOBA life = (vitality * LifePerVitality/4 + hpadd) * lifeScale, then + hpPerLevel per match level and + hpPerVit per vitality spent.",
+    "MOBA mana = (energy * ManaPerMagic/4) * manaScale. Skill mana = max(minmana, mana + lvlmana*(rank-1)) * manaCostScale.",
+    "Unlock level = max(1, round(reqlevel / 6)) so a short match can open the tree. reqLevel keeps the 1.13c number.",
+    "Cooldowns are match pacing. The delay column is empty for Barbarian skills.",
+    "Shop items are normal bases (code == normcode) a Barbarian can use, level <= 12 and levelreq <= 8. Exceptional and elite codes are left out.",
+    "Weapon attack bonus = average damage * 4. A second one-hander adds half. wclass / 2handedwclass pick the attack pose.",
+    "Monster life = average(minHP, maxHP) * 6, or * 4 when that average is at least 100 (so a Zombie stays a lane tank), and * 3 for bosses. A1MinD/A1MaxD is scaled by 0.24 because those columns are far above life.",
+    "PlrMode tokens organize sprites (NU, WL, RN, A1, A2, S1, GH, DD). DCC/COF files are not extracted."
+  ]
+}

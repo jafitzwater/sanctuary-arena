@@ -1,3 +1,5 @@
+import monsters from './d2/monsters-act1.json';
+
 export interface UnitDef {
   id: string;
   name: string;
@@ -17,10 +19,39 @@ export interface UnitDef {
   accent: string;
 }
 
+const LOOK: Record<string, { name?: string; radius: number; aggro: number; color: string; accent: string }> = {
+  fallen: { radius: 14, aggro: 210, color: '#8d1d24', accent: '#e07a3a' },
+  zombie: { radius: 18, aggro: 190, color: '#5d7a52', accent: '#b7d4a8' },
+  quillrat: { name: 'Quill Rat', radius: 15, aggro: 230, color: '#6b5344', accent: '#d2c2a4' },
+};
+
+function fromMon(id: string): UnitDef {
+  const row = monsters.find((entry) => entry.id === id);
+  if (!row) throw new Error(`Missing MonStats row ${id}`);
+  const look = LOOK[id];
+  return {
+    id,
+    name: look?.name ?? row.name,
+    hp: row.moba.hp,
+    ad: row.moba.ad,
+    armor: row.moba.armor,
+    moveSpeed: row.moba.moveSpeed,
+    attackRange: row.moba.attackRange,
+    attackInterval: row.moba.attackInterval,
+    radius: look?.radius ?? 16,
+    gold: row.moba.gold,
+    xp: row.moba.xp,
+    ranged: row.moba.ranged,
+    projectileSpeed: row.moba.projectileSpeed,
+    aggro: look?.aggro ?? 200,
+    color: look?.color ?? '#888',
+    accent: look?.accent ?? '#fff',
+  };
+}
+
 /**
- * Lane creeps and Act I monsters. Acts reference these ids from their wave
- * tables. Add a new monster here, point a wave at it, and give it a sprite
- * in render.ts — the spawner stays the same.
+ * Lane creeps and Act I monsters. Fallen, Zombie, and Quill Rat numbers come
+ * from MonStats via src/game/data/d2. Rogues stay hand-authored allies.
  */
 export const UNIT_DEFS: Record<string, UnitDef> = {
   rogue: {
@@ -59,42 +90,9 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
     color: '#35506a',
     accent: '#e6d3a1',
   },
-  fallen: {
-    id: 'fallen',
-    name: 'Fallen',
-    hp: 270,
-    ad: 20,
-    armor: 2,
-    moveSpeed: 118,
-    attackRange: 48,
-    attackInterval: 0.92,
-    radius: 14,
-    gold: 28,
-    xp: 34,
-    ranged: false,
-    projectileSpeed: 0,
-    aggro: 210,
-    color: '#8d1d24',
-    accent: '#e07a3a',
-  },
-  zombie: {
-    id: 'zombie',
-    name: 'Zombie',
-    hp: 560,
-    ad: 32,
-    armor: 8,
-    moveSpeed: 70,
-    attackRange: 50,
-    attackInterval: 1.32,
-    radius: 18,
-    gold: 36,
-    xp: 46,
-    ranged: false,
-    projectileSpeed: 0,
-    aggro: 190,
-    color: '#5d7a52',
-    accent: '#b7d4a8',
-  },
+  fallen: fromMon('fallen'),
+  zombie: fromMon('zombie'),
+  quillrat: fromMon('quillrat'),
 };
 
 export function unitDef(id: string): UnitDef {

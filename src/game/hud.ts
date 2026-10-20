@@ -1,6 +1,6 @@
 import portraitUrl from '../assets/art/barbarian/idle.png';
 import { ITEMS, type ItemDef } from './data/items';
-import { inShopRange, MAX_LEVEL, xpToNext } from './combat';
+import { inShopRange, manaCost, MAX_LEVEL, xpToNext } from './combat';
 import { player } from './query';
 import type { Sim } from './types';
 
@@ -14,11 +14,17 @@ export class Hud {
   onToggleShop: (() => void) | null = null;
   onToggleHelp: (() => void) | null = null;
   onToggleMute: (() => void) | null = null;
+  onToggleTree: (() => void) | null = null;
+  onOpenTree: ((slot: number) => void) | null = null;
+  onAssign: ((id: string) => void) | null = null;
+  onAttribute: ((key: 'str' | 'dex' | 'vit' | 'energy') => void) | null = null;
   onPlay: (() => void) | null = null;
   onAgain: (() => void) | null = null;
 
   shopOpen = false;
   helpOpen = false;
+  treeOpen = false;
+  beltSlot = 0;
   private built = false;
 
   constructor(private root: HTMLElement) {}
@@ -31,6 +37,10 @@ export class Hud {
     this.arm('#shop-btn', () => this.onToggleShop?.());
     this.arm('#help-btn', () => this.onToggleHelp?.());
     this.arm('#mute-btn', () => this.onToggleMute?.());
+    this.arm('#tree-btn', () => this.onToggleTree?.());
+    this.arm('#tree-close', () => {
+      this.treeOpen = false;
+    });
     this.arm('#shop-close', () => {
       this.shopOpen = false;
     });
@@ -55,9 +65,38 @@ export class Hud {
         return;
       }
       const skill = target.closest<HTMLElement>('[data-cast]');
-      if (skill?.dataset.cast) {
+      if (!skill) return;
+      event.preventDefault();
+      const slot = Number(skill.dataset.slot ?? 0);
+      this.beltSlot = slot;
+      if (skill.dataset.cast) this.onCast?.(skill.dataset.cast);
+      else this.onOpenTree?.(slot);
+    });
+    this.root.querySelector('#tree')?.addEventListener('pointerdown', (event) => {
+      const target = event.target as HTMLElement;
+      const attr = target.closest<HTMLElement>('[data-attr]');
+      if (attr?.dataset.attr === 'str' || attr?.dataset.attr === 'dex' || attr?.dataset.attr === 'vit' || attr?.dataset.attr === 'energy') {
         event.preventDefault();
-        this.onCast?.(skill.dataset.cast);
+        this.onAttribute?.(attr.dataset.attr);
+        return;
+      }
+      const slot = target.closest<HTMLElement>('[data-slot-pick]');
+      if (slot?.dataset.slotPick) {
+        event.preventDefault();
+        this.beltSlot = Number(slot.dataset.slotPick);
+        return;
+      }
+      const plus = target.closest<HTMLElement>('[data-upgrade]');
+      if (plus?.dataset.upgrade) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.onUpgrade?.(plus.dataset.upgrade);
+        return;
+      }
+      const node = target.closest<HTMLElement>('[data-assign]');
+      if (node?.dataset.assign) {
+        event.preventDefault();
+        this.onAssign?.(node.dataset.assign);
       }
     });
     this.root.querySelector('#shop-grid')?.addEventListener('pointerdown', (event) => {
@@ -73,10 +112,11 @@ export class Hud {
     if (button) button.textContent = muted ? 'Sound off' : 'Sound on';
   }
 
-  sync(sim: Sim, mode: Mode): void {
+  sync(sim: Sim, mode: Mode, focusId: number | null = null): void {
     if (!this.built) {
       this.buildSkills(sim);
       this.buildShop();
+      this.buildTree(sim);
       this.fillTitle(sim);
       this.built = true;
     }
@@ -95,15 +135,21 @@ export class Hud {
     const xpPct = sim.level >= MAX_LEVEL ? 1 : sim.xp / xpToNext(sim.level);
     this.setBar('#hp-fill', hpPct);
     this.setBar('#mp-fill', mpPct);
+    this.setBar('#hp-bar', hpPct);
+    this.setBar('#mp-bar', mpPct);
     this.setBar('#xp-fill', xpPct);
-    this.text('#hp-text', `${Math.ceil(hero.hp)} / ${Math.ceil(hero.maxHp)}`);
-    this.text('#mp-text', `${Math.ceil(hero.mana)} / ${Math.ceil(hero.maxMana)}`);
+    const hpLabel = `${Math.ceil(hero.hp)} / ${Math.ceil(hero.maxHp)}`;
+    const mpLabel = `${Math.ceil(hero.mana)} / ${Math.ceil(hero.maxMana)}`;
+    this.text('#hp-text', hpLabel);
+    this.text('#mp-text', mpLabel);
+    this.text('#hp-compact', hpLabel);
+    this.text('#mp-compact', mpLabel);
     this.text('#level', String(sim.level));
     this.text('#gold', String(Math.floor(sim.gold)));
     this.text('#cs', `${sim.cs} cs`);
     this.text('#kd', `${sim.kills} / ${sim.deaths}`);
     this.text('#clock', formatTime(sim.time));
-    const names = [sim.loadout.weapon, sim.loadout.armor, sim.loadout.helm].filter(Boolean);
+    const names = [sim.loadout.weapon, sim.loadout.offhand, sim.loadout.armor, sim.loadout.helm, sim.loadout.belt].filter(Boolean);
     this.text('#loadout', names.length ? names.map(labelOf).join(' · ') : 'Unarmed');
 
     const banner = this.q('#banner');
@@ -128,29 +174,45 @@ export class Hud {
     shop.hidden = !this.shopOpen;
     shop.classList.toggle('far', !near);
     const note = this.q('#shop-note');
+    const stats = `Str ${sim.attributes.str} · Dex ${sim.attributes.dex}.`;
     note.textContent = near
       ? hero.alive
-        ? 'Akara will trade while you stand in the Encampment.'
-        : 'You may trade while you wait to return.'
-      : 'Outside the Rogue Encampment. Walk back to camp — Akara will not sell out here.';
+        ? `Akara will trade while you stand in the Encampment. ${stats}`
+        : `You may trade while you wait to return. ${stats}`
+      : `Outside the Rogue Encampment. Walk back to camp — Akara will not sell out here. ${stats}`;
     const shopBtn = this.root.querySelector<HTMLButtonElement>('#shop-btn');
-    if (shopBtn) shopBtn.textContent = near ? 'Shop' : 'Shop · camp';
+    if (shopBtn) {
+      const touch = document.body.classList.contains('touch');
+      shopBtn.textContent = near ? 'Shop' : touch ? 'Camp' : 'Shop · camp';
+    }
+    this.syncTarget(sim, focusId);
     this.syncSkills(sim);
     this.syncShop(sim, near);
     this.text('#potion-hp-count', String(sim.potions.health));
     this.text('#potion-mp-count', String(sim.potions.mana));
     const help = this.q('#help');
     help.hidden = !this.helpOpen;
+    const tree = this.q('#tree');
+    tree.hidden = !this.treeOpen;
+    const treeBtn = this.root.querySelector<HTMLButtonElement>('#tree-btn');
+    if (treeBtn) {
+      treeBtn.textContent = 'Tree';
+      treeBtn.classList.toggle('has-points', sim.skillPoints > 0 || sim.statPoints > 0);
+    }
+    this.syncTree(sim);
   }
 
   private fillTitle(sim: Sim): void {
     this.text('#title-class', sim.classDef.name);
     this.text('#title-blurb', sim.classDef.blurb);
     this.text('#title-act', `Act ${sim.map.actNumber} · ${sim.map.name}`);
-    const list = sim.classDef.skills
-      .map((skill) => `${skill.key} ${skill.name}`)
-      .join('   ');
-    this.text('#title-skills', list);
+    const keyed = sim.classDef.skills.filter((skill) => skill.key);
+    this.text(
+      '#title-skills',
+      keyed.length
+        ? keyed.map((skill) => `${skill.key} ${skill.name}`).join('   ')
+        : 'Bash starts on Q. Press T for the skill tree and put four skills on the belt.',
+    );
   }
 
   private fillEnd(sim: Sim): void {
@@ -172,72 +234,110 @@ export class Hud {
     const host = this.root.querySelector('#skills');
     if (!host) return;
     host.innerHTML = '';
-    for (const skill of sim.classDef.skills) {
+    const keys = ['Q', 'W', 'E', 'R'];
+    for (let slot = 0; slot < 4; slot++) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'skill';
-      button.dataset.cast = skill.id;
+      button.dataset.slot = String(slot);
       button.innerHTML = `
-        <span class="key">${skill.key}</span>
-        <span class="sname">${skill.name}</span>
-        <span class="rank" data-rank="${skill.id}"></span>
-        <span class="cd" data-cd="${skill.id}"></span>
-        <span class="plus" data-upgrade="${skill.id}" hidden>+</span>
+        <span class="sweep" data-sweep="${slot}"></span>
+        <span class="key">${keys[slot]}</span>
+        <span class="sname" data-sname="${slot}"></span>
+        <span class="rank" data-rank="${slot}"></span>
+        <span class="cd" data-cd="${slot}" hidden></span>
+        <span class="plus" data-upgrade="" hidden>+</span>
       `;
-      button.title = skill.description;
       button.addEventListener('pointerenter', () => {
-        this.text('#skill-hint', skill.description);
+        const id = sim.belt[slot];
+        const skill = sim.classDef.skills.find((entry) => entry.id === id);
+        this.text('#skill-hint', skill ? skill.description : 'Empty belt slot. Open the tree to assign a skill.');
       });
       host.appendChild(button);
     }
   }
 
   private syncSkills(sim: Sim): void {
-    const hint = this.root.querySelector('#skill-hint');
-    for (const skill of sim.classDef.skills) {
-      const button = this.root.querySelector<HTMLButtonElement>(`[data-cast="${skill.id}"]`);
-      if (!button) continue;
-      const rank = sim.skillRanks[skill.id] ?? 0;
-      const cd = sim.cooldowns[skill.id] ?? 0;
-      const unlocked = sim.level >= skill.unlockLevel;
-      const canLearn = sim.skillPoints > 0 && unlocked && rank < skill.maxRank;
-      button.classList.toggle('locked', rank <= 0);
-      button.classList.toggle('ready', rank <= 0 && canLearn);
+    const keys = ['Q', 'W', 'E', 'R'];
+    const hero = player(sim);
+    sim.belt.forEach((id, slot) => {
+      const button = this.root.querySelector<HTMLButtonElement>(`#skills [data-slot="${slot}"]`);
+      if (!button) return;
+      const skill = sim.classDef.skills.find((entry) => entry.id === id);
+      button.dataset.cast = id;
+      const name = button.querySelector('[data-sname]');
+      if (name) name.textContent = skill ? skill.name : 'Empty';
+      button.title = skill?.description ?? 'Empty belt slot';
+      const rank = skill ? (sim.skillRanks[skill.id] ?? 0) : 0;
+      const cd = skill ? (sim.cooldowns[skill.id] ?? 0) : 0;
+      const cost = skill && rank > 0 ? manaCost(skill, rank) : 0;
+      const dry = !!skill && rank > 0 && hero.mana < cost;
+      button.classList.toggle('locked', !skill || rank <= 0);
+      button.classList.toggle('nomana', dry);
+      button.classList.toggle('ready', !!skill && rank > 0 && cd <= 0.05 && !dry);
       const rankEl = button.querySelector<HTMLElement>('[data-rank]');
-      if (rankEl) {
-        rankEl.innerHTML = Array.from({ length: skill.maxRank }, (_, index) =>
-          `<i class="${index < rank ? 'on' : ''}"></i>`,
-        ).join('');
-      }
+      if (rankEl) rankEl.textContent = skill && rank > 0 ? String(rank) : '';
       const cdEl = button.querySelector<HTMLElement>('[data-cd]');
+      const fraction = skill && cd > 0.05 && rank > 0 ? cd / Math.max(0.1, skill.cooldown) : 0;
+      button.style.setProperty('--cd', String(fraction));
       if (cdEl) {
-        if (cd > 0.05 && rank > 0) {
+        if (fraction > 0) {
           cdEl.hidden = false;
           cdEl.textContent = String(Math.ceil(cd));
-          button.style.setProperty('--cd', String(cd / skill.cooldown));
-        } else {
-          cdEl.hidden = true;
-          button.style.setProperty('--cd', '0');
-        }
+        } else cdEl.hidden = true;
       }
       const plus = button.querySelector<HTMLElement>('[data-upgrade]');
-      if (plus) plus.hidden = !canLearn || rank <= 0;
-      if (rank <= 0 && canLearn && hint && !hint.textContent) {
-        hint.textContent = `${skill.name} can be learned.`;
+      const canLearn = !!skill && sim.skillPoints > 0 && sim.level >= skill.unlockLevel && rank > 0 && rank < skill.maxRank;
+      if (plus) {
+        plus.hidden = !canLearn;
+        plus.dataset.upgrade = skill && canLearn ? skill.id : '';
       }
+      const manaNote = dry ? `, need ${cost} mana` : '';
+      button.setAttribute('aria-label', skill ? `${keys[slot]} ${skill.name}${manaNote}` : `${keys[slot]} empty`);
+    });
+  }
+
+  private syncTarget(sim: Sim, focusId: number | null): void {
+    const bar = this.root.querySelector<HTMLElement>('#targetbar');
+    if (!bar) return;
+    const hero = player(sim);
+    const id = focusId ?? hero.targetId;
+    const unit = sim.units.find((entry) => entry.id === id && entry.alive && entry.team !== 'ally');
+    if (!unit || unit.maxHp <= 0) {
+      bar.hidden = true;
+      return;
     }
+    bar.hidden = false;
+    this.text('#target-name', unit.name);
+    this.setBar('#target-fill', unit.hp / unit.maxHp);
   }
 
   private buildShop(): void {
     const host = this.root.querySelector('#shop-grid');
     if (!host) return;
-    host.innerHTML = ITEMS.map(
-      (item) => `
+    const groups: { title: string; slot: ItemDef['slot'] }[] = [
+      { title: 'Potions', slot: 'consumable' },
+      { title: 'Weapons', slot: 'weapon' },
+      { title: 'Armor', slot: 'armor' },
+      { title: 'Helms', slot: 'helm' },
+      { title: 'Belts', slot: 'belt' },
+      { title: 'Shields', slot: 'shield' },
+    ];
+    host.innerHTML = groups
+      .map((group) => {
+        const items = ITEMS.filter((item) => item.slot === group.slot);
+        if (!items.length) return '';
+        return `<h3 class="shop-h">${group.title}</h3>${items
+          .map(
+            (item) => `
       <button type="button" class="item" data-buy="${item.id}">
         <span class="item-top"><span class="item-name">${item.name}</span><span class="item-cost">${item.cost}g</span></span>
         <span class="item-desc">${item.description}</span>
       </button>`,
-    ).join('');
+          )
+          .join('')}`;
+      })
+      .join('');
   }
 
   private syncShop(sim: Sim, near: boolean): void {
@@ -246,18 +346,93 @@ export class Hud {
       if (!button) continue;
       const owned = this.owned(sim, item);
       const broke = sim.gold < item.cost;
-      button.disabled = !near || owned || broke;
+      const needStr = (item.reqStr ?? 0) > sim.attributes.str;
+      const needDex = (item.reqDex ?? 0) > sim.attributes.dex;
+      button.disabled = !near || owned || broke || needStr || needDex;
       button.classList.toggle('owned', owned);
       const cost = button.querySelector('.item-cost');
-      if (cost) cost.textContent = owned ? 'Owned' : `${item.cost}g`;
+      if (cost) {
+        if (owned) cost.textContent = 'Owned';
+        else if (needStr) cost.textContent = `Str ${item.reqStr}`;
+        else if (needDex) cost.textContent = `Dex ${item.reqDex}`;
+        else cost.textContent = `${item.cost}g`;
+      }
     }
   }
 
   private owned(sim: Sim, item: ItemDef): boolean {
-    if (item.slot === 'weapon') return sim.loadout.weapon === item.id;
-    if (item.slot === 'armor') return sim.loadout.armor === item.id;
-    if (item.slot === 'helm') return sim.loadout.helm === item.id;
+    if (item.slot === 'weapon') return !!item.twoHanded && !item.oneOrTwo && sim.loadout.weapon === item.id;
+    if (item.slot === 'shield') return sim.loadout.offhand === item.id;
+    if (item.slot === 'armor' || item.slot === 'helm' || item.slot === 'belt') return sim.loadout[item.slot] === item.id;
     return false;
+  }
+
+  private buildTree(sim: Sim): void {
+    const attrs = this.root.querySelector('#attr-row');
+    const picks = this.root.querySelector('#belt-pick');
+    const cols = this.root.querySelector('#tree-cols');
+    if (!attrs || !picks || !cols) return;
+    const keys = ['str', 'dex', 'vit', 'energy'] as const;
+    const labels = { str: 'Str', dex: 'Dex', vit: 'Vit', energy: 'Energy' };
+    attrs.innerHTML = keys
+      .map((key) => `<button type="button" data-attr="${key}"><b data-attr-val="${key}">${labels[key]}</b></button>`)
+      .join('');
+    picks.innerHTML = ['Q', 'W', 'E', 'R']
+      .map((key, index) => `<button type="button" data-slot-pick="${index}">${key} <span data-pick-name="${index}"></span></button>`)
+      .join('');
+    const tabs = [1, 2, 3];
+    cols.innerHTML = tabs
+      .map((tab) => {
+        const skills = sim.classDef.skills
+          .filter((skill) => skill.tab === tab)
+          .sort((a, b) => a.row - b.row || a.col - b.col);
+        const title = skills[0]?.tabName ?? 'Skills';
+        const nodes = skills
+          .map(
+            (skill) => `
+          <button type="button" class="tree-node" data-assign="${skill.id}" title="${skill.description.replace(/"/g, '&quot;')}">
+            <span class="tn-name">${skill.name}</span>
+            <span class="tn-meta" data-node-meta="${skill.id}"></span>
+            <span class="plus" data-upgrade="${skill.id}" hidden>+</span>
+          </button>`,
+          )
+          .join('');
+        return `<div class="tree-col"><h3>${title}</h3>${nodes}</div>`;
+      })
+      .join('');
+  }
+
+  private syncTree(sim: Sim): void {
+    this.text(
+      '#tree-points',
+      `${sim.skillPoints} skill point${sim.skillPoints === 1 ? '' : 's'} · ${sim.statPoints} stat point${sim.statPoints === 1 ? '' : 's'}`,
+    );
+    for (const key of ['str', 'dex', 'vit', 'energy'] as const) {
+      const node = this.root.querySelector(`[data-attr-val="${key}"]`);
+      const label = key === 'str' ? 'Str' : key === 'dex' ? 'Dex' : key === 'vit' ? 'Vit' : 'Energy';
+      if (node) node.textContent = `${label} ${sim.attributes[key]}${sim.statPoints > 0 ? ' +' : ''}`;
+    }
+    sim.belt.forEach((id, slot) => {
+      const name = this.root.querySelector(`[data-pick-name="${slot}"]`);
+      const skill = sim.classDef.skills.find((entry) => entry.id === id);
+      if (name) name.textContent = skill?.name ?? 'empty';
+      const button = this.root.querySelector<HTMLButtonElement>(`[data-slot-pick="${slot}"]`);
+      button?.classList.toggle('on', slot === this.beltSlot);
+    });
+    for (const skill of sim.classDef.skills) {
+      const rank = sim.skillRanks[skill.id] ?? 0;
+      const meta = this.root.querySelector(`[data-node-meta="${skill.id}"]`);
+      const ready = sim.level >= skill.unlockLevel && skill.prereqs.every((req) => (sim.skillRanks[req] ?? 0) >= 1);
+      if (meta) {
+        const mana = skill.passive ? 'passive' : `${skill.mana} mana`;
+        meta.textContent = `${rank}/${skill.maxRank} · lv ${skill.unlockLevel} · ${mana}${ready ? '' : ' · locked'}`;
+      }
+      const node = this.root.querySelector<HTMLButtonElement>(`[data-assign="${skill.id}"]`);
+      node?.classList.toggle('locked', !ready && rank <= 0);
+      node?.classList.toggle('on-belt', sim.belt.includes(skill.id));
+      const plus = node?.querySelector<HTMLElement>('[data-upgrade]');
+      if (plus) plus.hidden = !(sim.skillPoints > 0 && ready && rank < skill.maxRank);
+    }
   }
 
   private q(sel: string): HTMLElement {
