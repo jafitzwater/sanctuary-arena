@@ -52,8 +52,8 @@ function fromMon(id: string): UnitDef {
 /**
  * Lane creeps and Act I monsters. Fallen, Zombie, and Quill Rat shapes come
  * from MonStats. Life and damage are about 31% of the old skirmish figures
- * (240/780) so they match the Barbarian's new life. Speeds stay slower than
- * the hero's run of 216.
+ * (240/780) so they match the Barbarian's new life. Speeds stay under the
+ * hero's run of 120.
  */
 export const UNIT_DEFS: Record<string, UnitDef> = {
   rogue: {
@@ -62,7 +62,7 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
     hp: 105,
     ad: 7,
     armor: 4,
-    moveSpeed: 102,
+    moveSpeed: 57,
     attackRange: 52,
     attackInterval: 1.02,
     radius: 15,
@@ -80,7 +80,7 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
     hp: 74,
     ad: 6,
     armor: 2,
-    moveSpeed: 98,
+    moveSpeed: 54,
     attackRange: 200,
     attackInterval: 1.22,
     radius: 15,
@@ -92,16 +92,16 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
     color: '#35506a',
     accent: '#e6d3a1',
   },
-  fallen: { ...fromMon('fallen'), hp: 76, ad: 6 },
-  zombie: { ...fromMon('zombie'), hp: 174, ad: 7 },
-  quillrat: { ...fromMon('quillrat'), hp: 94, ad: 6 },
+  fallen: { ...fromMon('fallen'), hp: 76, ad: 6, moveSpeed: 66 },
+  zombie: { ...fromMon('zombie'), hp: 174, ad: 7, moveSpeed: 34 },
+  quillrat: { ...fromMon('quillrat'), hp: 94, ad: 6, moveSpeed: 50 },
   skeleton: {
     id: 'skeleton',
     name: 'Skeleton',
     hp: 88,
     ad: 7,
     armor: 4,
-    moveSpeed: 100,
+    moveSpeed: 56,
     attackRange: 46,
     attackInterval: 1.05,
     radius: 14,
@@ -119,7 +119,7 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
     hp: 150,
     ad: 8,
     armor: 6,
-    moveSpeed: 70,
+    moveSpeed: 39,
     attackRange: 48,
     attackInterval: 1.15,
     radius: 18,
@@ -137,7 +137,7 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
     hp: 120,
     ad: 9,
     armor: 6,
-    moveSpeed: 108,
+    moveSpeed: 60,
     attackRange: 50,
     attackInterval: 1,
     radius: 16,
@@ -155,7 +155,7 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
     hp: 70,
     ad: 8,
     armor: 0,
-    moveSpeed: 130,
+    moveSpeed: 72,
     attackRange: 180,
     attackInterval: 1.2,
     radius: 12,
@@ -173,7 +173,7 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
     hp: 200,
     ad: 10,
     armor: 12,
-    moveSpeed: 64,
+    moveSpeed: 36,
     attackRange: 52,
     attackInterval: 1.25,
     radius: 18,
@@ -191,7 +191,7 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
     hp: 160,
     ad: 12,
     armor: 8,
-    moveSpeed: 112,
+    moveSpeed: 62,
     attackRange: 52,
     attackInterval: 1.05,
     radius: 17,

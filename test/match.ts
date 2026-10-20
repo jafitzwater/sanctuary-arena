@@ -14,6 +14,7 @@ import { comebackMul, paceOf, xpShare } from '../src/game/pace';
 import { ROSTER } from '../src/game/data/classes/roster';
 import { dealTeams } from '../src/game/teams';
 import { FUTURE_ITEMS, isShopItem, ITEMS } from '../src/game/data/items';
+import { UNIT_DEFS } from '../src/game/data/units';
 import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
 import { walkable } from '../src/game/terrain';
 
@@ -51,9 +52,14 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   const hero = player(sim);
   assert.equal(hero.maxHp, 240);
   assert.equal(hero.ad, 15);
-  assert.equal(hero.moveSpeed, 216);
+  assert.equal(hero.moveSpeed, 120);
+  assert.equal(barbarian.stats.walkSpeed, 80);
   const raven = sim.units.find((unit) => unit.defId === 'blood-raven');
+  assert.equal(raven?.moveSpeed, 93);
   assert.ok(raven && hero.moveSpeed > raven.moveSpeed, 'the hero should still catch Blood Raven');
+  for (const def of Object.values(UNIT_DEFS)) {
+    assert.ok(def.moveSpeed < hero.moveSpeed, `${def.id} should stay slower than the hero`);
+  }
   sim.level = 5;
   recomputeHero(sim);
   assert.equal(hero.maxHp, 256, 'level 5 with no extra vitality');

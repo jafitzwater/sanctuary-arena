@@ -16,7 +16,7 @@ Destroy the **Harrogath Worldstone**. If the **Encampment Worldstone** falls, yo
 
 Bash starts on Q at rank 1. Shout, Stun, Leap Attack, Battle Orders, and Whirlwind unlock at levels 2, 4, 6, 8, and 10. A skill can be viewed as soon as its level arrives, but it goes on the belt only after you spend a point and it reaches rank 1. Learning one fills an empty slot. Only four skills are equipped. A gold **+** on a skill button, or on a loadout icon, spends a skill point (ranks go from 1 to 5). **T** or **Points** opens a compact stats panel: four big **+** buttons for strength, dexterity, vitality, and energy (five points each level after level 1). The Loadout tab is where you drag a learned skill onto Q W E R, or tap it and then a slot. The gold badge on Points is the number of unspent skill and stat points.
 
-Life at level 1 is 240. Each level adds 4, and each point of vitality adds 4. A level 5 Barbarian who put every point into vitality has 336 life. At level 10 that is 456. Attack damage starts at 15 and each point of strength above 30 adds 0.15. A health potion restores 105. Run speed is 216, town walk is 144, and Blood Raven runs at 168 so she can still be caught. Lane creeps stay slower (Fallen 118, Quill Rat 90, Zombie 62).
+Life at level 1 is 240. Each level adds 4, and each point of vitality adds 4. A level 5 Barbarian who put every point into vitality has 336 life. At level 10 that is 456. Attack damage starts at 15 and each point of strength above 30 adds 0.15. A health potion restores 105. Run speed is 120, town walk is 80, and Blood Raven runs at 93 so she can still be caught. Lane creeps stay slower (Fallen 66, Quill Rat 50, Zombie 34).
 
 | Skill | Level | Rank 1 | Each further rank |
 | --- | --- | --- | --- |
@@ -128,7 +128,7 @@ Merging to `main` runs the deploy workflow and updates https://jafitzwater.githu
 
 Column meaning follows the public [Diablo II data file guide](https://wolfieeiflow.github.io/diabloiidatafileguide/) and the d2mods knowledge base. Life, mana, stamina, and stat-per-level columns are stored in fourths.
 
-The match is shorter than a Diablo II character, so the importer scales those rows. The live Barbarian then uses the numbers in How to play (240 life, 4 per level, 4 per vitality, 15 attack damage, run 216) instead of the imported skirmish life of 780. Monster, tower, and base life and damage follow that same ratio. Armor and mana costs are unchanged.
+The match is shorter than a Diablo II character, so the importer scales those rows. The live Barbarian then uses the numbers in How to play (240 life, 4 per level, 4 per vitality, 15 attack damage, run 120) instead of the imported skirmish life of 780. Monster, tower, and base life and damage follow that same ratio. Armor and mana costs are unchanged.
 
 - Barbarian life and mana are multiplied so a fight is a skirmish, not a 20-minute duel. Vitality and energy still add life and mana. Five stat points arrive each level after level 1.
 - Skill mana is doubled from the text file. Bash starts at 4. Whirlwind starts at 50. Unlock level is `max(1, round(reqlevel / 6))` so the tree opens during a match. `reqLevel` keeps the original number. Cooldowns are match pacing; the delay column is empty.

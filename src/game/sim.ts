@@ -1,6 +1,7 @@
 import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
 import { dealTeams } from './teams';
+import { barbarian } from './data/classes/barbarian';
 import type { ClassDef } from './data/classes/types';
 import { unitDef } from './data/units';
 import { Rng } from './math';
@@ -1016,7 +1017,7 @@ export function spawnHero(sim: Sim, team: Team, x: number, y: number, name: stri
     maxMana: 80,
     ad: 15,
     armor: 8,
-    moveSpeed: 216,
+    moveSpeed: barbarian.stats.moveSpeed,
     attackRange: 48,
     attackInterval: 1,
     color: team === 'ally' ? '#c4a574' : '#8a3030',
@@ -1259,7 +1260,7 @@ function spawnHerald(sim: Sim, x: number, y: number, baron: boolean): void {
   unit.gold = baron ? 150 : 70;
   unit.xp = baron ? 180 : 80;
   unit.radius = baron ? 26 : 22;
-  unit.moveSpeed = baron ? 78 : 64;
+  unit.moveSpeed = baron ? 43 : 36;
   unit.color = baron ? '#6a2040' : '#8a7040';
   unit.accent = '#e6c864';
 }
