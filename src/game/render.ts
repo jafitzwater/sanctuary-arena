@@ -253,6 +253,9 @@ export class Renderer {
     if (opts.attack && hero.alive && opts.mode === 'play') {
       this.strokeEllipse(hero.x, hero.y, hero.attackRange, 'rgba(230, 211, 161, 0.28)');
     }
+    for (const den of sim.map.dens ?? []) {
+      this.strokeEllipse(den.x, den.y, 40, 'rgba(120, 70, 160, 0.28)');
+    }
     if (Math.hypot(hero.x - camp.x, hero.y - camp.y) < sim.map.fountainRadius && hero.alive) {
       this.strokeEllipse(camp.x, camp.y, sim.map.fountainRadius, 'rgba(230, 190, 110, 0.22)');
     }
@@ -558,7 +561,7 @@ export class Renderer {
     const glyph = stone ? null : this.sheetFor(unit, gait.moving, gait.d, tier);
     if (stone) this.drawWorldstone(ctx, p.x, y, height, unit.team, unit.alive);
     else if (glyph) this.blit(ctx, glyph.img, p.x, y, height, glyph.flip, glyph);
-    else this.fallback(ctx, unit, p.x, y, height);
+    else if (!this.drawGenerated(ctx, unit, p.x, y, height)) this.fallback(ctx, unit, p.x, y, height);
     if (unit.whirlT > 0) {
       ctx.strokeStyle = 'rgba(240, 220, 170, 0.8)';
       ctx.lineWidth = 3;
@@ -595,6 +598,18 @@ export class Renderer {
         return 92;
       case 'quillrat':
         return 70;
+      case 'skeleton':
+        return 78;
+      case 'hungry-dead':
+        return 90;
+      case 'goatman':
+        return 86;
+      case 'willowisp':
+        return 64;
+      case 'mummy':
+        return 96;
+      case 'demon':
+        return 92;
       case 'rogue':
       case 'rogue-archer':
         return 86;
@@ -706,6 +721,58 @@ export class Renderer {
     ctx.fill();
   }
 
+  /** Silhouettes for monsters that have no sprite sheet. */
+  private drawGenerated(ctx: CanvasRenderingContext2D, unit: Unit, x: number, y: number, height: number): boolean {
+    const known = ['skeleton', 'hungry-dead', 'goatman', 'willowisp', 'mummy', 'demon'];
+    if (!known.includes(unit.defId)) return false;
+    ctx.fillStyle = unit.alive ? unit.color : '#3a342c';
+    if (unit.defId === 'willowisp') {
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.arc(x, y - height * 0.45, height * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = unit.accent;
+      ctx.beginPath();
+      ctx.arc(x, y - height * 0.45, height * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+    ctx.beginPath();
+    ctx.ellipse(x, y - height * 0.34, height * 0.22, height * 0.32, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (unit.defId === 'skeleton') {
+      ctx.strokeStyle = unit.accent;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, y - height * 0.5);
+      ctx.lineTo(x, y - height * 0.16);
+      ctx.moveTo(x - height * 0.12, y - height * 0.4);
+      ctx.lineTo(x + height * 0.12, y - height * 0.4);
+      ctx.stroke();
+    }
+    if (unit.defId === 'goatman' || unit.defId === 'demon') {
+      ctx.strokeStyle = unit.accent;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x - height * 0.08, y - height * 0.58);
+      ctx.lineTo(x - height * 0.2, y - height * 0.78);
+      ctx.moveTo(x + height * 0.08, y - height * 0.58);
+      ctx.lineTo(x + height * 0.2, y - height * 0.78);
+      ctx.stroke();
+    }
+    if (unit.defId === 'mummy') {
+      ctx.strokeStyle = '#efe6c8';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x - height * 0.16, y - height * 0.46);
+      ctx.lineTo(x + height * 0.16, y - height * 0.4);
+      ctx.moveTo(x - height * 0.14, y - height * 0.3);
+      ctx.lineTo(x + height * 0.14, y - height * 0.24);
+      ctx.stroke();
+    }
+    return true;
+  }
+
   private fallback(ctx: CanvasRenderingContext2D, unit: Unit, x: number, y: number, height: number): void {
     ctx.fillStyle = unit.alive ? unit.color : '#3a342c';
     ctx.beginPath();
@@ -762,7 +829,7 @@ export class Renderer {
     ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, 6);
     ctx.fillStyle = unit.team === 'ally' ? '#9a2a22' : '#9a2a22';
     ctx.fillRect(x - w / 2, y, w, 4);
-    ctx.fillStyle = unit.team === 'ally' ? '#c6d28a' : '#e4553c';
+    ctx.fillStyle = unit.team === 'ally' ? '#c6d28a' : unit.team === 'wild' ? '#c49a3a' : '#e4553c';
     ctx.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, unit.hp / unit.maxHp)), 4);
     if (unit.kind === 'champion' || unit.kind === 'base') {
       ctx.fillStyle = '#f0e2bc';
@@ -874,7 +941,7 @@ export class Renderer {
       if (!unit.alive && unit.kind === 'minion') continue;
       const x = unit.x * sx;
       const y = unit.y * sy;
-      ctx.fillStyle = unit.team === 'ally' ? '#e6d3a1' : '#e15a4a';
+      ctx.fillStyle = unit.team === 'ally' ? '#e6d3a1' : unit.team === 'wild' ? '#c49a3a' : '#e15a4a';
       const r = unit.kind === 'minion' ? 2 : unit.kind === 'champion' ? 4 : 3;
       ctx.globalAlpha = unit.alive ? 1 : 0.4;
       ctx.fillRect(x - r / 2, y - r / 2, r, r);

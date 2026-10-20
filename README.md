@@ -161,7 +161,7 @@ Generated stand-ins, drawn for this project to match the Diablo II shapes rather
 
 ## Known gaps
 
-- One playable class. Sanctuary has three paths, a river, and a tower chain (outer, inner, seal tower, two guardians, and a Worldstone at each town). The seal stones are scenery. Destroying one does not yet spawn Super Monsters. No wilderness dens, river pits, fog of war, or the other six classes.
+- One playable class. Sanctuary has three paths, a river, a tower chain, and wilderness dens that respawn. Seal stones are scenery. No river pits, fog of war, or the other six classes. Monster life and the lane roster step from Normal to Nightmare at 90 seconds and Hell at 180.
 - The match uses six Barbarian skills and a four-slot belt, not the full 30-skill tree. The 1.13c JSON is still in the repo as the reference for names and raw numbers. Ranks stop at 5. Battle Orders raises life only. Shout raises defense for a few seconds.
 - Cooldowns and monster damage are scaled for a short match. Exceptional and elite items are not in the shop. Dual wield uses the slower swing and about half the offhand damage.
 - Blood Raven kites and retreats; she does not cast a skill kit. The quill rat has one pose. Rogues use the mercenary sheet, not a separate archer body.
