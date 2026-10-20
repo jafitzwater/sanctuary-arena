@@ -104,6 +104,7 @@ export class Renderer {
   };
   private readonly rogueSheet = loadImage(d2Atlas.rogue);
   private readonly akaraSheet = loadImage(d2Atlas.akara);
+  private readonly bannerSheet = loadImage(d2Atlas.banner);
   private readonly ground = loadImage(d2Atlas.ground);
 
   constructor(private canvas: HTMLCanvasElement) {
@@ -414,9 +415,8 @@ export class Renderer {
       case 'tower':
         return unit.alive ? 128 : 70;
       case 'base-ally':
-        return unit.alive ? 140 : 80;
       case 'base-enemy':
-        return unit.alive ? 156 : 90;
+        return unit.alive ? 220 : 120;
       default:
         return 70;
     }
@@ -426,8 +426,7 @@ export class Renderer {
     const raw = this.dirRow(unit.facing);
     const row = unit.whirlT > 0 ? raw : this.stepRow(unit.id, raw);
     if (unit.kind === 'seal') return this.full(this.props.rock[0], false);
-    if (unit.defId === 'base-ally') return this.full(this.props.stone[0], false);
-    if (unit.defId === 'base-enemy') return this.full(this.props.stone[1], false);
+    if (unit.defId === 'base-ally' || unit.defId === 'base-enemy') return this.full(this.bannerSheet, false);
     if (unit.defId === 'tower') return this.full(this.props.rock[unit.alive ? 2 : 0], false);
     if (unit.defId === 'barbarian') {
       const pack = this.d2[tier];
