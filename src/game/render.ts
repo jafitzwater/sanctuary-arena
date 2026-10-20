@@ -1,6 +1,7 @@
-import { actProps, d2Atlas, heroDrawBox, heroRunDraw, isSheetMatte, mephisto, pr23Boulders, pr23Cast, type CastSheet, type FrameSheet } from './art/sheets';
+import { actProps, d2Atlas, heroDrawBox, heroRunDraw, isObeliskBackground, isSheetMatte, mephisto, PATH_OBELISK, pr23Boulders, pr23Cast, type CastSheet, type FrameSheet } from './art/sheets';
 import {
   animFrame,
+  heroGaitStep,
   heroHoldCompass,
   heroSheetRow,
   RUN_FRAME_MS,
@@ -14,7 +15,7 @@ import type { Prop } from './landscape';
 import { sceneryFor } from './landscape';
 import { nearestOnPolyline, type Vec } from './math';
 import { player } from './query';
-import { groundAt, type GroundKind } from './terrain';
+import { GROUND_BASE, groundAt, type GroundKind } from './terrain';
 import type { Camera, Sim, Unit } from './types';
 
 export interface DrawOpts {
@@ -143,6 +144,7 @@ export class Renderer {
   private feet = new WeakMap<HTMLImageElement, Map<string, { x: number; y: number }>>();
   private trims = new WeakMap<HTMLImageElement, Map<string, { x: number; y: number; w: number; h: number } | null>>();
   private frameDt = 0;
+  private readonly obelisks = new WeakMap<HTMLImageElement, Map<string, Glyph>>();
   private floor: HTMLCanvasElement | null = null;
   private readonly cutouts = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
   private readonly cutSources = new Set<HTMLImageElement>();
@@ -398,12 +400,14 @@ export class Renderer {
     for (let j = -2; j <= j1; j++) {
       for (let i = -2; i <= i1; i++) {
         const kind = groundAt(map, i * step, j * step);
-        const row = rows[kind];
-        const col = kind === 'blend' ? this.blendCol(map, i * step, j * step) : floorCol(kind, i, j);
         const sx = Math.round((i - j) * 80 + ox);
         const sy = Math.round((i + j) * 40 + oy);
-        // One extra pixel on every side so integer diamonds meet with no seam.
-        ctx.drawImage(this.floorSheet(), col * 160, row * 80, 160, 80, sx - 81, sy - 41, 162, 82);
+        // Grass under every diamond, then the road or transition. Alpha edges show grass, not a void.
+        this.paintDiamond(ctx, rows, GROUND_BASE, floorCol(GROUND_BASE, i, j), sx, sy);
+        if (kind !== GROUND_BASE) {
+          const col = kind === 'blend' ? this.blendCol(map, i * step, j * step) : floorCol(kind, i, j);
+          this.paintDiamond(ctx, rows, kind, col, sx, sy);
+        }
       }
     }
   }
@@ -604,9 +608,22 @@ export class Renderer {
     const cast = unit.team === 'ally'
       ? guardian ? pr23Cast.heroBase : pr23Cast.heroPath
       : guardian ? pr23Cast.enemyBase : pr23Cast.enemyPath;
+    if (!guardian) {
+      const pick = unit.team === 'ally' ? PATH_OBELISK.ally : PATH_OBELISK.enemy;
+      const pose = pick.pose === 'idle' ? cast.idle : cast.walk;
+      return this.obeliskGlyph(pose, pick.col);
+    }
     const pose = unit.alive ? cast.walk : cast.idle;
     const col = pose.cols > 1 ? Math.floor(time * 6) % pose.cols : 0;
     return this.frameGlyph(pose, col, 0);
+  }
+
+  /** One static obelisk cell, black and red/magenta keyed out, foot on the bottom center. */
+  private obeliskGlyph(pose: FrameSheet, col: number): Glyph | null {
+    const img = this.sheet(pose.src);
+    const glyph = this.atlas(img, pose.cols, col, 0, false, pose.rows);
+    if (!glyph) return null;
+    return this.keyObelisk(img, glyph);
   }
 
   private mephistoGlyph(moving: boolean, elapsed: number, alive: boolean, row: number): Glyph | null {
@@ -823,23 +840,23 @@ export class Renderer {
 
   private gaitOf(unit: Unit): { moving: boolean; d: number; elapsed: number; walking: boolean } {
     const prev = this.gait.get(unit.id);
-    let d = prev?.d ?? 0;
-    let elapsed = prev?.elapsed ?? 0;
-    let moving = false;
-    let step = 0;
-    if (prev) {
-      step = Math.hypot(unit.x - prev.x, unit.y - prev.y);
-      moving = step > 0.4;
-      if (moving) {
-        d += step;
-        // Same rAF dt that moved the body in this tick. The clock is not reset.
-        elapsed += this.frameDt * 1000;
-      }
-    }
-    this.gait.set(unit.id, { x: unit.x, y: unit.y, d, elapsed });
-    // Town pace is 144 and the open run is 216. The clock itself does not reset.
-    const speed = this.frameDt > 0 ? step / this.frameDt : 0;
-    return { moving, d, elapsed, walking: moving && speed < 180 };
+    const step = prev ? Math.hypot(unit.x - prev.x, unit.y - prev.y) : 0;
+    const stepped = heroGaitStep(prev?.elapsed ?? 0, step, this.frameDt);
+    const d = (prev?.d ?? 0) + (stepped.moving ? step : 0);
+    this.gait.set(unit.id, { x: unit.x, y: unit.y, d, elapsed: stepped.elapsed });
+    return { moving: stepped.moving, d, elapsed: stepped.elapsed, walking: stepped.moving && !stepped.running };
+  }
+
+  /** One extra pixel on every side so integer diamonds meet with no seam. */
+  private paintDiamond(
+    ctx: CanvasRenderingContext2D,
+    rows: Record<GroundKind, number>,
+    kind: GroundKind,
+    col: number,
+    sx: number,
+    sy: number,
+  ): void {
+    ctx.drawImage(this.floorSheet(), col * 160, rows[kind] * 80, 160, 80, sx - 81, sy - 41, 162, 82);
   }
 
   /** Column of the grass-to-dirt row whose grass faces away from the lane. */
@@ -857,6 +874,99 @@ export class Renderer {
     const dx = x - best.x;
     const dy = y - best.y;
     return blendIndex(dx - dy, (dx + dy) * 0.5);
+  }
+
+  /**
+   * Key the obelisk cell. Red and magenta go everywhere. Black goes only where it
+   * touches the cell edge, so the rectangle behind the nova disappears and interior shade stays.
+   * The trimmed sprite is seated on its bottom center.
+   */
+  private keyObelisk(img: HTMLImageElement, glyph: Glyph): Glyph | null {
+    let table = this.obelisks.get(img);
+    if (!table) {
+      table = new Map();
+      this.obelisks.set(img, table);
+    }
+    const key = `${glyph.sx}:${glyph.sy}:${glyph.sw}:${glyph.sh}`;
+    const cached = table.get(key);
+    if (cached) return cached;
+    if (!img.complete || img.naturalWidth === 0) return glyph;
+    const w = Math.max(1, Math.round(glyph.sw));
+    const h = Math.max(1, Math.round(glyph.sh));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return glyph;
+    crisp(ctx);
+    ctx.drawImage(img, glyph.sx, glyph.sy, glyph.sw, glyph.sh, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h);
+    const px = data.data;
+    const kill = new Uint8Array(w * h);
+    const black = new Uint8Array(w * h);
+    for (let p = 0; p < w * h; p++) {
+      const i = p * 4;
+      const r = px[i];
+      const g = px[i + 1];
+      const b = px[i + 2];
+      const a = px[i + 3];
+      if (r < 28 && g < 28 && b < 28 && a > 16) black[p] = 1;
+      if (isObeliskBackground(r, g, b, a) && black[p] === 0) kill[p] = 1;
+    }
+    const stack: number[] = [];
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (x !== 0 && x !== w - 1 && y !== 0 && y !== h - 1) continue;
+        const p = y * w + x;
+        if (black[p] === 1) stack.push(p);
+      }
+    }
+    for (let n = 0; n < stack.length; n++) {
+      const p = stack[n];
+      if (kill[p] === 1 || black[p] === 0) continue;
+      kill[p] = 1;
+      const x = p % w;
+      const y = (p - x) / w;
+      if (x > 0) stack.push(p - 1);
+      if (x + 1 < w) stack.push(p + 1);
+      if (y > 0) stack.push(p - w);
+      if (y + 1 < h) stack.push(p + w);
+    }
+    let minX = w;
+    let minY = h;
+    let maxX = -1;
+    let maxY = -1;
+    for (let p = 0; p < w * h; p++) {
+      const i = p * 4;
+      if (kill[p] === 1) {
+        px[i] = 0;
+        px[i + 1] = 0;
+        px[i + 2] = 0;
+        px[i + 3] = 0;
+        continue;
+      }
+      if (px[i + 3] <= 16) continue;
+      const x = p % w;
+      const y = (p - x) / w;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+    ctx.putImageData(data, 0, 0);
+    if (maxX < 0) return glyph;
+    const trimmed = document.createElement('canvas');
+    const tw = maxX - minX + 1;
+    const th = maxY - minY + 1;
+    trimmed.width = tw;
+    trimmed.height = th;
+    const out = trimmed.getContext('2d');
+    if (!out) return glyph;
+    crisp(out);
+    out.drawImage(canvas, minX, minY, tw, th, 0, 0, tw, th);
+    const seated: Glyph = { img: trimmed, flip: false, sx: 0, sy: 0, sw: tw, sh: th, foot: { x: tw / 2, y: th } };
+    table.set(key, seated);
+    return seated;
   }
 
   /** Drop the magenta RGB stored in the floor sheet's transparent pixels. */

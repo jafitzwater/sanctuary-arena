@@ -5,6 +5,7 @@ import { barbarian } from './data/classes/barbarian';
 import type { ClassDef } from './data/classes/types';
 import { unitDef } from './data/units';
 import { Rng } from './math';
+import { heroMoveScale } from './gait';
 import { clampToPlayable } from './lane';
 import { FOOTPRINT } from './terrain';
 import {
@@ -493,10 +494,15 @@ function moveToward(unit: Unit, x: number, y: number, dt: number, scale = 1): vo
   unit.facing = Math.atan2(dy, dx);
 }
 
-function playerPace(sim: Sim, hero: Unit): number {
+function playerPace(sim: Sim, hero: Unit, direct = false): number {
   let scale = hero.whirlT > 0 ? 1.06 : 1;
   if (hero.frenzyT > 0) scale *= 1.18;
-  if (inShopRange(sim, hero)) scale *= sim.classDef.stats.walkSpeed / sim.classDef.stats.runSpeed;
+  scale *= heroMoveScale(
+    inShopRange(sim, hero),
+    direct,
+    sim.classDef.stats.walkSpeed,
+    sim.classDef.stats.runSpeed,
+  );
   return scale;
 }
 
@@ -528,7 +534,7 @@ function updatePlayer(sim: Sim, hero: Unit, input: FrameInput, dt: number): void
   const direct = Math.hypot(input.moveX, input.moveY) > 0.15;
   const lock = byId(sim, input.targetId);
   const target = lock && lock.alive && lock.team !== hero.team ? lock : null;
-  const pace = playerPace(sim, hero);
+  const pace = playerPace(sim, hero, direct);
   if (direct) {
     const mag = Math.hypot(input.moveX, input.moveY);
     const speed = moveSpeed(hero) * pace;
