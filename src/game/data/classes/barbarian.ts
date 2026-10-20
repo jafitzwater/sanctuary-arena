@@ -1,17 +1,111 @@
 import type { ClassDef, SkillDef } from './types';
 import classes from '../d2/charstats.json';
-import skills from '../d2/skills-barbarian.json';
 
 const row = classes.find((entry) => entry.id === 'barbarian');
 if (!row) throw new Error('Barbarian missing from CharStats import');
 
 const moba = row.moba;
 
-const skillList: SkillDef[] = skills.map((skill) => ({
-  ...skill,
-  key: '',
-  digit: '',
-}));
+function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' | 'mana' | 'manaPerRank' | 'cooldown' | 'description' | 'row'> & Partial<SkillDef>): SkillDef {
+  return {
+    key: '',
+    digit: '',
+    minMana: 0,
+    maxRank: 5,
+    reqLevel: partial.unlockLevel,
+    tab: 1,
+    tabName: 'Skills',
+    col: 1,
+    passive: false,
+    prereqs: [],
+    anim: 'A1',
+    param1: 0,
+    param2: 0,
+    srcDam: 0,
+    starter: false,
+    d2Id: 0,
+    ...partial,
+  };
+}
+
+/** Six match skills. Names follow the 1.13c tree; unlocks and ranks are for this match. */
+const skillList: SkillDef[] = [
+  skill({
+    id: 'bash',
+    name: 'Bash',
+    short: 'Bash',
+    unlockLevel: 1,
+    mana: 8,
+    manaPerRank: 2,
+    cooldown: 5,
+    starter: true,
+    row: 1,
+    d2Id: 126,
+    description: 'A heavy blow. Rank 1 deals 150% of a basic hit, and each rank adds 15%.',
+  }),
+  skill({
+    id: 'shout',
+    name: 'Shout',
+    short: 'Shout',
+    unlockLevel: 2,
+    mana: 12,
+    manaPerRank: 0,
+    cooldown: 14,
+    row: 2,
+    d2Id: 138,
+    anim: 'S1',
+    description: 'Raises your defense and nearby allies for 6 seconds. +10 armor, then +6 per rank.',
+  }),
+  skill({
+    id: 'stun',
+    name: 'Stun',
+    short: 'Stun',
+    unlockLevel: 4,
+    mana: 10,
+    manaPerRank: 0,
+    cooldown: 7,
+    row: 3,
+    d2Id: 139,
+    description: 'Hits a little harder than a basic attack and stuns. Stun lasts 0.6s and grows by 0.25s per rank.',
+  }),
+  skill({
+    id: 'leap-attack',
+    name: 'Leap Attack',
+    short: 'Leap',
+    unlockLevel: 6,
+    mana: 14,
+    manaPerRank: 2,
+    cooldown: 9,
+    row: 4,
+    d2Id: 132,
+    description: 'Jump to the aim point and strike on landing. Rank 1 deals 135% damage, and each rank adds 15%.',
+  }),
+  skill({
+    id: 'battle-orders',
+    name: 'Battle Orders',
+    short: 'Orders',
+    unlockLevel: 8,
+    mana: 18,
+    manaPerRank: 0,
+    cooldown: 16,
+    row: 5,
+    d2Id: 149,
+    anim: 'S1',
+    description: 'Raises maximum life by 6% per rank for 8 seconds.',
+  }),
+  skill({
+    id: 'whirlwind',
+    name: 'Whirlwind',
+    short: 'Whirl',
+    unlockLevel: 10,
+    mana: 22,
+    manaPerRank: 4,
+    cooldown: 11,
+    row: 6,
+    d2Id: 152,
+    description: 'Spin and hit everyone nearby. Each hit is 32% of attack damage at rank 1 and rises by 4% per rank.',
+  }),
+];
 
 /**
  * Stats and the 30-skill tree are the 1.13c CharStats / Skills rows, scaled
@@ -23,7 +117,7 @@ export const barbarian: ClassDef = {
   title: 'Warrior of Mount Arreat',
   role: 'melee',
   blurb:
-    'The 1.13c Barbarian tree: Combat Skills, Combat Masteries, and Warcries. Bash starts on Q. Press T to spend points and choose the other three belt skills.',
+    'Bash, Shout, Stun, Leap Attack, Battle Orders, and Whirlwind. Four of them sit on Q W E R. Press T to spend points and swap skills.',
   token: row.token || 'BA',
   startingBelt: ['bash', '', '', ''],
   stats: {

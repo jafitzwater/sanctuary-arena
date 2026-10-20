@@ -92,9 +92,9 @@ export class Game {
       this.hud.helpOpen = false;
       this.hud.treeOpen = true;
     };
-    this.hud.onAssign = (id) => {
+    this.hud.onAssign = (id, slot) => {
       this.input.assignSkill = id;
-      this.input.assignSlot = this.hud.beltSlot;
+      this.input.assignSlot = slot;
     };
     this.hud.onAttribute = (key) => {
       this.input.attribute = key;

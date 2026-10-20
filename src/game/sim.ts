@@ -56,7 +56,7 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     waveIn: map.waves.first,
     announcedWave: false,
     banner: null,
-    tip: 'Last-hit Fallen for gold. T opens the skill tree. Shop at the Encampment.',
+    tip: 'Last-hit Fallen for gold. Points spends skills and stats. Shop at the Encampment.',
     tipT: 9,
     cs: 0,
     kills: 0,
@@ -376,7 +376,7 @@ function tickStatus(sim: Sim, unit: Unit, dt: number): void {
     if (unit.whirlTick <= 0 && unit.alive && unit.stun <= 0) {
       unit.whirlTick = 0.18;
       const radius = 66 + unit.whirlRank * 6;
-      const damage = unit.ad * (unit.buffT > 0 ? 1 + unit.buffDmg : 1) * 0.32 + unit.whirlRank * 6;
+      const damage = unit.ad * (unit.buffT > 0 ? 1 + unit.buffDmg : 1) * (0.28 + unit.whirlRank * 0.04);
       for (const other of sim.units) {
         if (!other.alive || other.team === unit.team) continue;
         if (Math.hypot(other.x - unit.x, other.y - unit.y) <= radius + other.radius) {
@@ -398,8 +398,8 @@ function advanceLeap(sim: Sim, unit: Unit, dt: number): void {
   unit.x = leap.x0 + (leap.x1 - leap.x0) * e;
   unit.y = leap.y0 + (leap.y1 - leap.y0) * e;
   if (p < 1) return;
-  const radius = 80 + leap.rank * 6;
-  const damage = (26 + leap.rank * 18 + unit.ad * 0.5) * (leap.kind === 'leap-attack' ? 1.7 : 1);
+  const radius = 72;
+  const damage = unit.ad * (1.35 + Math.max(0, leap.rank - 1) * 0.15);
   for (const other of [...sim.units]) {
     if (!other.alive || other.team === unit.team) continue;
     if (Math.hypot(other.x - unit.x, other.y - unit.y) <= radius + other.radius) {
