@@ -1,7 +1,7 @@
 import portraitUrl from '../assets/art/barbarian/idle.png';
 import { ROSTER } from './data/classes/roster';
 import { itemIcon, skillIcon } from './art/icons';
-import { ITEMS, potionCap, type ItemDef } from './data/items';
+import { isShopItem, ITEMS, potionCap, type ItemDef } from './data/items';
 import { inShopRange, manaCost, MAX_LEVEL, xpToNext } from './combat';
 import { player } from './query';
 import type { Sim } from './types';
@@ -459,7 +459,7 @@ export class Hud {
       this.shopPick = quick?.id ?? null;
       this.shopGridKey = '';
     }
-    const list = this.shopCat === 'recommended' ? recommended : ITEMS.filter((item) => item.slot === this.shopCat);
+    const list = this.shopCat === 'recommended' ? recommended : ITEMS.filter((item) => item.slot === this.shopCat && isShopItem(item));
     if (!list.some((item) => item.id === this.shopPick)) this.shopPick = list[0]?.id ?? null;
     const key = `${this.shopCat}:${list.map((item) => item.id).join(',')}`;
     const host = this.root.querySelector('#shop-grid');

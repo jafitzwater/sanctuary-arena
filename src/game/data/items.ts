@@ -1,5 +1,7 @@
 export type ItemSlot = 'consumable' | 'weapon' | 'armor' | 'helm' | 'belt' | 'shield';
 export type PotionKind = 'health' | 'mana';
+/** Base gear is what Akara sells. The other tiers are stored so later drops can use them. */
+export type ItemTier = 'base' | 'magic' | 'rare' | 'unique' | 'set';
 
 export interface ItemDef {
   id: string;
@@ -30,6 +32,17 @@ export interface ItemDef {
   unlockLevel?: number;
   /** Potion slots this belt grants. Unset belts do not change the base cap. */
   potionSlots?: number;
+  /** Missing tier means a normal base item. */
+  tier?: ItemTier;
+  /** Magic find, in percent. Not used by the current shop. */
+  mf?: number;
+  /** Gold find, in percent. Not used by the current shop. */
+  gf?: number;
+  sockets?: number;
+  /** Rune name. A set value keeps the item out of the shop grid. */
+  rune?: string;
+  /** Inventory charm. Not equipped in the four gear slots. */
+  charm?: boolean;
 }
 
 /** Potions carried with no belt. A belt raises this, and nothing goes past MAX_POTION_CAP. */
@@ -54,6 +67,14 @@ const POTIONS: ItemDef[] = [
     consumable: 'mana',
     restoreMana: 130,
     description: 'Drink to restore 130 mana.',
+  },
+  {
+    id: 'hire-rogue',
+    name: 'Hire Rogue',
+    cost: 80,
+    slot: 'consumable',
+    tier: 'base',
+    description: 'A rogue follows you for 45 seconds. Only one at a time.',
   },
 ];
 
@@ -233,6 +254,44 @@ const GEAR: ItemDef[] = [
 ];
 
 export const ITEMS: ItemDef[] = [...POTIONS, ...GEAR];
+
+/** Not sold. The shop only lists base items from ITEMS. */
+export const FUTURE_ITEMS: ItemDef[] = [
+  {
+    id: 'tir',
+    name: 'Tir Rune',
+    cost: 0,
+    slot: 'weapon',
+    tier: 'magic',
+    rune: 'Tir',
+    description: 'A rune. Socketing and runewords are not in the shop yet.',
+  },
+  {
+    id: 'charm-life',
+    name: 'Fine Small Charm of Vita',
+    cost: 0,
+    slot: 'consumable',
+    tier: 'magic',
+    charm: true,
+    hp: 8,
+    description: 'A charm. It stays in the pack, not in a gear slot.',
+  },
+  {
+    id: 'soj',
+    name: 'Stone of Jordan',
+    cost: 0,
+    slot: 'consumable',
+    tier: 'unique',
+    mf: 0,
+    mana: 20,
+    description: 'A unique. Magic find and gold find will read fields like these.',
+    gf: 0,
+  },
+];
+
+export function isShopItem(item: ItemDef): boolean {
+  return (item.tier ?? 'base') === 'base' && !item.rune && !item.charm;
+}
 
 export function itemById(id: string): ItemDef | undefined {
   return ITEMS.find((item) => item.id === id);
