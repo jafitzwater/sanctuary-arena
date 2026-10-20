@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { projectIso, screenVectorToWorld, unprojectIso } from '../src/game/iso';
 import { distToPolyline } from '../src/game/math';
 import { act1 } from '../src/game/data/acts/act1';
@@ -874,6 +875,53 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   away.gold = 200;
   updateSim(away, hire, 0.05);
   assert.equal(away.units.some((unit) => unit.merc), false);
+}
+
+{
+  const sheets = readFileSync(new URL('../src/game/art/sheets.ts', import.meta.url), 'utf8');
+  const render = readFileSync(new URL('../src/game/render.ts', import.meta.url), 'utf8');
+  const height = Number(sheets.match(/export const HERO_HEIGHT = (\d+)/)?.[1]);
+  const block = sheets.match(/export const HERO_NATIVE_PX = \{([^}]+)\}/)?.[1] ?? '';
+  const native: Record<string, number> = {};
+  for (const match of block.matchAll(/(light|medium|heavy):\s*(\d+)/g)) native[match[1]] = Number(match[2]);
+  assert.equal(height, 108);
+  assert.ok(sheets.includes('return (HERO_HEIGHT * zoom) / HERO_NATIVE_PX[tier]'));
+  assert.ok(sheets.includes('drawX: x - frameWidth / 2'));
+  assert.ok(sheets.includes('drawY: y - frameHeight'));
+  assert.equal(render.match(/heroDrawBox\(/g)?.length, 1);
+  assert.equal(render.includes('glyph.sh / glyph.cellH'), false);
+  const cols: Record<string, number> = { idle: 1, walk: 8, run: 12 };
+  const torso = 78;
+  for (const tier of ['light', 'medium', 'heavy']) {
+    const cells: Record<string, number> = {};
+    for (const mode of ['idle', 'walk', 'run']) {
+      const file = new URL(`../src/assets/art/d2/barb-${tier}-${mode}.webp`, import.meta.url);
+      const buf = readFileSync(file);
+      assert.equal(buf.toString('ascii', 12, 16), 'VP8X');
+      const sheetH = 1 + buf.readUIntLE(27, 3);
+      cells[mode] = sheetH / 8;
+      assert.equal(sheetH % 8, 0, `${tier} ${mode} row count`);
+      assert.equal((1 + buf.readUIntLE(24, 3)) % cols[mode], 0, `${tier} ${mode} columns`);
+    }
+    assert.equal(native[tier], cells.walk, `${tier} scale reference is the walk cell`);
+    assert.notEqual(cells.run, cells.walk, `${tier} run cell is a different size`);
+    const drawScale: number = height / native[tier];
+    const oldWalk: number = torso * (height / cells.walk);
+    const oldRun: number = torso * (height / cells.run);
+    assert.ok(Math.abs(oldWalk - oldRun) > 1, `${tier} per-cell scale separated walk and run`);
+    for (const mode of ['idle', 'walk', 'run']) {
+      const drawn: number = torso * drawScale;
+      const sameBody: number = torso * (height / native[tier]);
+      assert.ok(Math.abs(drawn - sameBody) < 1, `${tier} ${mode} torso scale drifted`);
+      assert.equal(drawScale, height / cells.walk, `${tier} ${mode} uses the walk magnification`);
+    }
+    const frameW: number = 44 * drawScale;
+    const frameH: number = torso * drawScale;
+    const anchor = { drawX: 120 - frameW / 2, drawY: 90 - frameH };
+    assert.ok(Math.abs(anchor.drawX - (120 - frameW / 2)) < 1);
+    assert.ok(Math.abs(anchor.drawY - (90 - frameH)) < 1);
+    assert.equal(frameW / 44, frameH / torso);
+  }
 }
 
 console.log('match tests passed');
