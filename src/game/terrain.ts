@@ -13,6 +13,9 @@ export const FOOTPRINT = 0.3;
 
 export type GroundKind = 'grass' | 'edge' | 'path' | 'town' | 'pale' | 'river' | 'bank' | 'dark' | 'blend';
 
+/** Every floor diamond is this tile first. Roads and alpha edges paint over it. */
+export const GROUND_BASE: GroundKind = 'grass';
+
 function lanes(map: ActDef): Vec[][] {
   return map.paths?.length ? map.paths.map((path) => path.lane) : [map.lane];
 }

@@ -22,6 +22,40 @@ export interface HeroCombatBand {
   y1: number;
 }
 
+/** Actual speed at or above this is the run cycle. Town click-to-move stays at 144. */
+export const HERO_RUN_SPEED = 180;
+
+export interface HeroGaitStep {
+  moving: boolean;
+  elapsed: number;
+  speed: number;
+  running: boolean;
+}
+
+/**
+ * Advance the locomotion clock from displacement only.
+ * Facing, the deadband, and the held row are not inputs, so a turn cannot pause or reset it.
+ */
+export function heroGaitStep(elapsed: number, step: number, dt: number): HeroGaitStep {
+  const moving = step > 0.4;
+  const speed = dt > 0 ? step / dt : 0;
+  return {
+    moving,
+    speed,
+    elapsed: elapsed + (moving && dt > 0 ? dt * 1000 : 0),
+    running: moving && speed >= HERO_RUN_SPEED,
+  };
+}
+
+/**
+ * Joystick and keyboard ignore the town walk scale, so a full stick is 216.
+ * Click-to-move inside the shop radius stays at walkSpeed / runSpeed.
+ */
+export function heroMoveScale(inTown: boolean, direct: boolean, walkSpeed: number, runSpeed: number): number {
+  if (direct || !inTown || runSpeed <= 0) return 1;
+  return walkSpeed / runSpeed;
+}
+
 /** currentFrame = floor(elapsedAnimTime / frameDuration) % totalFrames. Never past the last frame. */
 export function animFrame(elapsedMs: number, frameMs: number, totalFrames: number): number {
   if (totalFrames <= 1 || frameMs <= 0) return 0;

@@ -18,15 +18,18 @@ import { FUTURE_ITEMS, isShopItem, ITEMS } from '../src/game/data/items';
 import { UNIT_DEFS } from '../src/game/data/units';
 import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
 import { campGates, DECOR_MARGIN, FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, sceneryFor } from '../src/game/landscape';
-import { groundAt, slide, walkable } from '../src/game/terrain';
+import { GROUND_BASE, groundAt, slide, walkable } from '../src/game/terrain';
 import {
   animFrame,
   HERO_COMBAT_BANDS,
   HERO_RUN_RECTS,
+  HERO_RUN_SPEED,
   HERO_WALK_RECTS,
   heroCompass,
   heroDrawOrigin,
+  heroGaitStep,
   heroHoldCompass,
+  heroMoveScale,
   heroRectOverlapsCombat,
   heroSheetRow,
   heroSourceRect,
@@ -997,6 +1000,62 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.equal(Math.min(...northwest), 90);
   assert.equal(Math.max(...northwest), 109);
   assert.equal(nwSpan, 19);
+}
+
+{
+  const sim = createMatch(sanctuary, barbarian, 1);
+  const hero = player(sim);
+  const camp = emptyInput();
+  const aimed = screenVectorToWorld(1, 0);
+  camp.moveX = aimed.x;
+  camp.moveY = aimed.y;
+  const x0 = hero.x;
+  const y0 = hero.y;
+  updateSim(sim, camp, 0.05);
+  const campSpeed = Math.hypot(hero.x - x0, hero.y - y0) / 0.05;
+  assert.ok(campSpeed >= HERO_RUN_SPEED, `full stick in camp was ${campSpeed.toFixed(1)}`);
+  assert.equal(heroMoveScale(true, true, 144, 216), 1);
+  assert.equal(heroMoveScale(true, false, 144, 216), 144 / 216);
+
+  const click = createMatch(sanctuary, barbarian, 1);
+  const walker = player(click);
+  const dest = emptyInput();
+  dest.destX = walker.x + 200;
+  dest.destY = walker.y;
+  const wx = walker.x;
+  const wy = walker.y;
+  updateSim(click, dest, 0.05);
+  const walkSpeed = Math.hypot(walker.x - wx, walker.y - wy) / 0.05;
+  assert.ok(walkSpeed < HERO_RUN_SPEED && walkSpeed > 100, `town click-to-move was ${walkSpeed.toFixed(1)}`);
+
+  let elapsed = 0;
+  let compass: number | null = null;
+  const frames: { row: number; frame: number }[] = [];
+  for (let tick = 0; tick < 24; tick++) {
+    compass = heroHoldCompass(compass, tick * 0.35);
+    const gait = heroGaitStep(elapsed, 216 * 0.016, 0.016);
+    elapsed = gait.elapsed;
+    assert.equal(gait.running, true);
+    assert.equal(gait.speed, 216);
+    frames.push({ row: heroSheetRow(compass), frame: animFrame(elapsed, RUN_FRAME_MS, RUN_FRAMES) });
+  }
+  assert.equal(elapsed, 24 * 16);
+  assert.ok(new Set(frames.map((frame) => frame.frame)).size >= 4, 'run frame froze during the sweep');
+  assert.ok(frames.some((frame, index) => index > 0 && frame.row !== frames[index - 1].row), 'facing never changed');
+  const turned = frames.findIndex((frame, index) => index > 0 && frame.row !== frames[index - 1].row);
+  assert.ok(turned > 0);
+  assert.ok(frames[turned].frame !== 0 || frames[turned - 1].frame !== 0, 'a turn reset the run clock');
+
+  const sheets = readFileSync(new URL('../src/game/art/sheets.ts', import.meta.url), 'utf8');
+  const render = readFileSync(new URL('../src/game/render.ts', import.meta.url), 'utf8');
+  assert.ok(sheets.includes('ally: { pose: \'idle\', col: 0 }'));
+  assert.ok(sheets.includes('enemy: { pose: \'walk\', col: 0 }'));
+  assert.equal(render.includes('obeliskGlyph'), true);
+  assert.ok(render.includes('paintDiamond(ctx, rows, GROUND_BASE'));
+  assert.equal(GROUND_BASE, 'grass');
+  const lightRun = HERO_RUN_RECTS.light[0][0];
+  const lightWalk = HERO_WALK_RECTS.light[0][0];
+  assert.ok(lightRun[3] - lightRun[1] > lightWalk[3] - lightWalk[1], 'run cell is not the walk strip');
 }
 
 console.log('match tests passed');

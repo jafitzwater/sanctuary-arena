@@ -362,3 +362,19 @@ export function isSheetMatte(r: number, g: number, b: number, a: number): boolea
   const chroma = Math.max(r, g, b) - Math.min(r, g, b);
   return chroma <= 12 && r >= 220 && g >= 220 && b >= 220;
 }
+
+/**
+ * Path obelisks. The ally walk strip is the red nova, so the stone pillar is the idle cell.
+ * The enemy walk sheet's first cell is the static obelisk.
+ */
+export const PATH_OBELISK = {
+  ally: { pose: 'idle', col: 0 },
+  enemy: { pose: 'walk', col: 0 },
+} as const;
+
+/** Red nova, magenta, sheet matte, and solid black. Grey stone is not background. */
+export function isObeliskBackground(r: number, g: number, b: number, a: number): boolean {
+  if (isSheetMatte(r, g, b, a)) return true;
+  if (r > 110 && r > g + 40 && r > b + 40 && g < 90) return true;
+  return r < 28 && g < 28 && b < 28 && a > 16;
+}
