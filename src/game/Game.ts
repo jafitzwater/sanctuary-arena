@@ -170,6 +170,7 @@ export class Game {
       window.innerHeight <= 540 &&
       window.innerWidth > window.innerHeight;
     document.body.classList.toggle('touch', coarse || phoneLandscape);
+    this.hud.setMuteLabel(this.audio.muted);
   }
 }
 

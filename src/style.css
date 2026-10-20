@@ -753,6 +753,7 @@ body.touch .skill {
 }
 body.touch .skill .key { font-size: 9px; }
 body.touch .skill .sname { font-size: 9px; line-height: 1.05; }
+body.touch .skill.locked .sname { font-size: 18px; color: var(--gold); }
 body.touch .skill .rank { display: none; }
 body.touch .skill .plus { width: 16px; height: 16px; font-size: 12px; top: -2px; right: -2px; }
 /* Quarter arc around the attack button. Angles run from just left of Attack up to straight above it. */
