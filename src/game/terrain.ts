@@ -8,8 +8,8 @@ const EDGE = 48;
 const RIVER = 62;
 const OPENING = 150;
 const CORRIDOR = 64;
-/** Obstacles collide on the bottom of the sprite, not the full visual box. */
-const FOOTPRINT = 0.3;
+/** Bottom 30% of a sprite. Units, towers, and boulders share this band. */
+export const FOOTPRINT = 0.3;
 
 export type GroundKind = 'grass' | 'edge' | 'path' | 'town' | 'pale' | 'river' | 'bank' | 'dark' | 'blend';
 

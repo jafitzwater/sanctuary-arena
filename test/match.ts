@@ -18,7 +18,7 @@ import { UNIT_DEFS } from '../src/game/data/units';
 import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
 import { campGates, DECOR_MARGIN, FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, sceneryFor } from '../src/game/landscape';
 import { groundAt, slide, walkable } from '../src/game/terrain';
-import { animFrame, RUN_FRAME_MS, RUN_FRAMES, WALK_FRAME_MS, WALK_FRAMES } from '../src/game/gait';
+import { animFrame, RUN_FRAME_MS, RUN_FRAMES, strideLength, WALK_FRAME_MS, WALK_FRAMES } from '../src/game/gait';
 
 function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   const frames = Math.max(1, Math.round(seconds / dt));
@@ -488,8 +488,12 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
     }
   }
   const elapsed = 700;
-  assert.equal(animFrame(elapsed, RUN_FRAME_MS, RUN_FRAMES), Math.floor(700 / 70) % 12, 'run frame is floor(elapsed / 70) % 12');
-  assert.equal(animFrame(elapsed, WALK_FRAME_MS, WALK_FRAMES), Math.floor(700 / 100) % 4, 'walk frame keeps the same elapsed clock');
+  assert.equal(animFrame(elapsed, RUN_FRAME_MS, RUN_FRAMES), Math.floor(700 / RUN_FRAME_MS) % RUN_FRAMES, 'run frame is floor(elapsed / 40) % 12');
+  assert.equal(animFrame(elapsed, WALK_FRAME_MS, WALK_FRAMES), Math.floor(700 / WALK_FRAME_MS) % WALK_FRAMES, 'walk frame keeps the same elapsed clock');
+  assert.ok(Math.abs(strideLength(216, RUN_FRAME_MS, RUN_FRAMES) - 103.68) < 0.01, 'run stride at 216 is 103.68px');
+  assert.ok(Math.abs(strideLength(144, WALK_FRAME_MS, WALK_FRAMES) - 33.408) < 0.01, 'walk stride at 144 is 33.408px');
+  const rocks = sceneryFor(sanctuary).filter((prop) => prop.kind === 'rock');
+  assert.ok(rocks.length > 24, 'boulder walls line the lanes');
   assert.notEqual(animFrame(elapsed, RUN_FRAME_MS, RUN_FRAMES), 0, 'a mid-cycle run is not frame 0');
   const runSeq: number[] = [];
   let clock = 0;

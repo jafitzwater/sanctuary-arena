@@ -1,0 +1,397 @@
+{
+  "minion-hero-basic-rogue-walk": {
+    "file": "minion-hero-basic-rogue-walk.webp",
+    "rows": 16,
+    "cols": 17,
+    "placeholder": false
+  },
+  "minion-hero-basic-rogue-idle": {
+    "file": "minion-hero-basic-rogue-idle.webp",
+    "rows": 16,
+    "cols": 22,
+    "placeholder": false
+  },
+  "minion-hero-basic-rogue-attack": {
+    "file": "minion-hero-basic-rogue-attack.webp",
+    "rows": 8,
+    "cols": 23,
+    "placeholder": false
+  },
+  "minion-hero-hard-guard-walk": {
+    "file": "minion-hero-hard-guard-walk.webp",
+    "rows": 16,
+    "cols": 18,
+    "placeholder": false
+  },
+  "minion-hero-hard-guard-idle": {
+    "file": "minion-hero-hard-guard-idle.webp",
+    "rows": 16,
+    "cols": 19,
+    "placeholder": false
+  },
+  "minion-hero-hard-guard-attack": {
+    "file": "minion-hero-hard-guard-attack.webp",
+    "rows": 8,
+    "cols": 21,
+    "placeholder": false
+  },
+  "minion-enemy-basic-fallen-walk": {
+    "file": "minion-enemy-basic-fallen-walk.webp",
+    "rows": 16,
+    "cols": 25,
+    "placeholder": false
+  },
+  "minion-enemy-basic-fallen-idle": {
+    "file": "minion-enemy-basic-fallen-idle.webp",
+    "rows": 16,
+    "cols": 24,
+    "placeholder": false
+  },
+  "minion-enemy-basic-fallen-attack": {
+    "file": "minion-enemy-basic-fallen-attack.webp",
+    "rows": 8,
+    "cols": 28,
+    "placeholder": false
+  },
+  "minion-enemy-basic-goatman-walk": {
+    "file": "minion-enemy-basic-goatman-walk.webp",
+    "rows": 16,
+    "cols": 32,
+    "placeholder": false
+  },
+  "minion-enemy-basic-goatman-idle": {
+    "file": "minion-enemy-basic-goatman-idle.webp",
+    "rows": 8,
+    "cols": 19,
+    "placeholder": false
+  },
+  "minion-enemy-basic-goatman-attack": {
+    "file": "minion-enemy-basic-goatman-attack.webp",
+    "rows": 16,
+    "cols": 32,
+    "placeholder": false
+  },
+  "minion-enemy-medium-sandraider-walk": {
+    "file": "minion-enemy-medium-sandraider-walk.webp",
+    "rows": 16,
+    "cols": 18,
+    "placeholder": false,
+    "gifFrames": 1
+  },
+  "minion-enemy-medium-sandraider-idle": {
+    "file": "minion-enemy-medium-sandraider-idle.webp",
+    "rows": 8,
+    "cols": 15,
+    "placeholder": false,
+    "gifFrames": 1
+  },
+  "minion-enemy-medium-sandraider-attack": {
+    "file": "minion-enemy-medium-sandraider-attack.webp",
+    "rows": 16,
+    "cols": 29,
+    "placeholder": false,
+    "gifFrames": 1
+  },
+  "minion-enemy-medium-blunderbore-walk": {
+    "file": "minion-enemy-medium-blunderbore-walk.webp",
+    "rows": 16,
+    "cols": 47,
+    "placeholder": false,
+    "gifFrames": 1
+  },
+  "minion-enemy-medium-blunderbore-idle": {
+    "file": "minion-enemy-medium-blunderbore-idle.webp",
+    "rows": 16,
+    "cols": 28,
+    "placeholder": false,
+    "gifFrames": 1
+  },
+  "minion-enemy-hard-destruction-walk": {
+    "file": "minion-enemy-hard-destruction-walk.webp",
+    "rows": 16,
+    "cols": 34,
+    "placeholder": false
+  },
+  "minion-enemy-hard-destruction-idle": {
+    "file": "minion-enemy-hard-destruction-walk.webp",
+    "rows": 16,
+    "cols": 34,
+    "placeholder": false
+  },
+  "minion-enemy-hard-bovine-walk": {
+    "file": "minion-enemy-hard-bovine-walk.webp",
+    "rows": 16,
+    "cols": 26,
+    "placeholder": false,
+    "gifFrames": 1
+  },
+  "minion-enemy-hard-bovine-idle": {
+    "file": "minion-enemy-hard-bovine-idle.webp",
+    "rows": 8,
+    "cols": 11,
+    "placeholder": false,
+    "gifFrames": 1
+  },
+  "minion-enemy-hard-bovine-attack": {
+    "file": "minion-enemy-hard-bovine-attack.webp",
+    "rows": 16,
+    "cols": 23,
+    "placeholder": false,
+    "gifFrames": 1
+  },
+  "boss-herald-diablo-walk": {
+    "file": "boss-herald-diablo-walk.webp",
+    "rows": 16,
+    "cols": 21,
+    "placeholder": false
+  },
+  "boss-herald-diablo-idle": {
+    "file": "boss-herald-diablo-idle.webp",
+    "rows": 8,
+    "cols": 12,
+    "placeholder": false
+  },
+  "boss-herald-diablo-attack": {
+    "file": "boss-herald-diablo-attack.webp",
+    "rows": 16,
+    "cols": 21,
+    "placeholder": false
+  },
+  "boss-arena-duriel-walk": {
+    "file": "boss-arena-duriel-walk.webp",
+    "rows": 16,
+    "cols": 16,
+    "placeholder": false
+  },
+  "boss-arena-duriel-idle": {
+    "file": "boss-arena-duriel-idle.webp",
+    "rows": 16,
+    "cols": 23,
+    "placeholder": false
+  },
+  "boss-arena-duriel-attack": {
+    "file": "boss-arena-duriel-attack.webp",
+    "rows": 8,
+    "cols": 25,
+    "placeholder": false
+  },
+  "boss-arena-andariel-walk": {
+    "file": "boss-arena-andariel-walk.webp",
+    "rows": 16,
+    "cols": 20,
+    "placeholder": false
+  },
+  "boss-arena-andariel-idle": {
+    "file": "boss-arena-andariel-idle.webp",
+    "rows": 8,
+    "cols": 25,
+    "placeholder": false
+  },
+  "boss-arena-andariel-attack": {
+    "file": "boss-arena-andariel-attack.webp",
+    "rows": 16,
+    "cols": 34,
+    "placeholder": false
+  },
+  "tower-hero-path-walk": {
+    "file": "tower-hero-path-walk.webp",
+    "rows": 1,
+    "cols": 13,
+    "placeholder": false
+  },
+  "tower-hero-path-idle": {
+    "file": "tower-hero-path-idle.webp",
+    "rows": 1,
+    "cols": 1,
+    "placeholder": false
+  },
+  "tower-hero-path-attack": {
+    "file": "tower-hero-path-attack.webp",
+    "rows": 1,
+    "cols": 7,
+    "placeholder": false
+  },
+  "tower-enemy-path-walk": {
+    "file": "tower-enemy-path-walk.webp",
+    "rows": 1,
+    "cols": 15,
+    "placeholder": false
+  },
+  "tower-enemy-path-idle": {
+    "file": "tower-enemy-path-idle.webp",
+    "rows": 1,
+    "cols": 6,
+    "placeholder": false
+  },
+  "tower-enemy-path-attack": {
+    "file": "tower-enemy-path-attack.webp",
+    "rows": 1,
+    "cols": 7,
+    "placeholder": false
+  },
+  "tower-hero-base-walk": {
+    "file": "tower-hero-base-walk.webp",
+    "rows": 3,
+    "cols": 38,
+    "placeholder": false
+  },
+  "tower-hero-base-idle": {
+    "file": "tower-hero-base-walk.webp",
+    "rows": 3,
+    "cols": 38,
+    "placeholder": false
+  },
+  "tower-enemy-base-walk": {
+    "file": "tower-enemy-base-walk.webp",
+    "rows": 16,
+    "cols": 22,
+    "placeholder": false
+  },
+  "tower-enemy-base-idle": {
+    "file": "tower-enemy-base-walk.webp",
+    "rows": 16,
+    "cols": 22,
+    "placeholder": false
+  },
+  "boss-herald-mephisto-idle-walk": {
+    "file": "boss-herald-mephisto-idle-walk.webp",
+    "rows": 8,
+    "cols": 13,
+    "placeholder": false
+  },
+  "boss-herald-mephisto-idle-idle": {
+    "file": "boss-herald-mephisto-idle-walk.webp",
+    "rows": 8,
+    "cols": 13,
+    "placeholder": false
+  },
+  "boss-herald-mephisto-walk-walk": {
+    "file": "boss-herald-mephisto-walk-walk.webp",
+    "rows": 8,
+    "cols": 13,
+    "placeholder": false
+  },
+  "boss-herald-mephisto-walk-idle": {
+    "file": "boss-herald-mephisto-walk-walk.webp",
+    "rows": 8,
+    "cols": 13,
+    "placeholder": false
+  },
+  "boss-herald-mephisto-attack-1-walk": {
+    "file": "boss-herald-mephisto-attack-1-walk.webp",
+    "rows": 8,
+    "cols": 18,
+    "placeholder": false
+  },
+  "boss-herald-mephisto-attack-1-idle": {
+    "file": "boss-herald-mephisto-attack-1-walk.webp",
+    "rows": 8,
+    "cols": 18,
+    "placeholder": false
+  },
+  "boss-herald-mephisto-attack-2-walk": {
+    "file": "boss-herald-mephisto-attack-2-walk.webp",
+    "rows": 8,
+    "cols": 17,
+    "placeholder": false
+  },
+  "boss-herald-mephisto-attack-2-idle": {
+    "file": "boss-herald-mephisto-attack-2-walk.webp",
+    "rows": 8,
+    "cols": 17,
+    "placeholder": false
+  },
+  "boss-herald-mephisto-get-hit-walk": {
+    "file": "boss-herald-mephisto-get-hit-walk.webp",
+    "rows": 8,
+    "cols": 6,
+    "placeholder": false
+  },
+  "boss-herald-mephisto-get-hit-idle": {
+    "file": "boss-herald-mephisto-get-hit-walk.webp",
+    "rows": 8,
+    "cols": 6,
+    "placeholder": false
+  },
+  "boss-herald-mephisto-death-walk": {
+    "file": "boss-herald-mephisto-death-walk.webp",
+    "rows": 8,
+    "cols": 25,
+    "placeholder": false
+  },
+  "boss-herald-mephisto-death-idle": {
+    "file": "boss-herald-mephisto-death-walk.webp",
+    "rows": 8,
+    "cols": 25,
+    "placeholder": false
+  },
+  "boss-herald-mephisto-die-walk": {
+    "file": "boss-herald-mephisto-die-walk.webp",
+    "rows": 8,
+    "cols": 1,
+    "placeholder": false
+  },
+  "boss-herald-mephisto-die-idle": {
+    "file": "boss-herald-mephisto-die-walk.webp",
+    "rows": 8,
+    "cols": 1,
+    "placeholder": false
+  },
+  "floor-grass": {
+    "file": "ground.webp",
+    "rows": 1,
+    "cols": 4,
+    "groundRow": 0,
+    "source": "act1-outdoor-floor.png",
+    "placeholder": false
+  },
+  "floor-battle-path": {
+    "file": "ground.webp",
+    "rows": 1,
+    "cols": 4,
+    "groundRow": 2,
+    "source": "floor-battle-path.png",
+    "placeholder": false
+  },
+  "floor-hero-town": {
+    "file": "ground.webp",
+    "rows": 1,
+    "cols": 4,
+    "groundRow": 3,
+    "source": "act1-town-floor.png",
+    "placeholder": false
+  },
+  "floor-enemy-town": {
+    "file": "ground.webp",
+    "rows": 1,
+    "cols": 4,
+    "groundRow": 4,
+    "source": "floor-enemy-town.png",
+    "placeholder": false
+  },
+  "boulder-0": {
+    "file": "boulder0.webp",
+    "rows": 1,
+    "cols": 1,
+    "placeholder": false
+  },
+  "boulder-1": {
+    "file": "boulder1.webp",
+    "rows": 1,
+    "cols": 1,
+    "placeholder": false
+  },
+  "boulder-2": {
+    "file": "boulder2.webp",
+    "rows": 1,
+    "cols": 1,
+    "placeholder": false
+  },
+  "minion-hero-medium-valkyrie": {
+    "file": "minion-hero-medium-valkyrie-placeholder.webp",
+    "rows": 16,
+    "cols": 17,
+    "placeholder": true,
+    "missing": "Valkyrie"
+  }
+}

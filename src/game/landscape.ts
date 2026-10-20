@@ -166,8 +166,64 @@ function build(map: ActDef): Prop[] {
   for (const gate of campGates(map)) placePalisade(props, map, gate);
   campFurnish(props, map, map.playerBase, campGates(map)[0], true);
   campFurnish(props, map, map.enemyBase, campGates(map)[1], false);
+  placeBoulders(props, map);
   plantForests(props, map);
   return props;
+}
+
+/** Lane-margin boulder walls. Centers stay outside the 2-tile decor margin. */
+function placeBoulders(props: Prop[], map: ActDef): void {
+  const offset = decorLimit(map) + 8;
+  const cap = 72;
+  let count = 0;
+  for (const lane of lanesOf(map)) {
+    for (const spot of samplePolyline(lane, 176)) {
+      if (Math.hypot(spot.x - lane[0].x, spot.y - lane[0].y) < 220) continue;
+      const end = lane[lane.length - 1];
+      if (Math.hypot(spot.x - end.x, spot.y - end.y) < 220) continue;
+      for (const sign of [-1, 1]) {
+        if (count >= cap) return;
+        const x = spot.x + spot.nx * sign * offset;
+        const y = spot.y + spot.ny * sign * offset;
+        if (!boulderSite(map, props, x, y)) continue;
+        place(props, { kind: 'rock', variant: 3 + (count % 3), x, y, flip: sign < 0, block: 48 });
+        count += 1;
+      }
+    }
+  }
+}
+
+function samplePolyline(lane: Vec[], spacing: number): { x: number; y: number; nx: number; ny: number }[] {
+  const out: { x: number; y: number; nx: number; ny: number }[] = [];
+  let pending = spacing;
+  for (let i = 1; i < lane.length; i++) {
+    const dx = lane[i].x - lane[i - 1].x;
+    const dy = lane[i].y - lane[i - 1].y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1) continue;
+    const ux = dx / len;
+    const uy = dy / len;
+    let at = 0;
+    while (at + pending <= len) {
+      at += pending;
+      pending = spacing;
+      out.push({ x: lane[i - 1].x + ux * at, y: lane[i - 1].y + uy * at, nx: -uy, ny: ux });
+    }
+    pending -= len - at;
+  }
+  return out;
+}
+
+function boulderSite(map: ActDef, props: Prop[], x: number, y: number): boolean {
+  if (x < 80 || y < 80 || x > map.width - 80 || y > map.height - 80) return false;
+  if (nearLane(map, x, y, decorLimit(map) - 1)) return false;
+  if (inGateSlot(map, x, y)) return false;
+  if (Math.hypot(x - map.playerBase.x, y - map.playerBase.y) < map.plaza) return false;
+  if (Math.hypot(x - map.enemyBase.x, y - map.enemyBase.y) < map.plaza) return false;
+  if (map.river && distToPolyline({ x, y }, map.river) < 80) return false;
+  const spots = [...(map.dens ?? []), ...(map.shrines ?? []), ...(map.pits ?? [])];
+  if (spots.some((spot) => Math.hypot(x - spot.x, y - spot.y) < OPENING)) return false;
+  return props.every((prop) => Math.hypot(prop.x - x, prop.y - y) > 70);
 }
 
 /** Fence posts flanking a straight 6-tile opening. Nothing is placed inside the slot. */

@@ -1,4 +1,4 @@
-import { actProps, d2Atlas, monsterSheets } from './art/sheets';
+import { actProps, d2Atlas, isSheetMatte, mephisto, pr23Boulders, pr23Cast, type CastSheet, type FrameSheet } from './art/sheets';
 import { animFrame, RUN_FRAME_MS, RUN_FRAMES, WALK_FRAME_MS, WALK_FRAMES } from './gait';
 import type { ActDef } from './data/acts/types';
 import { projectIso, unprojectIso } from './iso';
@@ -59,14 +59,17 @@ function nearMagenta(r: number, g: number, b: number, a: number): boolean {
   return r > 170 && b > 120 && rb - g > 70 && Math.abs(r - b) < 120;
 }
 
-function stripMatte(data: ImageData): void {
+function stripMatte(data: ImageData, broad = false): void {
   const px = data.data;
   const w = data.width;
   const h = data.height;
   const kill = new Uint8Array(w * h);
   for (let p = 0; p < kill.length; p++) {
     const i = p * 4;
-    if (nearMagenta(px[i], px[i + 1], px[i + 2], px[i + 3])) kill[p] = 1;
+    const matte = broad
+      ? isSheetMatte(px[i], px[i + 1], px[i + 2], px[i + 3])
+      : nearMagenta(px[i], px[i + 1], px[i + 2], px[i + 3]);
+    if (matte) kill[p] = 1;
   }
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -128,10 +131,8 @@ export class Renderer {
   private floor: HTMLCanvasElement | null = null;
   private readonly cutouts = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
   private readonly cutSources = new Set<HTMLImageElement>();
-  private readonly art = {
-    raven: loadImage(monsterSheets.raven),
-    ravenWalk: loadImage(monsterSheets.ravenWalk),
-  };
+  private readonly pr23Sources = new Set<HTMLImageElement>();
+  private readonly loaded = new Map<string, HTMLImageElement>();
   private readonly props = {
     tree: actProps.tree.map(loadImage),
     rock: actProps.rock.map(loadImage),
@@ -141,15 +142,7 @@ export class Renderer {
     tent: actProps.tent.map(loadImage),
     stone: actProps.stone.map(loadImage),
   };
-  private readonly mobs = {
-    fallenIdle: loadImage(d2Atlas.fallen.idle),
-    fallenWalk: loadImage(d2Atlas.fallen.walk),
-    zombieIdle: loadImage(d2Atlas.zombie.idle),
-    zombieWalk: loadImage(d2Atlas.zombie.walk),
-    shamanIdle: loadImage(d2Atlas.shaman.idle),
-    shamanWalk: loadImage(d2Atlas.shaman.walk),
-    quill: loadImage(d2Atlas.quill),
-  };
+  private readonly boulders = pr23Boulders.map((src) => this.sheet(src));
   private readonly d2 = {
     light: {
       idle: loadImage(d2Atlas.light.idle),
@@ -170,10 +163,18 @@ export class Renderer {
       attack: loadImage(d2Atlas.heavy.attack),
     },
   };
-  private readonly rogueSheet = loadImage(d2Atlas.rogue);
   private readonly akaraSheet = loadImage(d2Atlas.akara);
   private readonly bannerSheet = loadImage(d2Atlas.banner);
   private readonly ground = loadImage(d2Atlas.ground);
+
+  private sheet(src: string): HTMLImageElement {
+    const hit = this.loaded.get(src);
+    if (hit) return hit;
+    const img = loadImage(src);
+    this.loaded.set(src, img);
+    this.pr23Sources.add(img);
+    return img;
+  }
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -188,7 +189,6 @@ export class Renderer {
       ...this.props.tent,
       ...this.props.stone,
       this.akaraSheet,
-      this.rogueSheet,
     ]) this.cutSources.add(img);
     const bump = () => {
       this.mapKey = '';
@@ -403,11 +403,12 @@ export class Renderer {
       prop.kind === 'stump' ? 52 :
       prop.kind === 'wagon' ? 78 :
       prop.kind === 'npc' ? 102 :
+      prop.kind === 'rock' && prop.variant >= 3 ? 104 :
       72;
     const sheet =
       prop.kind === 'npc' ? this.akaraSheet :
       prop.kind === 'tree' ? this.props.tree[prop.variant % this.props.tree.length] :
-      prop.kind === 'rock' ? this.props.rock[prop.variant % this.props.rock.length] :
+      prop.kind === 'rock' ? (prop.variant >= 3 ? this.boulders[(prop.variant - 3) % this.boulders.length] : this.props.rock[prop.variant % this.props.rock.length]) :
       prop.kind === 'fence' ? this.props.fence[prop.variant % this.props.fence.length] :
       prop.kind === 'stump' ? this.props.stump[prop.variant % this.props.stump.length] :
       prop.kind === 'wagon' ? this.props.wagon[prop.variant % this.props.wagon.length] :
@@ -440,7 +441,7 @@ export class Renderer {
       ctx.scale(1, 0.5);
       ctx.translate(-footX, -y);
     }
-    const glyph = this.sheetFor(unit, gait.moving, gait.d, gait.elapsed, gait.walking, tier, unit.id === playerId);
+    const glyph = this.sheetFor(unit, gait.moving, gait.d, gait.elapsed, gait.walking, tier, unit.id === playerId, opts.time);
     const outlined = unit.kind === 'minion' || unit.kind === 'champion';
     if (glyph) this.blit(ctx, glyph.img, footX, y, height, glyph.flip, glyph, outlined);
     if (unit.whirlT > 0) {
@@ -470,12 +471,14 @@ export class Renderer {
   }
 
   private unitHeight(unit: Unit): number {
+    if (unit.objective === 'herald' || unit.objective === 'baron') return 156;
+    if (unit.objective === 'dragon') return 148;
     if (unit.defId === 'fallen' && unit.name === 'Bishibosh') return 92;
     switch (unit.defId) {
       case 'barbarian':
         return 108;
       case 'blood-raven':
-        return 104;
+        return 140;
       case 'fallen':
         return 80;
       case 'zombie':
@@ -517,16 +520,17 @@ export class Renderer {
     walking: boolean,
     tier: ArmorTier,
     logFrames = false,
+    time = 0,
   ): Glyph | null {
     const delta = this.screenDelta(unit.facing);
     const row = unit.whirlT > 0 ? this.rowOf(delta) : this.heldRow(unit.id, this.smoothAim(unit.id, delta));
     if (unit.kind === 'seal') return this.full(this.props.rock[0], false);
     if (unit.defId === 'base-ally' || unit.defId === 'base-enemy') return this.full(this.bannerSheet, false);
-    if (unit.defId === 'tower') return this.full(this.props.rock[unit.alive ? 2 : 0], false);
+    if (unit.defId === 'tower') return this.towerGlyph(unit, time);
     if (unit.defId === 'barbarian') {
       const pack = this.d2[tier];
-      // One armor tier, one sheet per state. Feet share a cell anchor, and the
-      // column advances with distance so a run does not skip ahead of the feet.
+      // One armor tier, one sheet per state. The hero keeps the measured foot pivot.
+      // The column is elapsed time, advanced by the same rAF dt as the stride.
       if (!unit.alive || unit.castT > 0) return this.atlas(pack.idle, 1, 0, row, true);
       if (unit.whirlT > 0) return this.atlas(pack.run, RUN_FRAMES, Math.floor(phase / 10) % RUN_FRAMES, row, true);
       if (unit.leap || unit.swing > 0) {
@@ -543,28 +547,58 @@ export class Renderer {
       }
       return this.atlas(pack.idle, 1, 0, row, true);
     }
-    if (unit.defId === 'rogue' || unit.defId === 'rogue-archer') {
-      return this.atlas(this.rogueSheet, 2, moving ? 1 : 0, row);
-    }
-    if (unit.defId === 'fallen' && unit.name === 'Bishibosh') {
-      return this.cycle(this.mobs.shamanWalk, this.mobs.shamanIdle, moving, phase, row);
-    }
-    if (unit.defId === 'fallen' || unit.defId === 'goatman') {
-      return this.cycle(this.mobs.fallenWalk, this.mobs.fallenIdle, moving, phase, row);
-    }
-    if (unit.defId === 'zombie' || unit.defId === 'skeleton' || unit.defId === 'hungry-dead' || unit.defId === 'mummy') {
-      return this.cycle(this.mobs.zombieWalk, this.mobs.zombieIdle, moving, phase, row);
-    }
-    if (unit.defId === 'demon' || unit.defId === 'willowisp' || unit.objective === 'dragon' || unit.objective === 'herald' || unit.objective === 'baron') {
-      return this.cycle(this.mobs.shamanWalk, this.mobs.shamanIdle, moving, phase, row);
-    }
-    if (unit.defId === 'quillrat') {
-      return this.atlas(this.mobs.quill, 2, moving ? Math.floor(phase / 16) % 2 : 0, row);
-    }
-    const flip = Math.cos(unit.facing) < -0.12;
-    const step = Math.floor(phase / 22) % 2 === 0;
-    if (unit.defId === 'blood-raven') return this.full(moving ? (step ? this.art.ravenWalk : this.art.raven) : this.art.raven, flip);
+    if (unit.objective === 'herald') return this.mephistoGlyph(moving, elapsed, unit.alive, row);
+    if (unit.objective === 'baron') return this.castGlyph(pr23Cast.diablo, moving, elapsed, row);
+    if (unit.objective === 'dragon') return this.castGlyph(pr23Cast.duriel, moving, elapsed, row);
+    if (unit.defId === 'blood-raven') return this.castGlyph(pr23Cast.andariel, moving, elapsed, row);
+    const cast = this.minionCast(unit);
+    if (cast) return this.castGlyph(cast, moving, elapsed, row);
     return null;
+  }
+
+  /** Art swap only. Team and def id pick the sheet; stats stay on the unit. */
+  private minionCast(unit: Unit): CastSheet | null {
+    if (unit.team === 'ally') {
+      if (unit.defId === 'rogue' || unit.defId === 'rogue-archer') return pr23Cast.rogue;
+      if (unit.defId === 'skeleton' || unit.defId === 'hungry-dead') return pr23Cast.valkyrie;
+      if (unit.defId === 'goatman' || unit.defId === 'demon' || unit.defId === 'mummy') return pr23Cast.guard;
+      return null;
+    }
+    if (unit.defId === 'fallen' || unit.defId === 'zombie' || unit.defId === 'quillrat') return pr23Cast.fallen;
+    if (unit.defId === 'goatman') return pr23Cast.goatman;
+    if (unit.defId === 'skeleton' || unit.defId === 'hungry-dead') return pr23Cast.sandraider;
+    if (unit.defId === 'willowisp') return pr23Cast.blunderbore;
+    if (unit.defId === 'mummy') return pr23Cast.destruction;
+    if (unit.defId === 'demon') return pr23Cast.bovine;
+    return null;
+  }
+
+  private towerGlyph(unit: Unit, time: number): Glyph | null {
+    const guardian = /guardian|warden/i.test(unit.name) || unit.radius >= 42;
+    const cast = unit.team === 'ally'
+      ? guardian ? pr23Cast.heroBase : pr23Cast.heroPath
+      : guardian ? pr23Cast.enemyBase : pr23Cast.enemyPath;
+    const pose = unit.alive ? cast.walk : cast.idle;
+    const col = pose.cols > 1 ? Math.floor(time * 6) % pose.cols : 0;
+    return this.frameGlyph(pose, col, 0);
+  }
+
+  private mephistoGlyph(moving: boolean, elapsed: number, alive: boolean, row: number): Glyph | null {
+    if (!alive) return this.frameGlyph(mephisto.death, Math.max(0, mephisto.death.cols - 1), row);
+    const pose = moving ? mephisto.walk : mephisto.idle;
+    const col = moving ? animFrame(elapsed, WALK_FRAME_MS, pose.cols) : 0;
+    return this.frameGlyph(pose, col, row);
+  }
+
+  private castGlyph(cast: CastSheet, moving: boolean, elapsed: number, row: number): Glyph | null {
+    const pose = moving ? cast.walk : cast.idle;
+    const col = moving ? animFrame(elapsed, WALK_FRAME_MS, pose.cols) : 0;
+    return this.frameGlyph(pose, col, row);
+  }
+
+  /** New sheets are packed on the cell's bottom center. The hero keeps footOf. */
+  private frameGlyph(pose: FrameSheet, col: number, row: number): Glyph | null {
+    return this.atlas(this.sheet(pose.src), pose.cols, col, row, false, pose.rows);
   }
 
   /** Ease the facing angle, then keep the current sheet row until the stick leaves its sector. */
@@ -602,12 +636,6 @@ export class Renderer {
     return next;
   }
 
-  /** Walk and idle from one monster's own sheet. No flip: every direction is a row. */
-  private cycle(walk: HTMLImageElement, idle: HTMLImageElement, moving: boolean, phase: number, row: number): Glyph | null {
-    if (moving) return this.atlas(walk, 4, Math.floor(phase / 16) % 4, row);
-    return this.atlas(idle, 1, 0, row);
-  }
-
   private armorTier(sim: Sim): ArmorTier {
     const id = sim.loadout.armor;
     if (id === 'stu' || id === 'rng') return 'heavy';
@@ -634,11 +662,12 @@ export class Renderer {
     return { img, flip, sx: 0, sy: 0, sw: iw, sh: ih };
   }
 
-  private atlas(img: HTMLImageElement, cols: number, col: number, row: number, anchor = false): Glyph | null {
+  private atlas(img: HTMLImageElement, cols: number, col: number, row: number, anchor = false, rows = 8): Glyph | null {
     if (!img.complete || !img.naturalWidth || !img.naturalHeight) return null;
     const sw = img.naturalWidth / cols;
-    const sh = img.naturalHeight / 8;
-    const glyph: Glyph = { img, flip: false, sx: col * sw, sy: row * sh, sw, sh };
+    const sh = img.naturalHeight / Math.max(1, rows);
+    const facing = rows === 16 ? (row % 8) * 2 : rows === 8 ? row % 8 : 0;
+    const glyph: Glyph = { img, flip: false, sx: (col % cols) * sw, sy: facing * sh, sw, sh };
     if (anchor) {
       const foot = this.footOf(img, glyph.sx, glyph.sy, sw, sh);
       if (foot) glyph.foot = foot;
@@ -701,6 +730,7 @@ export class Renderer {
       moving = step > 0.4;
       if (moving) {
         d += step;
+        // Same rAF dt that moved the body in this tick. The clock is not reset.
         elapsed += this.frameDt * 1000;
       }
     }
@@ -762,12 +792,14 @@ export class Renderer {
   }
 
   private prepare(img: Sheet): Sheet {
-    if (!(img instanceof HTMLImageElement) || !this.cutSources.has(img)) return img;
-    return this.cutout(img);
+    if (!(img instanceof HTMLImageElement)) return img;
+    if (this.pr23Sources.has(img)) return this.cutout(img, true);
+    if (!this.cutSources.has(img)) return img;
+    return this.cutout(img, false);
   }
 
   /** Clear edge-connected matte on trees, walls, and ruins. Interior shadow stays. */
-  private cutout(img: HTMLImageElement): Sheet {
+  private cutout(img: HTMLImageElement, broad = false): Sheet {
     const cached = this.cutouts.get(img);
     if (cached) return cached;
     if (!img.complete || img.naturalWidth === 0) return img;
@@ -781,7 +813,7 @@ export class Renderer {
     crisp(ctx);
     ctx.drawImage(img, 0, 0);
     const data = ctx.getImageData(0, 0, w, h);
-    stripMatte(data);
+    stripMatte(data, broad);
     ctx.putImageData(data, 0, 0);
     this.cutouts.set(img, canvas);
     return canvas;

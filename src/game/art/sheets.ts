@@ -1,3 +1,4 @@
+import pr23Manifest from './pr23-manifest.json';
 import raven from '../../assets/art/generated/blood-raven.png';
 import ravenWalk from '../../assets/art/generated/blood-raven-walk.png';
 import lightIdle from '../../assets/art/d2/barb-light-idle.webp';
@@ -88,3 +89,122 @@ export const monsterSheets = {
 };
 
 export const TWO_HAND_WCLASS = new Set(['2HS', '2HT', 'STF']);
+
+interface Pr23Entry {
+  file: string;
+  rows: number;
+  cols: number;
+  placeholder: boolean;
+  missing?: string;
+  gifFrames?: number;
+  groundRow?: number;
+  source?: string;
+}
+
+const pr23Files = import.meta.glob('../../assets/art/d2/pr23/*.webp', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
+const manifest = pr23Manifest as Record<string, Pr23Entry>;
+
+function pr23Url(file: string): string {
+  const hit = Object.entries(pr23Files).find(([path]) => path.endsWith(`/${file}`));
+  if (!hit) throw new Error(`missing cut sheet ${file}`);
+  return hit[1];
+}
+
+export interface FrameSheet {
+  src: string;
+  rows: number;
+  cols: number;
+}
+
+export interface CastSheet {
+  idle: FrameSheet;
+  walk: FrameSheet;
+  attack?: FrameSheet;
+  placeholder: boolean;
+  missing?: string;
+  gifFrames?: number;
+}
+
+function frameOf(entry: Pr23Entry): FrameSheet {
+  return { src: pr23Url(entry.file), rows: entry.rows, cols: entry.cols };
+}
+
+function must(key: string): Pr23Entry {
+  const entry = manifest[key];
+  if (!entry) throw new Error(`missing manifest entry ${key}`);
+  return entry;
+}
+
+function castOf(stem: string): CastSheet {
+  const walk = must(`${stem}-walk`);
+  const idle = manifest[`${stem}-idle`] ?? walk;
+  const attack = manifest[`${stem}-attack`];
+  return {
+    idle: frameOf(idle),
+    walk: frameOf(walk),
+    attack: attack ? frameOf(attack) : undefined,
+    placeholder: Boolean(walk.placeholder || idle.placeholder),
+    missing: walk.missing ?? idle.missing,
+    gifFrames: walk.gifFrames,
+  };
+}
+
+function singleOf(key: string): CastSheet {
+  const entry = must(key);
+  const frame = frameOf(entry);
+  return {
+    idle: frame,
+    walk: frame,
+    placeholder: entry.placeholder,
+    missing: entry.missing,
+  };
+}
+
+/** Cut PR #23 atlases. The hero's measured foot pivot is not in this set. */
+export const pr23Cast = {
+  rogue: castOf('minion-hero-basic-rogue'),
+  guard: castOf('minion-hero-hard-guard'),
+  valkyrie: singleOf('minion-hero-medium-valkyrie'),
+  fallen: castOf('minion-enemy-basic-fallen'),
+  goatman: castOf('minion-enemy-basic-goatman'),
+  sandraider: castOf('minion-enemy-medium-sandraider'),
+  blunderbore: castOf('minion-enemy-medium-blunderbore'),
+  destruction: castOf('minion-enemy-hard-destruction'),
+  bovine: castOf('minion-enemy-hard-bovine'),
+  diablo: castOf('boss-herald-diablo'),
+  duriel: castOf('boss-arena-duriel'),
+  andariel: castOf('boss-arena-andariel'),
+  heroPath: castOf('tower-hero-path'),
+  enemyPath: castOf('tower-enemy-path'),
+  heroBase: castOf('tower-hero-base'),
+  enemyBase: castOf('tower-enemy-base'),
+};
+
+export const mephisto = {
+  idle: frameOf(must('boss-herald-mephisto-idle-walk')),
+  walk: frameOf(must('boss-herald-mephisto-walk-walk')),
+  attack1: frameOf(must('boss-herald-mephisto-attack-1-walk')),
+  attack2: frameOf(must('boss-herald-mephisto-attack-2-walk')),
+  getHit: frameOf(must('boss-herald-mephisto-get-hit-walk')),
+  death: frameOf(must('boss-herald-mephisto-death-walk')),
+  die: frameOf(must('boss-herald-mephisto-die-walk')),
+};
+
+export const pr23Boulders = [0, 1, 2].map((index) => pr23Url(`boulder${index}.webp`));
+
+/**
+ * #FF00FF, near-magenta halos, the grey and teal sheet backdrops, and a flat
+ * near-white backdrop. Black is left alone so outlines survive.
+ */
+export function isSheetMatte(r: number, g: number, b: number, a: number): boolean {
+  if (a < 16) return true;
+  if (g <= 110 && r > 170 && b > 120 && Math.min(r, b) - g > 70 && Math.abs(r - b) < 120) return true;
+  if (Math.abs(r - 170) <= 4 && Math.abs(g - 170) <= 4 && Math.abs(b - 170) <= 4) return true;
+  if (r < 18 && Math.abs(g - 128) <= 18 && Math.abs(b - 128) <= 18) return true;
+  const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+  return chroma <= 12 && r >= 220 && g >= 220 && b >= 220;
+}
