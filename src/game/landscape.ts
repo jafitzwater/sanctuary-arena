@@ -62,6 +62,25 @@ function onRoad(map: ActDef, x: number, y: number, pad: number): boolean {
   return lanesOf(map).some((lane) => distToPolyline({ x, y }, lane) < map.laneWidth / 2 + pad);
 }
 
+/** Same shoulder the walk check uses, so a solid stays off the path. */
+const PATH_SHOULDER = 40;
+const OPENING = 150;
+
+function offPath(map: ActDef, x: number, y: number, radius: number): boolean {
+  const limit = map.laneWidth / 2 + PATH_SHOULDER + radius + 4;
+  if (lanesOf(map).some((lane) => distToPolyline({ x, y }, lane) < limit)) return false;
+  const spots = [...(map.dens ?? []), ...(map.shrines ?? []), ...(map.pits ?? [])];
+  return spots.every((spot) => Math.hypot(x - spot.x, y - spot.y) >= OPENING + radius);
+}
+
+function place(props: Prop[], map: ActDef, prop: Prop): void {
+  if (prop.block <= 0 && (prop.kind === 'tree' || prop.kind === 'fence' || prop.kind === 'tent')) {
+    const radius = prop.kind === 'tree' ? 38 : prop.kind === 'fence' ? 24 : 42;
+    if (offPath(map, prop.x, prop.y, radius)) prop.block = radius;
+  }
+  props.push(prop);
+}
+
 function inPlaza(map: ActDef, x: number, y: number, scale: number): boolean {
   return (
     Math.hypot(x - map.playerBase.x, y - map.playerBase.y) < map.plaza * scale ||
@@ -86,11 +105,11 @@ function build(map: ActDef): Prop[] {
       if (map.river && distToPolyline(at, map.river) < 78) continue;
       if (onRoad(map, at.x, at.y, 24)) continue;
       if (road.id === 'north' && n % 2 === 0) {
-        props.push({ kind: 'fence', variant: n % 2, x: at.x, y: at.y, flip: side < 0, block: 0 });
+        place(props, map, { kind: 'fence', variant: n % 2, x: at.x, y: at.y, flip: side < 0, block: 0 });
       } else if (road.id === 'south' && n % 3 === 0) {
-        props.push({ kind: 'rock', variant: n % 3, x: at.x, y: at.y, flip: false, block: 0 });
+        place(props, map, { kind: 'rock', variant: n % 3, x: at.x, y: at.y, flip: false, block: 0 });
       } else {
-        props.push({ kind: 'tree', variant: n % 5, x: at.x, y: at.y, flip: side < 0, block: 0 });
+        place(props, map, { kind: 'tree', variant: n % 5, x: at.x, y: at.y, flip: side < 0, block: 0 });
       }
     }
   }
@@ -106,7 +125,7 @@ function build(map: ActDef): Prop[] {
         n += 1;
         continue;
       }
-      props.push({
+      place(props, map, {
         kind: n % 3 === 0 ? 'rock' : 'tree',
         variant: (n + 1) % 5,
         x: bank.x,
@@ -125,27 +144,23 @@ function build(map: ActDef): Prop[] {
       const y = den.y + Math.sin(angle) * 220;
       if (onRoad(map, x, y, 8) || inPlaza(map, x, y, 0.8)) continue;
       if (map.river && distToPolyline({ x, y }, map.river) < 64) continue;
-      props.push({ kind: 'tree', variant: (den.id + k) % 5, x, y, flip: k % 2 === 0, block: 0 });
+      place(props, map, { kind: 'tree', variant: (den.id + k) % 5, x, y, flip: k % 2 === 0, block: 0 });
     }
   }
 
   const camp = map.playerBase;
-  props.push(
-    { kind: 'tent', variant: 0, x: camp.x - 190, y: camp.y - 70, flip: false, block: 46 },
-    { kind: 'tent', variant: 1, x: camp.x + 30, y: camp.y - 210, flip: true, block: 42 },
-    { kind: 'tent', variant: 2, x: camp.x + 220, y: camp.y + 90, flip: false, block: 40 },
-    { kind: 'npc', variant: 0, x: camp.x - 20, y: camp.y - 78, flip: false, block: 20 },
-    { kind: 'fence', variant: 0, x: camp.x - 250, y: camp.y + 40, flip: false, block: 28 },
-    { kind: 'fence', variant: 1, x: camp.x - 250, y: camp.y + 120, flip: false, block: 28 },
-    { kind: 'rock', variant: 1, x: camp.x + 250, y: camp.y - 150, flip: false, block: 34 },
-  );
+  place(props, map, { kind: 'tent', variant: 0, x: camp.x - 190, y: camp.y - 70, flip: false, block: 46 });
+  place(props, map, { kind: 'tent', variant: 1, x: camp.x + 30, y: camp.y - 210, flip: true, block: 42 });
+  place(props, map, { kind: 'tent', variant: 2, x: camp.x + 220, y: camp.y + 90, flip: false, block: 40 });
+  place(props, map, { kind: 'npc', variant: 0, x: camp.x - 20, y: camp.y - 78, flip: false, block: 20 });
+  place(props, map, { kind: 'fence', variant: 0, x: camp.x - 250, y: camp.y + 40, flip: false, block: 28 });
+  place(props, map, { kind: 'fence', variant: 1, x: camp.x - 250, y: camp.y + 120, flip: false, block: 28 });
+  place(props, map, { kind: 'rock', variant: 1, x: camp.x + 250, y: camp.y - 150, flip: false, block: 34 });
 
   const lair = map.enemyBase;
-  props.push(
-    { kind: 'rock', variant: 0, x: lair.x + 40, y: lair.y - 180, flip: false, block: 36 },
-    { kind: 'rock', variant: 2, x: lair.x + 180, y: lair.y + 30, flip: false, block: 34 },
-    { kind: 'fence', variant: 0, x: lair.x - 40, y: lair.y - 200, flip: true, block: 26 },
-    { kind: 'tree', variant: 4, x: lair.x + 220, y: lair.y - 80, flip: false, block: 0 },
-  );
+  place(props, map, { kind: 'rock', variant: 0, x: lair.x + 40, y: lair.y - 180, flip: false, block: 36 });
+  place(props, map, { kind: 'rock', variant: 2, x: lair.x + 180, y: lair.y + 30, flip: false, block: 34 });
+  place(props, map, { kind: 'fence', variant: 0, x: lair.x - 40, y: lair.y - 200, flip: true, block: 26 });
+  place(props, map, { kind: 'tree', variant: 4, x: lair.x + 220, y: lair.y - 80, flip: false, block: 0 });
   return props;
 }

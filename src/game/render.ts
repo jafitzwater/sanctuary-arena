@@ -60,6 +60,8 @@ export class Renderer {
   private reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private gait = new Map<number, { x: number; y: number; d: number }>();
   private facingRow = new Map<number, number>();
+  private drawPos = new Map<number, { x: number; y: number }>();
+  private frameDt = 0;
   private readonly art = {
     raven: loadImage(monsterSheets.raven),
     ravenWalk: loadImage(monsterSheets.ravenWalk),
@@ -102,6 +104,7 @@ export class Renderer {
   };
   private readonly rogueSheet = loadImage(d2Atlas.rogue);
   private readonly akaraSheet = loadImage(d2Atlas.akara);
+  private readonly bannerSheet = loadImage(d2Atlas.banner);
   private readonly ground = loadImage(d2Atlas.ground);
 
   constructor(private canvas: HTMLCanvasElement) {
@@ -145,6 +148,7 @@ export class Renderer {
   }
 
   updateCamera(sim: Sim, mode: DrawOpts['mode'], dt: number, time: number): void {
+    this.frameDt = dt;
     const focus = this.focus(sim, mode, time);
     if (!this.snapped) {
       this.focusX = focus.x;
@@ -324,7 +328,8 @@ export class Renderer {
   }
 
   private drawUnit(ctx: CanvasRenderingContext2D, unit: Unit, opts: DrawOpts, u: number, tier: ArmorTier): void {
-    const p = this.project(unit.x, unit.y);
+    const at = this.eased(unit);
+    const p = this.project(at.x, at.y);
     if (p.x < -160 || p.y < -200 || p.x > this.camera.cssW + 160 || p.y > this.camera.cssH + 60) return;
     const gait = this.gaitOf(unit);
     let y = p.y;
@@ -410,9 +415,8 @@ export class Renderer {
       case 'tower':
         return unit.alive ? 128 : 70;
       case 'base-ally':
-        return unit.alive ? 140 : 80;
       case 'base-enemy':
-        return unit.alive ? 156 : 90;
+        return unit.alive ? 220 : 120;
       default:
         return 70;
     }
@@ -422,8 +426,7 @@ export class Renderer {
     const raw = this.dirRow(unit.facing);
     const row = unit.whirlT > 0 ? raw : this.stepRow(unit.id, raw);
     if (unit.kind === 'seal') return this.full(this.props.rock[0], false);
-    if (unit.defId === 'base-ally') return this.full(this.props.stone[0], false);
-    if (unit.defId === 'base-enemy') return this.full(this.props.stone[1], false);
+    if (unit.defId === 'base-ally' || unit.defId === 'base-enemy') return this.full(this.bannerSheet, false);
     if (unit.defId === 'tower') return this.full(this.props.rock[unit.alive ? 2 : 0], false);
     if (unit.defId === 'barbarian') {
       const pack = this.d2[tier];
@@ -516,6 +519,31 @@ export class Renderer {
     return { img, flip: false, sx: col * sw, sy: row * sh, sw, sh };
   }
 
+
+  /** Ease the hero toward the sim point. Frame choice still uses the true step. */
+  private eased(unit: Unit): { x: number; y: number } {
+    if (unit.defId !== 'barbarian') return { x: unit.x, y: unit.y };
+    const prev = this.drawPos.get(unit.id);
+    const dt = this.frameDt;
+    if (!prev || dt <= 0) {
+      const at = { x: unit.x, y: unit.y };
+      this.drawPos.set(unit.id, at);
+      return at;
+    }
+    const gap = Math.hypot(unit.x - prev.x, unit.y - prev.y);
+    if (gap > 72) {
+      const at = { x: unit.x, y: unit.y };
+      this.drawPos.set(unit.id, at);
+      return at;
+    }
+    const t = 1 - Math.exp(-dt * 28);
+    const at = {
+      x: prev.x + (unit.x - prev.x) * t,
+      y: prev.y + (unit.y - prev.y) * t,
+    };
+    this.drawPos.set(unit.id, at);
+    return at;
+  }
 
   private gaitOf(unit: Unit): { moving: boolean; d: number } {
     const prev = this.gait.get(unit.id);

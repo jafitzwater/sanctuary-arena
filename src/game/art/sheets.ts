@@ -37,6 +37,7 @@ import zombieWalk from '../../assets/art/d2/zombie-walk.webp';
 import shamanIdle from '../../assets/art/d2/shaman-idle.webp';
 import shamanWalk from '../../assets/art/d2/shaman-walk.webp';
 import quill from '../../assets/art/d2/quillrat.webp';
+import banner from '../../assets/art/d2/banner.webp';
 
 /**
  * Real Spriters Resource atlases. Eight direction rows, south then clockwise.
@@ -58,6 +59,7 @@ export const d2Atlas = {
   rogue: rogueMerc,
   akara: akaraSheet,
   ground,
+  banner,
 };
 
 /** Act I outdoor and town objects, keyed off magenta. No drawn stand-ins. */

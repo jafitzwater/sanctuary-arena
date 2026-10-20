@@ -16,7 +16,8 @@ import { dealTeams } from '../src/game/teams';
 import { FUTURE_ITEMS, isShopItem, ITEMS } from '../src/game/data/items';
 import { UNIT_DEFS } from '../src/game/data/units';
 import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
-import { walkable } from '../src/game/terrain';
+import { sceneryFor } from '../src/game/landscape';
+import { groundAt, walkable } from '../src/game/terrain';
 
 function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   const frames = Math.max(1, Math.round(seconds / dt));
@@ -304,6 +305,12 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   assert.ok(walkable(sanctuary, 1680, 160), 'a den clearing stays open');
   assert.equal(walkable(sanctuary, 1500, 860), false, 'the river stays shut off the roads');
   assert.ok(walkable(sanctuary, sanctuary.playerBase.x + 150, sanctuary.playerBase.y), 'camp spawn stays open');
+  assert.equal(groundAt(sanctuary, 2360, 1240), 'path', 'the blood moor cobbles stay a path');
+  const tree = sceneryFor(sanctuary).find((prop) => prop.kind === 'tree' && prop.block > 0);
+  assert.ok(tree, 'a large tree has a solid trunk');
+  if (tree) assert.equal(walkable(sanctuary, tree.x, tree.y), false, 'a large tree blocks passage');
+  const tent = sceneryFor(sanctuary).find((prop) => prop.kind === 'tent' && prop.block > 0);
+  assert.ok(tent && !walkable(sanctuary, tent.x, tent.y), 'a tent blocks passage');
   step(sim, emptyInput(), sanctuary.waves.first + 0.25);
   const minions = sim.units.filter((unit) => unit.kind === 'minion' && unit.alive);
   for (const index of [0, 1, 2]) {
