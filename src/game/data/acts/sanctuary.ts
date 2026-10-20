@@ -141,6 +141,30 @@ function laneTowers(path: PathDef): TowerSpawn[] {
   });
 }
 
+function beside(lane: { x: number; y: number }[], t: number, side: number): { x: number; y: number } {
+  const at = along(lane, t);
+  const prev = along(lane, Math.max(0, t - 0.02));
+  const next = along(lane, Math.min(1, t + 0.02));
+  const dx = next.x - prev.x;
+  const dy = next.y - prev.y;
+  const mag = Math.hypot(dx, dy) || 1;
+  return { x: at.x + (-dy / mag) * side, y: at.y + (dx / mag) * side };
+}
+
+const seals = [north, center, south].flatMap((path) =>
+  (['ally', 'enemy'] as const).map((team) => {
+    const at = beside(path.lane, team === 'ally' ? 0.12 : 0.9, team === 'ally' ? 120 : -120);
+    const side = team === 'ally' ? 'Encampment' : 'Harrogath';
+    return {
+      team,
+      path: path.id,
+      x: Math.round(at.x),
+      y: Math.round(at.y),
+      name: `${side} ${path.name} Seal`,
+    };
+  }),
+);
+
 const guardians: TowerSpawn[] = [
   { team: 'ally', tier: 3, role: 'guardian', x: 400, y: 1960, name: 'Encampment Guardian' },
   { team: 'ally', tier: 3, role: 'guardian', x: 760, y: 2280, name: 'Encampment Warden' },
@@ -167,6 +191,17 @@ export const sanctuary: ActDef = {
   march: 'Minions leave both Worldstones.',
   lane: center.lane,
   paths: [north, center, south],
+  seals,
+  pits: [
+    { id: 'herald', x: 1800, y: 700 },
+    { id: 'dragon', x: 2300, y: 1900 },
+  ],
+  shrines: [
+    { x: 1280, y: 1180, kind: 'might' },
+    { x: 2480, y: 1500, kind: 'guard' },
+    { x: 1760, y: 1760, kind: 'haste' },
+    { x: 3180, y: 1500, kind: 'mana' },
+  ],
   dens: [
     { id: 1, x: 1680, y: 160, unit: 'fallen', count: 3, respawn: 22, unique: 'Bishibosh' },
     { id: 2, x: 2480, y: 860, unit: 'skeleton', count: 3, respawn: 22 },

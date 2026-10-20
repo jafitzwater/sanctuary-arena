@@ -2,7 +2,7 @@ import type { ActDef } from './data/acts/types';
 import type { ClassDef } from './data/classes/types';
 
 export type Team = 'ally' | 'enemy' | 'wild';
-export type UnitKind = 'champion' | 'minion' | 'tower' | 'base';
+export type UnitKind = 'champion' | 'minion' | 'tower' | 'base' | 'seal';
 export type Phase = 'playing' | 'victory' | 'defeat';
 
 export interface LeapState {
@@ -48,6 +48,14 @@ export interface Unit {
   pack: number;
   anchorX: number;
   anchorY: number;
+  /** Champion or unique affix. Empty on ordinary units. */
+  affix: string;
+  /** River objective tag: dragon, herald, or baron. */
+  objective: string;
+  mightT: number;
+  guardT: number;
+  haste: number;
+  recall: number;
   targetId: number | null;
   facing: number;
   swing: number;
@@ -145,6 +153,11 @@ export interface Sim {
   pace: 'Normal' | 'Nightmare' | 'Hell';
   /** Seconds until each wilderness den respawns. Indexed by den id. */
   denIn: number[];
+  dragonIn: number;
+  dragonStep: number;
+  heraldIn: number;
+  heraldCount: number;
+  shrineIn: number[];
   banner: { text: string; t: number } | null;
   tip: string;
   tipT: number;
@@ -171,6 +184,7 @@ export interface FrameInput {
   attribute: 'str' | 'dex' | 'vit' | 'energy' | null;
   assignSkill: string | null;
   assignSlot: number;
+  recall: boolean;
 }
 
 export function emptyInput(): FrameInput {
@@ -190,6 +204,7 @@ export function emptyInput(): FrameInput {
     attribute: null,
     assignSkill: null,
     assignSlot: 0,
+    recall: false,
   };
 }
 

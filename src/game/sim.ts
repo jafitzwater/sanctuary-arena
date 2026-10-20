@@ -1,4 +1,4 @@
-import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef } from './data/acts/types';
+import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
 import type { ClassDef } from './data/classes/types';
 import { unitDef } from './data/units';
@@ -58,6 +58,11 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     announcedWave: false,
     pace: 'Normal',
     denIn: [],
+    dragonIn: 18,
+    dragonStep: 0,
+    heraldIn: 22,
+    heraldCount: 0,
+    shrineIn: (map.shrines ?? []).map(() => 0),
     banner: null,
     tip: 'Last-hit Fallen for gold. Points spends skills and stats. Shop at the Encampment.',
     tipT: 9,
@@ -83,6 +88,7 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     spawnDen(sim, den);
     sim.denIn[den.id] = den.respawn;
   }
+  for (const seal of map.seals ?? []) spawnSeal(sim, seal);
   return sim;
 }
 
@@ -117,6 +123,12 @@ function blankUnit(sim: Sim, partial: Pick<Unit, 'defId' | 'kind' | 'team' | 'na
     pack: partial.pack ?? 0,
     anchorX: partial.anchorX ?? 0,
     anchorY: partial.anchorY ?? 0,
+    affix: partial.affix ?? '',
+    objective: partial.objective ?? '',
+    mightT: 0,
+    guardT: 0,
+    haste: 0,
+    recall: 0,
     targetId: null,
     facing: partial.facing ?? 0,
     swing: 0,
@@ -356,6 +368,9 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
 
   waves(sim, step);
   updateDens(sim, step);
+  updateSeals(sim, step);
+  updatePits(sim, step);
+  updateShrines(sim, step);
 
   for (const fx of sim.fx) {
     fx.t += step;
@@ -392,6 +407,9 @@ function tickStatus(sim: Sim, unit: Unit, dt: number): void {
     unit.berserkT = Math.max(0, unit.berserkT - dt);
   }
   unit.invuln = Math.max(0, unit.invuln - dt);
+  unit.mightT = Math.max(0, unit.mightT - dt);
+  unit.guardT = Math.max(0, unit.guardT - dt);
+  unit.haste = Math.max(0, unit.haste - dt);
   unit.hitFlash = Math.max(0, unit.hitFlash - dt);
   unit.swing = Math.max(0, unit.swing - dt * 3.4);
   unit.combat = Math.max(0, unit.combat - dt);
@@ -443,7 +461,9 @@ function advanceLeap(sim: Sim, unit: Unit, dt: number): void {
 }
 
 function moveSpeed(unit: Unit): number {
-  return unit.moveSpeed * (unit.slow > 0 ? 1 - unit.slowPct : 1);
+  const slow = unit.slow > 0 ? 1 - unit.slowPct : 1;
+  const haste = unit.haste > 0 ? 1.18 : 1;
+  return unit.moveSpeed * slow * haste;
 }
 
 function moveToward(unit: Unit, x: number, y: number, dt: number, scale = 1): void {
@@ -465,6 +485,29 @@ function playerPace(sim: Sim, hero: Unit): number {
 }
 
 function updatePlayer(sim: Sim, hero: Unit, input: FrameInput, dt: number): void {
+  if (input.recall && hero.recall <= 0 && hero.stun <= 0 && !hero.leap && hero.whirlT <= 0) {
+    hero.recall = 2.6;
+    banner(sim, 'Returning to the fountain…');
+    return;
+  }
+  if (hero.recall > 0) {
+    const moving = Math.hypot(input.moveX, input.moveY) > 0.15 || input.destX != null;
+    if (moving || hero.stun > 0 || hero.hitFlash > 0) {
+      hero.recall = 0;
+      banner(sim, 'Recall interrupted.');
+    } else {
+      hero.recall -= dt;
+      if (hero.recall <= 0) {
+        const home = sim.map.playerBase;
+        hero.x = home.x + 48;
+        hero.y = home.y;
+        hero.recall = 0;
+        hero.targetId = null;
+        banner(sim, 'The fountain restores you.');
+      }
+    }
+    return;
+  }
   if (hero.stun > 0 || hero.leap) return;
   const direct = Math.hypot(input.moveX, input.moveY) > 0.15;
   const lock = byId(sim, input.targetId);
@@ -704,11 +747,12 @@ function tryStrike(sim: Sim, unit: Unit): void {
   }
   unit.facing = Math.atan2(target.y - unit.y, target.x - unit.x);
   if (!inRange(unit, target) || unit.attackCd > 0) return;
-  const buff = unit.buffT > 0 ? 1 + unit.buffDmg : 1;
+  const buff = (unit.buffT > 0 ? 1 + unit.buffDmg : 1) * (unit.mightT > 0 ? 1.15 : 1);
+  let raw = unit.ad * buff;
+  if (unit.affix === 'Spectral Hit') raw *= 1.3;
   if (unit.ranged) {
-    shoot(sim, unit, target, unit.ad * buff);
+    shoot(sim, unit, target, raw);
   } else {
-    let raw = unit.ad * buff;
     if (unit.bashT > 0) {
       raw = raw * 1.55 + 8;
       target.stun = Math.max(target.stun, 0.5);
@@ -720,6 +764,11 @@ function tryStrike(sim: Sim, unit: Unit): void {
       unit.concentrateT = 0;
     }
     damageUnit(sim, target, raw, unit);
+    if (unit.affix === 'Cursed') {
+      target.slow = Math.max(target.slow, 1.2);
+      target.slowPct = Math.max(target.slowPct, 0.25);
+    }
+    if (unit.affix === 'Mana Burn') target.mana = Math.max(0, target.mana - 12);
     unit.swing = 1;
     ring(sim, target.x, target.y, 18, unit.accent);
   }
@@ -949,6 +998,148 @@ function spawnOnLane(
       );
       index += 1;
     }
+  }
+  if (pathSupers(sim, path, team)) {
+    const unitId = groups[0]?.unit ?? (team === 'ally' ? 'rogue' : 'fallen');
+    const superUnit = spawnMinion(sim, unitId, team, origin.x + fx * 40, origin.y + fy * 40, path);
+    bless(superUnit, AFFIXES[(sim.seed + path + Math.floor(sim.time)) % AFFIXES.length]);
+  }
+}
+
+const AFFIXES = ['Extra Strong', 'Cursed', 'Mana Burn', 'Spectral Hit'] as const;
+
+function pathSupers(sim: Sim, path: number, team: Team): boolean {
+  return sim.units.some(
+    (unit) => unit.kind === 'seal' && !unit.alive && unit.path === path && unit.team !== team && unit.team !== 'wild',
+  );
+}
+
+function bless(unit: Unit, affix: (typeof AFFIXES)[number]): void {
+  unit.affix = affix;
+  unit.name = `${affix} ${unit.name}`;
+  unit.xp = Math.round(unit.xp * 1.8);
+  unit.gold = Math.round(unit.gold * 1.5);
+  if (affix === 'Extra Strong') {
+    unit.maxHp = Math.round(unit.maxHp * 1.35);
+    unit.hp = unit.maxHp;
+    unit.ad = Math.max(1, Math.round(unit.ad * 1.4));
+  }
+}
+
+function spawnSeal(sim: Sim, spec: SealSpawn): void {
+  const path = sim.map.paths?.findIndex((entry) => entry.id === spec.path) ?? 0;
+  blankUnit(sim, {
+    defId: 'seal',
+    kind: 'seal',
+    team: spec.team,
+    name: spec.name,
+    x: spec.x,
+    y: spec.y,
+    radius: 26,
+    hp: 460,
+    maxHp: 460,
+    armor: 8,
+    attackRange: 0,
+    gold: 90,
+    xp: 140,
+    path: path < 0 ? 0 : path,
+    color: spec.team === 'ally' ? '#d4b46a' : '#c44536',
+    accent: '#e6d3a1',
+  });
+}
+
+function updateSeals(sim: Sim, dt: number): void {
+  for (const unit of sim.units) {
+    if (unit.kind !== 'seal' || unit.alive) continue;
+    unit.respawn -= dt;
+    if (unit.respawn > 0) continue;
+    unit.alive = true;
+    unit.hp = unit.maxHp;
+    unit.respawn = 0;
+    banner(sim, `${unit.name} is restored.`);
+  }
+}
+
+function updatePits(sim: Sim, dt: number): void {
+  const pits = sim.map.pits ?? [];
+  const dragonPit = pits.find((pit) => pit.id === 'dragon');
+  const heraldPit = pits.find((pit) => pit.id === 'herald');
+  if (dragonPit) {
+    const up = sim.units.some((unit) => unit.alive && unit.objective === 'dragon');
+    if (up) sim.dragonIn = 36;
+    else {
+      sim.dragonIn -= dt;
+      if (sim.dragonIn <= 0) {
+        spawnDragon(sim, dragonPit.x, dragonPit.y);
+        sim.dragonIn = 36;
+      }
+    }
+  }
+  if (heraldPit) {
+    const up = sim.units.some((unit) => unit.alive && (unit.objective === 'herald' || unit.objective === 'baron'));
+    if (up) sim.heraldIn = 32;
+    else {
+      sim.heraldIn -= dt;
+      if (sim.heraldIn <= 0) {
+        sim.heraldCount += 1;
+        spawnHerald(sim, heraldPit.x, heraldPit.y, sim.heraldCount % 3 === 0);
+        sim.heraldIn = 32;
+      }
+    }
+  }
+}
+
+function spawnDragon(sim: Sim, x: number, y: number): void {
+  const elements = ['Fire', 'Cold', 'Lightning'] as const;
+  const element = elements[sim.dragonStep % elements.length];
+  sim.dragonStep += 1;
+  const unit = spawnMinion(sim, 'demon', 'wild', x, y);
+  unit.objective = 'dragon';
+  unit.affix = element;
+  unit.name = `${element} Horror`;
+  unit.anchorX = x;
+  unit.anchorY = y;
+  unit.maxHp = 420;
+  unit.hp = 420;
+  unit.ad = 16;
+  unit.gold = 80;
+  unit.xp = 110;
+  unit.radius = 22;
+  unit.color = element === 'Cold' ? '#8fd0e8' : element === 'Lightning' ? '#e6d56a' : '#e05a32';
+  unit.accent = '#fff4e0';
+}
+
+function spawnHerald(sim: Sim, x: number, y: number, baron: boolean): void {
+  const unit = spawnMinion(sim, baron ? 'mummy' : 'goatman', 'wild', x, y);
+  unit.objective = baron ? 'baron' : 'herald';
+  unit.name = baron ? 'Blood Baron' : 'Herald';
+  unit.anchorX = x;
+  unit.anchorY = y;
+  unit.maxHp = baron ? 760 : 520;
+  unit.hp = unit.maxHp;
+  unit.ad = baron ? 22 : 16;
+  unit.gold = baron ? 150 : 70;
+  unit.xp = baron ? 180 : 80;
+  unit.radius = baron ? 26 : 22;
+  unit.moveSpeed = baron ? 78 : 64;
+  unit.color = baron ? '#6a2040' : '#8a7040';
+  unit.accent = '#e6c864';
+}
+
+function updateShrines(sim: Sim, dt: number): void {
+  const shrines = sim.map.shrines ?? [];
+  const hero = player(sim);
+  for (let i = 0; i < shrines.length; i++) {
+    sim.shrineIn[i] = Math.max(0, (sim.shrineIn[i] ?? 0) - dt);
+    if (!hero.alive || sim.shrineIn[i] > 0) continue;
+    const shrine = shrines[i];
+    if (Math.hypot(hero.x - shrine.x, hero.y - shrine.y) > 42) continue;
+    sim.shrineIn[i] = 28;
+    if (shrine.kind === 'might') hero.mightT = Math.max(hero.mightT, 12);
+    if (shrine.kind === 'guard') hero.guardT = Math.max(hero.guardT, 12);
+    if (shrine.kind === 'haste') hero.haste = Math.max(hero.haste, 12);
+    if (shrine.kind === 'mana') hero.mana = hero.maxMana;
+    banner(sim, `A ${shrine.kind} shrine answers.`);
   }
 }
 
