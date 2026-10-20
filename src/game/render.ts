@@ -60,8 +60,11 @@ export class Renderer {
   private reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private gait = new Map<number, { x: number; y: number; d: number }>();
   private facingRow = new Map<number, number>();
-  private drawPos = new Map<number, { x: number; y: number }>();
+  private aim = new Map<number, number>();
   private frameDt = 0;
+  private floor: HTMLCanvasElement | null = null;
+  private readonly cutouts = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
+  private readonly cutSources = new Set<HTMLImageElement>();
   private readonly art = {
     raven: loadImage(monsterSheets.raven),
     ravenWalk: loadImage(monsterSheets.ravenWalk),
@@ -111,8 +114,17 @@ export class Renderer {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Canvas 2D is unavailable');
     this.ctx = ctx;
+    for (const img of [
+      ...this.props.tree,
+      ...this.props.rock,
+      ...this.props.fence,
+      ...this.props.tent,
+      ...this.props.stone,
+      this.akaraSheet,
+    ]) this.cutSources.add(img);
     const bump = () => {
       this.mapKey = '';
+      this.floor = null;
     };
     this.ground.onload = bump;
   }
@@ -181,21 +193,24 @@ export class Renderer {
     const ctx = this.ctx;
     const { dpr, cssW, cssH } = this.camera;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.imageSmoothingEnabled = true;
-    ctx.fillStyle = '#070605';
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = '#1c2410';
     ctx.fillRect(0, 0, cssW, cssH);
     if (this.mapCanvas) {
-      const srcW = cssW / this.scale;
-      const srcH = cssH / this.scale;
-      ctx.drawImage(this.mapCanvas, this.camBakeX, this.camBakeY, srcW, srcH, 0, 0, cssW, cssH);
+      const srcX = Math.round(this.camBakeX);
+      const srcY = Math.round(this.camBakeY);
+      const srcW = Math.max(1, Math.round(cssW / this.scale));
+      const srcH = Math.max(1, Math.round(cssH / this.scale));
+      ctx.drawImage(this.mapCanvas, srcX, srcY, srcW, srcH, 0, 0, cssW, cssH);
     }
-    ctx.imageSmoothingEnabled = false;
 
     const u = this.spriteScale();
-    const layers: { depth: number; paint: () => void }[] = [];
+    // Screen foot-Y is (x + y). Props lose ties so a unit at the same base draws in front.
+    const layers: { depth: number; front: number; paint: () => void }[] = [];
     for (const prop of this.scenery) {
       layers.push({
         depth: prop.x + prop.y,
+        front: 0,
         paint: () => this.drawScenery(ctx, prop, u),
       });
     }
@@ -203,11 +218,12 @@ export class Renderer {
     const units = sim.units.filter((unit) => unit.alive || unit.corpse > 0 || unit.kind !== 'minion');
     for (const unit of units) {
       layers.push({
-        depth: unit.x + unit.y + (unit.kind === 'base' ? -8 : 0),
+        depth: unit.x + unit.y,
+        front: 1,
         paint: () => this.drawUnit(ctx, unit, opts, u, this.armorTier(sim)),
       });
     }
-    layers.sort((a, b) => a.depth - b.depth);
+    layers.sort((a, b) => a.depth - b.depth || a.front - b.front);
     for (const layer of layers) layer.paint();
 
     for (const shot of sim.projectiles) {
@@ -271,7 +287,7 @@ export class Renderer {
     const ox = map.height * hw + PAD;
     const oy = PAD;
     ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = '#100c09';
+    ctx.fillStyle = '#1c2410';
     ctx.fillRect(0, 0, width, height);
     if (ready) this.stampGround(ctx, map, ox, oy, hw);
     this.scenery = sceneryFor(map);
@@ -298,13 +314,11 @@ export class Renderer {
       for (let i = -2; i <= i1; i++) {
         const kind = groundAt(map, i * step, j * step);
         const row = rows[kind];
-        let col = Math.abs((i * 3 + j * 5) % 4);
-        if (kind === 'river') col %= 2;
-        if (kind === 'dark') col = 2 + (col % 2);
+        const col = floorCol(kind, i, j);
         const sx = Math.round((i - j) * 80 + ox);
         const sy = Math.round((i + j) * 40 + oy);
-        // One extra pixel on every side so the diamonds overlap and the bake has no seams.
-        ctx.drawImage(this.ground, col * 160, row * 80, 160, 80, sx - 81, sy - 41, 162, 82);
+        // One extra pixel on every side so integer diamonds meet with no seam.
+        ctx.drawImage(this.floorSheet(), col * 160, row * 80, 160, 80, sx - 81, sy - 41, 162, 82);
       }
     }
   }
@@ -328,8 +342,7 @@ export class Renderer {
   }
 
   private drawUnit(ctx: CanvasRenderingContext2D, unit: Unit, opts: DrawOpts, u: number, tier: ArmorTier): void {
-    const at = this.eased(unit);
-    const p = this.project(at.x, at.y);
+    const p = this.project(unit.x, unit.y);
     if (p.x < -160 || p.y < -200 || p.x > this.camera.cssW + 160 || p.y > this.camera.cssH + 60) return;
     const gait = this.gaitOf(unit);
     let y = p.y;
@@ -423,8 +436,8 @@ export class Renderer {
   }
 
   private sheetFor(unit: Unit, moving: boolean, phase: number, tier: ArmorTier): Glyph | null {
-    const raw = this.dirRow(unit.facing);
-    const row = unit.whirlT > 0 ? raw : this.stepRow(unit.id, raw);
+    const delta = this.screenDelta(unit.facing);
+    const row = unit.whirlT > 0 ? this.rowOf(delta) : this.heldRow(unit.id, this.smoothAim(unit.id, delta));
     if (unit.kind === 'seal') return this.full(this.props.rock[0], false);
     if (unit.defId === 'base-ally' || unit.defId === 'base-enemy') return this.full(this.bannerSheet, false);
     if (unit.defId === 'tower') return this.full(this.props.rock[unit.alive ? 2 : 0], false);
@@ -469,16 +482,37 @@ export class Renderer {
     return null;
   }
 
-  /** Turn at most one direction row per frame so a facing change does not pop. */
-  private stepRow(id: number, target: number): number {
-    const prev = this.facingRow.get(id);
-    if (prev == null) {
-      this.facingRow.set(id, target);
+  /** Ease the facing angle, then keep the current sheet row until the stick leaves its sector. */
+  private smoothAim(id: number, target: number): number {
+    const prev = this.aim.get(id);
+    const dt = this.frameDt;
+    if (prev == null || dt <= 0) {
+      this.aim.set(id, target);
       return target;
     }
-    let delta = (target - prev + 8) % 8;
-    if (delta > 4) delta -= 8;
-    const next = delta === 0 ? prev : (prev + Math.sign(delta) + 8) % 8;
+    let turn = target - prev;
+    if (turn > Math.PI) turn -= Math.PI * 2;
+    else if (turn < -Math.PI) turn += Math.PI * 2;
+    const next = wrapAngle(prev + turn * (1 - Math.exp(-dt * 36)));
+    this.aim.set(id, next);
+    return next;
+  }
+
+  private heldRow(id: number, delta: number): number {
+    const prev = this.facingRow.get(id);
+    const quant = this.rowOf(delta);
+    if (prev == null) {
+      this.facingRow.set(id, quant);
+      return quant;
+    }
+    const center = (prev + 0.25) * (Math.PI / 4);
+    let gap = delta - center;
+    if (gap > Math.PI) gap -= Math.PI * 2;
+    else if (gap < -Math.PI) gap += Math.PI * 2;
+    if (Math.abs(gap) <= Math.PI / 8 + Math.PI / 18) return prev;
+    let step = (quant - prev + 8) % 8;
+    if (step > 4) step -= 8;
+    const next = step === 0 ? prev : (prev + Math.sign(step) + 8) % 8;
     this.facingRow.set(id, next);
     return next;
   }
@@ -497,12 +531,15 @@ export class Renderer {
   }
 
   /** Sheet row 0 faces the camera. Later rows turn clockwise, two source rows per step. */
-  private dirRow(facing: number): number {
+  private screenDelta(facing: number): number {
     const sx = Math.cos(facing) - Math.sin(facing);
     const sy = Math.cos(facing) + Math.sin(facing);
-    let delta = Math.atan2(sy, sx) - Math.PI / 2;
-    if (delta < 0) delta += Math.PI * 2;
-    return Math.floor((Math.round(delta / (Math.PI / 8)) % 16) / 2) % 8;
+    return wrapAngle(Math.atan2(sy, sx) - Math.PI / 2);
+  }
+
+  private rowOf(delta: number): number {
+    const index = Math.round(wrapAngle(delta) / (Math.PI / 8)) % 16;
+    return Math.floor(index / 2) % 8;
   }
 
   private full(img: Sheet, flip: boolean): Glyph | null {
@@ -520,31 +557,6 @@ export class Renderer {
   }
 
 
-  /** Ease the hero toward the sim point. Frame choice still uses the true step. */
-  private eased(unit: Unit): { x: number; y: number } {
-    if (unit.defId !== 'barbarian') return { x: unit.x, y: unit.y };
-    const prev = this.drawPos.get(unit.id);
-    const dt = this.frameDt;
-    if (!prev || dt <= 0) {
-      const at = { x: unit.x, y: unit.y };
-      this.drawPos.set(unit.id, at);
-      return at;
-    }
-    const gap = Math.hypot(unit.x - prev.x, unit.y - prev.y);
-    if (gap > 72) {
-      const at = { x: unit.x, y: unit.y };
-      this.drawPos.set(unit.id, at);
-      return at;
-    }
-    const t = 1 - Math.exp(-dt * 28);
-    const at = {
-      x: prev.x + (unit.x - prev.x) * t,
-      y: prev.y + (unit.y - prev.y) * t,
-    };
-    this.drawPos.set(unit.id, at);
-    return at;
-  }
-
   private gaitOf(unit: Unit): { moving: boolean; d: number } {
     const prev = this.gait.get(unit.id);
     let d = prev?.d ?? 0;
@@ -558,6 +570,109 @@ export class Renderer {
     return { moving, d };
   }
 
+  /** Drop the magenta RGB stored in the floor sheet's transparent pixels. */
+  private floorSheet(): HTMLCanvasElement | HTMLImageElement {
+    if (this.floor) return this.floor;
+    const img = this.ground;
+    if (!img.complete || img.naturalWidth < 640) return img;
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return img;
+    ctx.drawImage(img, 0, 0);
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const px = data.data;
+    // Some cells store the diamond shifted, with the overflow wrapped around the cell.
+    const src = new Uint8ClampedArray(px);
+    const cellW = 160;
+    const cellH = 80;
+    for (let row = 0; row < FLOOR_SEAT.length; row++) {
+      for (let col = 0; col < 4; col++) {
+        const shift = FLOOR_SEAT[row][col];
+        if (!shift) continue;
+        for (let y = 0; y < cellH; y++) {
+          const from = ((row * cellH + (y + shift) % cellH) * canvas.width + col * cellW) * 4;
+          px.set(src.subarray(from, from + cellW * 4), ((row * cellH + y) * canvas.width + col * cellW) * 4);
+        }
+      }
+    }
+    for (let i = 0; i < px.length; i += 4) {
+      const magenta = px[i] > 200 && px[i + 2] > 180 && px[i + 1] < 80;
+      if (px[i + 3] < 16 || magenta) {
+        px[i] = 28;
+        px[i + 1] = 34;
+        px[i + 2] = 14;
+        px[i + 3] = 0;
+      }
+    }
+    ctx.putImageData(data, 0, 0);
+    this.floor = canvas;
+    return canvas;
+  }
+
+  private prepare(img: Sheet): Sheet {
+    if (!(img instanceof HTMLImageElement) || !this.cutSources.has(img)) return img;
+    return this.cutout(img);
+  }
+
+  /** Clear edge-connected matte on trees, walls, and ruins. Interior shadow stays. */
+  private cutout(img: HTMLImageElement): Sheet {
+    const cached = this.cutouts.get(img);
+    if (cached) return cached;
+    if (!img.complete || img.naturalWidth === 0) return img;
+    const canvas = document.createElement('canvas');
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return img;
+    ctx.drawImage(img, 0, 0);
+    const data = ctx.getImageData(0, 0, w, h);
+    const px = data.data;
+    const matte = (i: number) => {
+      const r = px[i];
+      const g = px[i + 1];
+      const b = px[i + 2];
+      const a = px[i + 3];
+      if (a < 16) return true;
+      if (r > 200 && b > 180 && g < 80) return true;
+      if (r > 140 && b > 100 && g < 60 && b > g + 60 && r > g + 80) return true;
+      if (r > 240 && g > 240 && b > 240) return true;
+      return r < 20 && g < 20 && b < 20;
+    };
+    const kill = new Uint8Array(w * h);
+    const queue: number[] = [];
+    const seed = (p: number) => {
+      if (kill[p] || !matte(p * 4)) return;
+      kill[p] = 1;
+      queue.push(p);
+    };
+    for (let y = 0; y < h; y++) {
+      seed(y * w);
+      seed(y * w + w - 1);
+    }
+    for (let x = 0; x < w; x++) {
+      seed(x);
+      seed((h - 1) * w + x);
+    }
+    while (queue.length) {
+      const p = queue.pop() as number;
+      const x = p % w;
+      if (x > 0) seed(p - 1);
+      if (x + 1 < w) seed(p + 1);
+      if (p >= w) seed(p - w);
+      if (p + w < w * h) seed(p + w);
+    }
+    for (let p = 0; p < kill.length; p++) {
+      if (kill[p]) px[p * 4 + 3] = 0;
+    }
+    ctx.putImageData(data, 0, 0);
+    this.cutouts.set(img, canvas);
+    return canvas;
+  }
+
   private blit(
     ctx: CanvasRenderingContext2D,
     img: Sheet,
@@ -568,8 +683,9 @@ export class Renderer {
     src?: Glyph,
     outline = false,
   ): void {
-    const iw = src ? src.sw : img instanceof HTMLImageElement ? img.naturalWidth : img.width;
-    const ih = src ? src.sh : img instanceof HTMLImageElement ? img.naturalHeight : img.height;
+    const sheet = this.prepare(img);
+    const iw = src ? src.sw : sheet instanceof HTMLImageElement ? sheet.naturalWidth : sheet.width;
+    const ih = src ? src.sh : sheet instanceof HTMLImageElement ? sheet.naturalHeight : sheet.height;
     if (!iw || !ih) return;
     const dh = Math.max(1, Math.round(height));
     const dw = Math.max(1, Math.round((iw / ih) * dh));
@@ -580,8 +696,8 @@ export class Renderer {
     const dx = -Math.round(dw / 2);
     const dy = -dh;
     const paint = (ox: number, oy: number) => {
-      if (src) ctx.drawImage(img, src.sx, src.sy, src.sw, src.sh, dx + ox, dy + oy, dw, dh);
-      else ctx.drawImage(img, dx + ox, dy + oy, dw, dh);
+      if (src) ctx.drawImage(sheet, src.sx, src.sy, src.sw, src.sh, dx + ox, dy + oy, dw, dh);
+      else ctx.drawImage(sheet, dx + ox, dy + oy, dw, dh);
     };
     if (outline) {
       ctx.save();
@@ -701,7 +817,31 @@ export class Renderer {
   }
 }
 
+/** Roll, in pixels, that seats each floor cell on the 160×80 diamond. */
+const FLOOR_SEAT: readonly (readonly number[])[] = [
+  [12, 12, 12, 12],
+  [12, 0, 12, 0],
+  [12, 0, 0, 18],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [6, 6, 6, 0],
+];
+
+function floorCol(kind: GroundKind, i: number, j: number): number {
+  const cols =
+    kind === 'path' ? [0, 3] :
+    kind === 'bank' || kind === 'edge' ? [0, 2] :
+    kind === 'river' || kind === 'dark' ? [0, 1] :
+    [0, 1, 2, 3];
+  return cols[Math.abs((i * 3 + j * 5) % cols.length)];
+}
+
 function roadPoints(map: ActDef, lane: Vec[]): Vec[] {
   return [map.playerBase, ...lane, map.enemyBase];
+}
+
+function wrapAngle(angle: number): number {
+  const turn = angle % (Math.PI * 2);
+  return turn < 0 ? turn + Math.PI * 2 : turn;
 }
 

@@ -306,6 +306,15 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   assert.equal(walkable(sanctuary, 1500, 860), false, 'the river stays shut off the roads');
   assert.ok(walkable(sanctuary, sanctuary.playerBase.x + 150, sanctuary.playerBase.y), 'camp spawn stays open');
   assert.equal(groundAt(sanctuary, 2360, 1240), 'path', 'the blood moor cobbles stay a path');
+  assert.equal(groundAt(sanctuary, 1500, 1100), 'grass', 'open ground between the paths is grass');
+  assert.equal(groundAt(sanctuary, 20, 20), 'grass', 'the map edge is grass, not a void');
+  for (let y = 0; y < sanctuary.height; y += 80) {
+    for (let x = 0; x < sanctuary.width; x += 80) {
+      const kind = groundAt(sanctuary, x, y);
+      assert.notEqual(kind, 'edge', `no path border at ${x},${y}`);
+      assert.notEqual(kind, 'dark', `no void tile at ${x},${y}`);
+    }
+  }
   const tree = sceneryFor(sanctuary).find((prop) => prop.kind === 'tree' && prop.block > 0);
   assert.ok(tree, 'a large tree has a solid trunk');
   if (tree) assert.equal(walkable(sanctuary, tree.x, tree.y), false, 'a large tree blocks passage');
