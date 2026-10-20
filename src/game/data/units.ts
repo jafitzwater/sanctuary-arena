@@ -50,15 +50,17 @@ function fromMon(id: string): UnitDef {
 }
 
 /**
- * Lane creeps and Act I monsters. Fallen, Zombie, and Quill Rat numbers come
- * from MonStats via src/game/data/d2. Rogues stay hand-authored allies.
+ * Lane creeps and Act I monsters. Fallen, Zombie, and Quill Rat shapes come
+ * from MonStats. Life and damage are about 31% of the old skirmish figures
+ * (240/780) so they match the Barbarian's new life. Speeds stay slower than
+ * the hero's run of 216.
  */
 export const UNIT_DEFS: Record<string, UnitDef> = {
   rogue: {
     id: 'rogue',
     name: 'Rogue',
-    hp: 340,
-    ad: 22,
+    hp: 105,
+    ad: 7,
     armor: 4,
     moveSpeed: 102,
     attackRange: 52,
@@ -75,8 +77,8 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
   'rogue-archer': {
     id: 'rogue-archer',
     name: 'Rogue Archer',
-    hp: 240,
-    ad: 20,
+    hp: 74,
+    ad: 6,
     armor: 2,
     moveSpeed: 98,
     attackRange: 200,
@@ -90,9 +92,9 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
     color: '#35506a',
     accent: '#e6d3a1',
   },
-  fallen: fromMon('fallen'),
-  zombie: fromMon('zombie'),
-  quillrat: fromMon('quillrat'),
+  fallen: { ...fromMon('fallen'), hp: 76, ad: 6 },
+  zombie: { ...fromMon('zombie'), hp: 174, ad: 7 },
+  quillrat: { ...fromMon('quillrat'), hp: 94, ad: 6 },
 };
 
 export function unitDef(id: string): UnitDef {

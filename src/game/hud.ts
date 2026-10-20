@@ -159,8 +159,8 @@ export class Hud {
       }
       const row = target.closest<HTMLElement>('[data-skill]');
       if (!row?.dataset.skill) return;
-      if (row.classList.contains('locked')) {
-        this.onUpgrade?.(row.dataset.skill);
+      if (row.classList.contains('locked') || row.classList.contains('unlearned')) {
+        if (row.classList.contains('unlearned') && !row.classList.contains('locked')) this.onUpgrade?.(row.dataset.skill);
         return;
       }
       // Leave the pointer with the scroller until the gesture is clearly a sideways drag.
@@ -289,7 +289,7 @@ export class Hud {
       '#title-skills',
       keyed.length
         ? keyed.map((skill) => `${skill.key} ${skill.name}`).join('   ')
-        : 'Bash starts on Q. Press T to spend points. Drag a skill onto the belt, or tap a skill and then a slot.',
+        : 'Bash starts on Q. Press T to spend points. Learn a skill before it can go on the belt.',
     );
   }
 
@@ -605,7 +605,7 @@ export class Hud {
       '#equip-hint',
       pending
         ? `${pending.name} selected. Tap Q W E R, or drag it onto a slot.`
-        : 'Drag a skill onto a slot, or tap a skill and then a slot. New skills fill an empty slot.',
+        : 'Spend + to learn a skill. Only rank 1 or higher can go on the belt. Drag it onto a slot, or tap it and then a slot.',
     );
     for (const key of ['str', 'dex', 'vit', 'energy'] as const) {
       const node = this.root.querySelector(`[data-attr-val="${key}"]`);
@@ -634,6 +634,7 @@ export class Hud {
       }
       const node = this.root.querySelector<HTMLButtonElement>(`[data-skill="${skill.id}"]`);
       node?.classList.toggle('locked', !unlocked);
+      node?.classList.toggle('unlearned', rank < 1);
       node?.classList.toggle('on-belt', where >= 0);
       node?.classList.toggle('picked', this.pendingSkill === skill.id);
       const plus = node?.querySelector<HTMLElement>('[data-upgrade]');
