@@ -64,6 +64,7 @@ export class InputController {
 
     this.canvas.addEventListener('contextmenu', (event) => event.preventDefault());
     this.canvas.addEventListener('pointerdown', (event) => this.onCanvasDown(event));
+    installZoomLock();
 
     stick.addEventListener('pointerdown', (event) => {
       if (!this.hooks.isPlaying()) return;
@@ -103,6 +104,10 @@ export class InputController {
     document.addEventListener(
       'touchmove',
       (event) => {
+        if (event.touches.length > 1) {
+          event.preventDefault();
+          return;
+        }
         const target = event.target as HTMLElement | null;
         if (target?.closest('#shop, #help, #title, #end, #topbar, #belt')) return;
         event.preventDefault();
@@ -220,10 +225,18 @@ export class InputController {
     if (!this.hooks.isPlaying()) return;
     if (event.button !== 0 && event.button !== 2) return;
     const rect = this.canvas.getBoundingClientRect();
-    const world = this.hooks.getWorld(event.clientX - rect.left, event.clientY - rect.top);
     this.pointerX = event.clientX;
     this.pointerY = event.clientY;
     this.pointerSeen = true;
+    this.hooks.closeOverlays();
+    event.preventDefault();
+    // A finger must not walk the hero. Movement on touch is the joystick only.
+    // Mouse and pen still click the ground to move, or click an enemy to chase.
+    if (event.pointerType === 'touch') {
+      this.dest = null;
+      return;
+    }
+    const world = this.hooks.getWorld(event.clientX - rect.left, event.clientY - rect.top);
     const sim = this.hooks.getSim();
     if (!sim) return;
     const hit = pickEnemy(sim, world.x, world.y);
@@ -234,8 +247,6 @@ export class InputController {
       this.targetId = null;
       this.dest = { x: world.x, y: world.y };
     }
-    this.hooks.closeOverlays();
-    event.preventDefault();
   }
 
   private moveStick(stick: HTMLElement, knob: HTMLElement, event: PointerEvent): void {
@@ -263,6 +274,39 @@ export class InputController {
     this.joyY = 0;
     this.stickId = null;
     knob.style.transform = 'translate(0px, 0px)';
+  }
+}
+
+/**
+ * iOS Safari and Android Chrome still double-tap zoom while mashing buttons,
+ * even when the viewport sets user-scalable=no. Cancel the second tap of a
+ * quick pair, pinch, and the legacy iOS gesture events. Pointer handlers for
+ * Attack and skills run before touchstart, so those taps still register.
+ */
+function installZoomLock(): void {
+  let lastStart = 0;
+  document.addEventListener(
+    'touchstart',
+    (event) => {
+      const now = performance.now();
+      if (event.touches.length > 1 || now - lastStart < 320) event.preventDefault();
+      lastStart = now;
+    },
+    { passive: false, capture: true },
+  );
+  let lastEnd = 0;
+  document.addEventListener(
+    'touchend',
+    (event) => {
+      const now = performance.now();
+      if (now - lastEnd < 320) event.preventDefault();
+      lastEnd = now;
+    },
+    { passive: false, capture: true },
+  );
+  document.addEventListener('dblclick', (event) => event.preventDefault(), { capture: true });
+  for (const name of ['gesturestart', 'gesturechange', 'gestureend', 'gesturemove']) {
+    document.addEventListener(name, (event) => event.preventDefault(), { passive: false, capture: true });
   }
 }
 

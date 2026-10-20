@@ -25,13 +25,12 @@ The Barbarian starts with Bash. Leap, War Cry, and Whirlwind unlock at levels 2,
 
 Turn the phone sideways. Portrait shows a rotate hint and pauses the match.
 
-- The red orb (bottom left) is life. The blue orb (bottom right) is mana. The stick sits above the life orb and moves you on the screen, including diagonally along the isometric ground.
-- **Attack** and the skill belt sit along the bottom. Attack strikes whatever is in reach. Tap an enemy to lock onto them, then walk in with the stick.
-- Tap empty ground to walk there when you are not using the stick.
+- The red orb (bottom left) is life. The blue orb (bottom right) is mana. The stick sits above the life orb and is the only way to move, including diagonally along the isometric ground. Tapping the map does not walk or chase.
+- **Attack** and the skill belt sit along the bottom. Attack strikes whatever is already in reach. Walk into range with the stick, then hold Attack.
 - The four belt buttons cast skills. A gold **+** spends a skill point (tap the main button to learn a skill you do not know yet).
 - **HP** / **MP** drink potions. **Shop** always opens Akara's list. Outside the Rogue Encampment the button reads **Shop · camp**, the panel stays open, and it says she will not sell until you walk back. Buys stay disabled out there. Buttons are sized for thumbs and respond to the tap itself, not a delayed click.
 
-The page sets `maximum-scale=1` and `user-scalable=no`, and touch scrolling is swallowed outside the shop and help sheets so the browser does not zoom or pull the page.
+The page sets `minimum-scale=1`, `maximum-scale=1`, and `user-scalable=no`. The game surface uses `touch-action: none`. A second tap within a third of a second, a pinch, and iOS `gesturestart` / `gesturechange` / `gestureend` are cancelled so mashing Attack or a skill cannot zoom the page on iOS Safari or Android Chrome. Shop and help sheets still scroll vertically.
 
 ### Mouse and keyboard
 
