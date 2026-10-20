@@ -1,10 +1,8 @@
 import { act1 } from './data/acts/act1';
 import { barbarian } from './data/classes/barbarian';
-import { inShopRange } from './combat';
 import { AudioBus } from './audio';
 import { Hud } from './hud';
 import { InputController } from './input';
-import { player } from './query';
 import { Renderer } from './render';
 import { createMatch, updateSim } from './sim';
 import type { Sim } from './types';
@@ -106,10 +104,6 @@ export class Game {
     if (playing) {
       const input = this.input.snapshot();
       updateSim(this.sim, input, dt);
-      if (this.hud.shopOpen) {
-        const hero = player(this.sim);
-        if (hero.alive && !inShopRange(this.sim, hero)) this.hud.shopOpen = false;
-      }
       if (this.sim.phase !== 'playing') {
         this.mode = 'end';
         this.hud.shopOpen = false;

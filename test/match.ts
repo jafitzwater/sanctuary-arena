@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { projectIso, screenVectorToWorld, unprojectIso } from '../src/game/iso';
 import { distToPolyline } from '../src/game/math';
 import { act1 } from '../src/game/data/acts/act1';
 import { getAct } from '../src/game/data/acts';
@@ -13,6 +14,17 @@ import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
 function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   const frames = Math.max(1, Math.round(seconds / dt));
   for (let i = 0; i < frames; i++) updateSim(sim, input, dt);
+}
+
+{
+  const projected = projectIso(100, 40, 2, 5, 7);
+  const back = unprojectIso(projected.x, projected.y, 2, 5, 7);
+  assert.ok(Math.abs(back.x - 100) < 1e-6);
+  assert.ok(Math.abs(back.y - 40) < 1e-6);
+  const up = screenVectorToWorld(0, -1);
+  assert.ok(up.x < 0 && up.y < 0);
+  const right = screenVectorToWorld(1, 0);
+  assert.ok(right.x > 0 && right.y < 0);
 }
 
 {

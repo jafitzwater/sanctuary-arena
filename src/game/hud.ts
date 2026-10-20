@@ -1,3 +1,4 @@
+import portraitUrl from '../assets/art/barbarian/idle.png';
 import { ITEMS, type ItemDef } from './data/items';
 import { inShopRange, MAX_LEVEL, xpToNext } from './combat';
 import { player } from './query';
@@ -23,22 +24,17 @@ export class Hud {
   constructor(private root: HTMLElement) {}
 
   bind(): void {
-    const play = this.root.querySelector<HTMLButtonElement>('#play-btn');
-    const again = this.root.querySelector<HTMLButtonElement>('#again-btn');
-    const shopBtn = this.root.querySelector<HTMLButtonElement>('#shop-btn');
-    const helpBtn = this.root.querySelector<HTMLButtonElement>('#help-btn');
-    const muteBtn = this.root.querySelector<HTMLButtonElement>('#mute-btn');
-    const closeShop = this.root.querySelector<HTMLButtonElement>('#shop-close');
-    const closeHelp = this.root.querySelector<HTMLButtonElement>('#help-close');
-    play?.addEventListener('click', () => this.onPlay?.());
-    again?.addEventListener('click', () => this.onAgain?.());
-    shopBtn?.addEventListener('click', () => this.onToggleShop?.());
-    helpBtn?.addEventListener('click', () => this.onToggleHelp?.());
-    muteBtn?.addEventListener('click', () => this.onToggleMute?.());
-    closeShop?.addEventListener('click', () => {
+    const portrait = this.root.querySelector<HTMLImageElement>('#portrait-img');
+    if (portrait) portrait.src = portraitUrl;
+    this.arm('#play-btn', () => this.onPlay?.());
+    this.arm('#again-btn', () => this.onAgain?.());
+    this.arm('#shop-btn', () => this.onToggleShop?.());
+    this.arm('#help-btn', () => this.onToggleHelp?.());
+    this.arm('#mute-btn', () => this.onToggleMute?.());
+    this.arm('#shop-close', () => {
       this.shopOpen = false;
     });
-    closeHelp?.addEventListener('click', () => {
+    this.arm('#help-close', () => {
       this.helpOpen = false;
     });
     this.root.querySelector('#potion-hp')?.addEventListener('pointerdown', (event) => {
@@ -130,12 +126,15 @@ export class Hud {
     const near = !hero.alive || inShopRange(sim, hero);
     const shop = this.q('#shop');
     shop.hidden = !this.shopOpen;
+    shop.classList.toggle('far', !near);
     const note = this.q('#shop-note');
     note.textContent = near
       ? hero.alive
         ? 'Akara will trade while you stand in the Encampment.'
         : 'You may trade while you wait to return.'
-      : 'Return to the Rogue Encampment to trade.';
+      : 'Outside the Rogue Encampment. Walk back to camp — Akara will not sell out here.';
+    const shopBtn = this.root.querySelector<HTMLButtonElement>('#shop-btn');
+    if (shopBtn) shopBtn.textContent = near ? 'Shop' : 'Shop · camp';
     this.syncSkills(sim);
     this.syncShop(sim, near);
     this.text('#potion-hp-count', String(sim.potions.health));
@@ -274,7 +273,41 @@ export class Hud {
 
   private setBar(sel: string, pct: number): void {
     const node = this.root.querySelector<HTMLElement>(sel);
-    if (node) node.style.width = `${Math.max(0, Math.min(1, pct)) * 100}%`;
+    if (!node) return;
+    const clamped = Math.max(0, Math.min(1, pct));
+    if (node.classList.contains('orb-liquid')) node.style.setProperty('--fill', String(clamped));
+    else node.style.width = `${clamped * 100}%`;
+  }
+
+  /**
+   * Phones often drop a click when the finger jitters, because touchmove is
+   * cancelled on the page. Pointer capture + pointerup still fires. Click is
+   * kept for keyboard activation and debounced so it cannot toggle twice.
+   */
+  private arm(selector: string, fn: () => void): void {
+    const el = this.root.querySelector<HTMLElement>(selector);
+    if (!el) return;
+    let last = 0;
+    const go = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const now = performance.now();
+      if (now - last < 450) return;
+      last = now;
+      fn();
+    };
+    el.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        el.setPointerCapture(event.pointerId);
+      } catch {
+        /* element cannot capture */
+      }
+    });
+    el.addEventListener('pointerup', go);
+    el.addEventListener('click', go);
   }
 }
 
