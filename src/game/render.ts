@@ -1,18 +1,12 @@
-import moorUrl from '../assets/art/moor.png';
-import { d2Atlas, monsterSheets, propSheets } from './art/sheets';
+import { actProps, d2Atlas, monsterSheets } from './art/sheets';
 import type { ActDef } from './data/acts/types';
 import { projectIso, unprojectIso } from './iso';
-import { distToPolyline, Rng, type Vec } from './math';
+import type { Prop } from './landscape';
+import { sceneryFor } from './landscape';
+import type { Vec } from './math';
 import { player } from './query';
+import { groundAt, type GroundKind } from './terrain';
 import type { Camera, Sim, Unit } from './types';
-
-interface Scenery {
-  kind: 'tree' | 'dead' | 'tent' | 'wall' | 'npc' | 'seal' | 'fountain';
-  x: number;
-  y: number;
-  s: number;
-  flip: boolean;
-}
 
 export interface DrawOpts {
   mode: 'title' | 'play' | 'end';
@@ -54,7 +48,7 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private mapCanvas: HTMLCanvasElement | null = null;
   private mapKey = '';
-  private scenery: Scenery[] = [];
+  private scenery: Prop[] = [];
   private snapped = false;
   private focusX = 0;
   private focusY = 0;
@@ -65,16 +59,18 @@ export class Renderer {
   private oy = 0;
   private reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private gait = new Map<number, { x: number; y: number; d: number }>();
+  private facingRow = new Map<number, number>();
   private mapRef: ActDef | null = null;
-  private readonly moor = loadImage(moorUrl);
   private readonly art = {
     raven: loadImage(monsterSheets.raven),
     ravenWalk: loadImage(monsterSheets.ravenWalk),
-    tent: loadImage(propSheets.tent),
-    fire: loadImage(propSheets.fire),
-    wall: loadImage(propSheets.wall),
-    tower: loadImage(propSheets.tower),
-    altar: loadImage(propSheets.altar),
+  };
+  private readonly props = {
+    tree: actProps.tree.map(loadImage),
+    rock: actProps.rock.map(loadImage),
+    fence: actProps.fence.map(loadImage),
+    tent: actProps.tent.map(loadImage),
+    stone: actProps.stone.map(loadImage),
   };
   private readonly mobs = {
     fallenIdle: loadImage(d2Atlas.fallen.idle),
@@ -107,8 +103,7 @@ export class Renderer {
   };
   private readonly rogueSheet = loadImage(d2Atlas.rogue);
   private readonly akaraSheet = loadImage(d2Atlas.akara);
-  private readonly townFloor = loadImage(d2Atlas.town);
-  private readonly outdoorFloor = loadImage(d2Atlas.outdoor);
+  private readonly ground = loadImage(d2Atlas.ground);
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -117,10 +112,7 @@ export class Renderer {
     const bump = () => {
       this.mapKey = '';
     };
-    this.moor.onload = bump;
-    this.townFloor.onload = bump;
-    this.outdoorFloor.onload = bump;
-    for (const img of Object.values(this.art)) img.onload = bump;
+    this.ground.onload = bump;
   }
 
   resize(): void {
@@ -205,19 +197,7 @@ export class Renderer {
         paint: () => this.drawScenery(ctx, prop, u),
       });
     }
-    const camp = sim.map.playerBase;
-    const lair = sim.map.enemyBase;
-    const flicker = 0.82 + Math.sin(opts.time * 11) * 0.18;
-    layers.push({
-      depth: camp.x + 70 + camp.y + 24,
-      paint: () => this.drawFire(ctx, camp.x + 70, camp.y + 24, 54 * u * flicker),
-    });
-    layers.push({
-      depth: lair.x - 90 + lair.y + 30,
-      paint: () => this.drawFire(ctx, lair.x - 90, lair.y + 30, 48 * u * flicker),
-    });
 
-    const hero = player(sim);
     const units = sim.units.filter((unit) => unit.alive || unit.corpse > 0 || unit.kind !== 'minion');
     for (const unit of units) {
       layers.push({
@@ -236,25 +216,6 @@ export class Renderer {
       ctx.fill();
     }
     for (const fx of sim.fx) this.drawFx(ctx, fx);
-
-    if (opts.attack && hero.alive && opts.mode === 'play') {
-      this.strokeEllipse(hero.x, hero.y, hero.attackRange, 'rgba(230, 211, 161, 0.28)');
-    }
-    for (const den of sim.map.dens ?? []) {
-      this.strokeEllipse(den.x, den.y, 40, 'rgba(120, 70, 160, 0.28)');
-    }
-    for (const pit of sim.map.pits ?? []) {
-      this.strokeEllipse(pit.x, pit.y, 70, pit.id === 'dragon' ? 'rgba(180, 60, 30, 0.35)' : 'rgba(160, 140, 70, 0.35)');
-    }
-    for (const shrine of sim.map.shrines ?? []) {
-      this.strokeEllipse(shrine.x, shrine.y, 28, 'rgba(120, 190, 160, 0.4)');
-    }
-    if (Math.hypot(hero.x - camp.x, hero.y - camp.y) < sim.map.fountainRadius && hero.alive) {
-      this.strokeEllipse(camp.x, camp.y, sim.map.fountainRadius, 'rgba(230, 190, 110, 0.22)');
-    }
-
-    this.drawLabel(camp.x, camp.y - 96, sim.map.towns?.ally ?? 'Rogue Encampment', '#e6d3a1');
-    this.drawLabel(lair.x, lair.y - 96, sim.map.towns?.enemy ?? 'Catacombs', sim.map.towns ? '#c5d4e4' : '#e7b2a4');
 
     const vignette = ctx.createRadialGradient(cssW / 2, cssH / 2, cssH * 0.2, cssW / 2, cssH / 2, cssH * 0.78);
     vignette.addColorStop(0, 'rgba(0,0,0,0)');
@@ -294,10 +255,8 @@ export class Renderer {
   }
 
   private ensureMap(map: ActDef): void {
-    const ready = this.moor.complete && this.moor.naturalWidth > 0;
-    const townW = this.townFloor.complete ? this.townFloor.naturalWidth : 0;
-    const roadW = this.outdoorFloor.complete ? this.outdoorFloor.naturalWidth : 0;
-    const key = `${map.id}:${ready ? this.moor.naturalWidth : 0}:${townW}:${roadW}`;
+    const ready = this.ground.complete && this.ground.naturalWidth >= 640;
+    const key = `${map.id}:${ready ? this.ground.naturalWidth : 0}`;
     if (this.mapCanvas && this.mapKey === key) return;
     const hw = BAKE_HW;
     const width = Math.ceil((map.width + map.height) * hw + PAD * 2);
@@ -309,208 +268,61 @@ export class Renderer {
     if (!ctx) return;
     const ox = map.height * hw + PAD;
     const oy = PAD;
+    ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = '#100c09';
     ctx.fillRect(0, 0, width, height);
-    ctx.setTransform(hw, hw * 0.5, -hw, hw * 0.5, ox, oy);
-    ctx.imageSmoothingEnabled = true;
-    if (ready) {
-      const pattern = ctx.createPattern(this.moor, 'repeat');
-      if (pattern) ctx.fillStyle = pattern;
-    } else ctx.fillStyle = '#1a1410';
-    ctx.fillRect(-200, -200, map.width + 400, map.height + 400);
-    ctx.fillStyle = 'rgba(8, 6, 4, 0.38)';
-    ctx.fillRect(0, 0, map.width, map.height);
-    this.paintRoad(ctx, map);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.scenery = buildScenery(map);
+    if (ready) this.stampGround(ctx, map, ox, oy, hw);
+    this.scenery = sceneryFor(map);
     this.mapCanvas = canvas;
     this.mapKey = key;
   }
 
-  private paintRoad(ctx: CanvasRenderingContext2D, map: ActDef): void {
-    const camp = map.playerBase;
-    const lair = map.enemyBase;
-    if (map.paths?.length && map.river && map.river.length > 1) {
-      ctx.fillStyle = 'rgba(28, 48, 62, 0.34)';
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(map.width, 0);
-      for (let i = map.river.length - 1; i >= 0; i--) ctx.lineTo(map.river[i].x, map.river[i].y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = 'rgba(16, 48, 28, 0.28)';
-      ctx.beginPath();
-      ctx.moveTo(0, map.height);
-      ctx.lineTo(map.width, map.height);
-      for (let i = map.river.length - 1; i >= 0; i--) ctx.lineTo(map.river[i].x, map.river[i].y);
-      ctx.closePath();
-      ctx.fill();
-    }
-    const town = this.townFloor.complete && this.townFloor.naturalWidth > 0 ? ctx.createPattern(this.townFloor, 'repeat') : null;
-    ctx.fillStyle = town ?? 'rgba(92, 68, 40, 0.22)';
-    ctx.beginPath();
-    ctx.arc(camp.x, camp.y, map.plaza, 0, Math.PI * 2);
-    ctx.fill();
-    const crypt = ctx.createRadialGradient(lair.x, lair.y, 30, lair.x, lair.y, map.plaza);
-    if (map.theme.decor === 'sanctuary') {
-      crypt.addColorStop(0, 'rgba(186, 214, 224, 0.55)');
-      crypt.addColorStop(1, 'rgba(40, 70, 90, 0)');
-    } else {
-      crypt.addColorStop(0, 'rgba(18, 36, 22, 0.72)');
-      crypt.addColorStop(1, 'rgba(18, 36, 22, 0)');
-    }
-    ctx.fillStyle = crypt;
-    ctx.beginPath();
-    ctx.arc(lair.x, lair.y, map.plaza, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    const outdoor = this.outdoorFloor.complete && this.outdoorFloor.naturalWidth > 0 ? ctx.createPattern(this.outdoorFloor, 'repeat') : null;
-    const roads = map.paths?.length ? map.paths : null;
-    if (!roads) {
-      trace(ctx, map.lane);
-      ctx.strokeStyle = '#241910';
-      ctx.lineWidth = map.laneWidth + map.jungle * 1.4;
-      ctx.stroke();
-      ctx.strokeStyle = '#3a2b22';
-      ctx.lineWidth = map.laneWidth + 18;
-      ctx.stroke();
-      ctx.strokeStyle = outdoor ?? '#5a4032';
-      ctx.lineWidth = map.laneWidth * 0.72;
-      ctx.stroke();
-      ctx.strokeStyle = 'rgba(120, 36, 28, 0.28)';
-      ctx.lineWidth = map.laneWidth * 0.28;
-      ctx.stroke();
-      const stain = ctx.createLinearGradient(map.width * 0.45, 0, map.width, 0);
-      stain.addColorStop(0, 'rgba(70, 12, 14, 0)');
-      stain.addColorStop(1, 'rgba(48, 8, 16, 0.4)');
-      ctx.fillStyle = stain;
-      ctx.fillRect(0, 0, map.width, map.height);
-    } else {
-      for (const path of roads) {
-        trace(ctx, roadPoints(map, path.lane));
-        ctx.strokeStyle = path.edge;
-        ctx.lineWidth = map.laneWidth + 28;
-        ctx.stroke();
-        ctx.strokeStyle = path.id === 'center' && outdoor ? outdoor : path.road;
-        ctx.lineWidth = map.laneWidth * 0.68;
-        ctx.stroke();
+  /** Stamp 160×80 Act I diamonds on the iso grid. Identity transform, so they are not skewed twice. */
+  private stampGround(ctx: CanvasRenderingContext2D, map: ActDef, ox: number, oy: number, hw: number): void {
+    const step = 80 / hw;
+    const rows: Record<GroundKind, number> = {
+      grass: 0,
+      edge: 1,
+      path: 2,
+      town: 3,
+      pale: 4,
+      river: 5,
+      bank: 1,
+      dark: 5,
+    };
+    const i1 = Math.ceil(map.width / step) + 2;
+    const j1 = Math.ceil(map.height / step) + 2;
+    for (let j = -2; j <= j1; j++) {
+      for (let i = -2; i <= i1; i++) {
+        const kind = groundAt(map, i * step, j * step);
+        const row = rows[kind];
+        let col = Math.abs((i * 3 + j * 5) % 4);
+        if (kind === 'river') col %= 2;
+        if (kind === 'dark') col = 2 + (col % 2);
+        const sx = Math.round((i - j) * 80 + ox);
+        const sy = Math.round((i + j) * 40 + oy);
+        // One extra pixel on every side so the diamonds overlap and the bake has no seams.
+        ctx.drawImage(this.ground, col * 160, row * 80, 160, 80, sx - 81, sy - 41, 162, 82);
       }
-    }
-
-    if (map.river && map.river.length > 1) {
-      trace(ctx, map.river);
-      ctx.strokeStyle = '#3a0c12';
-      ctx.lineWidth = 168;
-      ctx.stroke();
-      ctx.strokeStyle = 'rgba(122, 18, 24, 0.92)';
-      ctx.lineWidth = 78;
-      ctx.stroke();
-      ctx.strokeStyle = 'rgba(196, 48, 42, 0.55)';
-      ctx.lineWidth = 22;
-      ctx.stroke();
-    }
-
-    const rng = new Rng(71);
-    const stainLanes = roads ? roads.map((path) => path.lane) : [map.lane];
-    for (let i = 0; i < (roads ? 120 : 80); i++) {
-      const lane = stainLanes[i % stainLanes.length];
-      const at = pointAlong(lane, rng.next());
-      const side = (rng.next() - 0.5) * map.laneWidth * 0.55;
-      const nudged = offsetPoint(lane, at, side);
-      const north = roads?.[i % stainLanes.length]?.id === 'north';
-      ctx.fillStyle = north
-        ? 'rgba(210, 224, 230, 0.28)'
-        : rng.next() > 0.5
-          ? 'rgba(90, 18, 16, 0.35)'
-          : 'rgba(40, 28, 18, 0.4)';
-      ctx.beginPath();
-      ctx.ellipse(nudged.x, nudged.y, rng.range(10, 28), rng.range(6, 14), 0, 0, Math.PI * 2);
-      ctx.fill();
     }
   }
 
-  private drawScenery(ctx: CanvasRenderingContext2D, prop: Scenery, u: number): void {
+  private drawScenery(ctx: CanvasRenderingContext2D, prop: Prop, u: number): void {
     const p = this.project(prop.x, prop.y);
-    if (p.x < -140 || p.y < -180 || p.x > this.camera.cssW + 140 || p.y > this.camera.cssH + 40) return;
-    if (prop.kind === 'tent') {
-      this.blit(ctx, this.art.tent, p.x, p.y, 92 * u * prop.s, prop.flip);
-      return;
-    }
-    if (prop.kind === 'wall') {
-      this.blit(ctx, this.art.wall, p.x, p.y, 70 * u * prop.s, prop.flip);
-      return;
-    }
-    if (prop.kind === 'npc') {
-      if (this.akaraSheet.complete && this.akaraSheet.naturalWidth > 0) {
-        this.blit(ctx, this.akaraSheet, p.x, p.y, 108 * u * prop.s, false);
-      }
-      return;
-    }
-    if (prop.kind === 'fountain') {
-      ctx.fillStyle = 'rgba(80, 140, 170, 0.45)';
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, 28 * u, 12 * u, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(186, 214, 224, 0.7)';
-      ctx.stroke();
-      return;
-    }
-    if (prop.kind === 'seal') {
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, 22 * u, 9 * u, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#2c2622';
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y - 52 * u * prop.s);
-      ctx.lineTo(p.x + 18 * u, p.y - 10 * u);
-      ctx.lineTo(p.x - 18 * u, p.y - 10 * u);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = prop.flip ? '#c44536' : '#d4b46a';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y - 28 * u, 7 * u, 0, Math.PI * 2);
-      ctx.stroke();
-      return;
-    }
-    this.drawTree(ctx, p.x, p.y, prop.s * u, prop.kind === 'dead');
-  }
-
-  private drawTree(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, dead: boolean): void {
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(x, y, 14 * s, 6 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = dead ? '#3a3228' : '#2a2118';
-    ctx.fillRect(x - 3 * s, y - 22 * s, 6 * s, 22 * s);
-    ctx.fillStyle = dead ? '#4e4638' : '#1a2c22';
-    ctx.beginPath();
-    ctx.moveTo(x, y - 48 * s);
-    ctx.lineTo(x + 16 * s, y - 16 * s);
-    ctx.lineTo(x - 16 * s, y - 16 * s);
-    ctx.closePath();
-    ctx.fill();
-    if (!dead) {
-      ctx.fillStyle = '#24382c';
-      ctx.beginPath();
-      ctx.moveTo(x - 4 * s, y - 34 * s);
-      ctx.lineTo(x + 12 * s, y - 18 * s);
-      ctx.lineTo(x - 14 * s, y - 20 * s);
-      ctx.fill();
-    }
-  }
-
-  private drawFire(ctx: CanvasRenderingContext2D, x: number, y: number, height: number): void {
-    const p = this.project(x, y);
-    if (p.x < -40 || p.y < -80 || p.x > this.camera.cssW + 40 || p.y > this.camera.cssH + 20) return;
-    ctx.fillStyle = 'rgba(255, 120, 40, 0.18)';
-    ctx.beginPath();
-    ctx.ellipse(p.x, p.y, height * 0.55, height * 0.22, 0, 0, Math.PI * 2);
-    ctx.fill();
-    this.blit(ctx, this.art.fire, p.x, p.y, height, false);
+    if (p.x < -180 || p.y < -220 || p.x > this.camera.cssW + 180 || p.y > this.camera.cssH + 40) return;
+    const height =
+      prop.kind === 'tree' ? 168 :
+      prop.kind === 'tent' ? 108 :
+      prop.kind === 'fence' ? 64 :
+      prop.kind === 'npc' ? 102 :
+      86;
+    const sheet =
+      prop.kind === 'npc' ? this.akaraSheet :
+      prop.kind === 'tree' ? this.props.tree[prop.variant % this.props.tree.length] :
+      prop.kind === 'rock' ? this.props.rock[prop.variant % this.props.rock.length] :
+      prop.kind === 'fence' ? this.props.fence[prop.variant % this.props.fence.length] :
+      this.props.tent[prop.variant % this.props.tent.length];
+    if (sheet.complete && sheet.naturalWidth > 0) this.blit(ctx, sheet, p.x, p.y, height * u, prop.flip);
   }
 
   private drawUnit(ctx: CanvasRenderingContext2D, unit: Unit, opts: DrawOpts, u: number, tier: ArmorTier): void {
@@ -521,31 +333,15 @@ export class Renderer {
     if (unit.leap) {
       const t = Math.min(1, unit.leap.t / unit.leap.dur);
       y -= Math.sin(t * Math.PI) * 48 * u;
-    } else if (gait.moving && !this.reduceMotion) {
-      y += Math.sin(gait.d / 14) * 2.2;
     }
     const height = Math.max(1, Math.round(this.unitHeight(unit) * u));
     const footX = Math.round(p.x);
     const footY = Math.round(p.y);
     y = Math.round(y);
-    ctx.fillStyle = 'rgba(0,0,0,0.62)';
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath();
-    ctx.ellipse(footX, footY + 1, Math.max(6, Math.round(height * 0.36)), Math.max(3, Math.round(height * 0.13)), 0, 0, Math.PI * 2);
+    ctx.ellipse(footX, footY, Math.max(4, Math.round(height * 0.16)), Math.max(2, Math.round(height * 0.06)), 0, 0, Math.PI * 2);
     ctx.fill();
-    if (unit.bot && unit.alive) {
-      ctx.strokeStyle = unit.color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.ellipse(footX, footY, height * 0.32, height * 0.13, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    if (opts.targetId === unit.id && unit.alive) {
-      ctx.strokeStyle = '#f0e2bc';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.ellipse(footX, footY, height * 0.34, height * 0.14, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
     ctx.save();
     if (!unit.alive) ctx.globalAlpha = 0.55;
     else if ((unit.invuln > 0 || unit.hitFlash > 0) && Math.sin(opts.time * 28) > 0) ctx.globalAlpha = 0.55;
@@ -554,12 +350,9 @@ export class Renderer {
       ctx.scale(1, 0.5);
       ctx.translate(-footX, -y);
     }
-    const stone = this.mapRef?.theme.decor === 'sanctuary' && (unit.defId === 'base-ally' || unit.defId === 'base-enemy');
-    const glyph = stone ? null : this.sheetFor(unit, gait.moving, gait.d, tier);
+    const glyph = this.sheetFor(unit, gait.moving, gait.d, tier);
     const outlined = unit.kind === 'minion' || unit.kind === 'champion';
-    if (stone) this.drawWorldstone(ctx, footX, y, height, unit.team, unit.alive);
-    else if (glyph) this.blit(ctx, glyph.img, footX, y, height, glyph.flip, glyph, outlined);
-    else if (!this.drawGenerated(ctx, unit, footX, y, height)) this.fallback(ctx, unit, footX, y, height);
+    if (glyph) this.blit(ctx, glyph.img, footX, y, height, glyph.flip, glyph, outlined);
     if (unit.whirlT > 0) {
       ctx.strokeStyle = 'rgba(240, 220, 170, 0.8)';
       ctx.lineWidth = 3;
@@ -628,19 +421,24 @@ export class Renderer {
   }
 
   private sheetFor(unit: Unit, moving: boolean, phase: number, tier: ArmorTier): Glyph | null {
-    const row = this.dirRow(unit.facing);
+    const raw = this.dirRow(unit.facing);
+    const row = unit.whirlT > 0 ? raw : this.stepRow(unit.id, raw);
+    if (unit.kind === 'seal') return this.full(this.props.rock[0], false);
+    if (unit.defId === 'base-ally') return this.full(this.props.stone[0], false);
+    if (unit.defId === 'base-enemy') return this.full(this.props.stone[1], false);
+    if (unit.defId === 'tower') return this.full(this.props.rock[unit.alive ? 2 : 0], false);
     if (unit.defId === 'barbarian') {
       const pack = this.d2[tier];
-      // Every pose stays on this armor tier. Death, whirl, leap, and cast
-      // borrow idle, run, or attack instead of a second drawing.
+      // One armor tier, one sheet per state. Feet share a cell anchor, and the
+      // column advances with distance so a run does not skip ahead of the feet.
       if (!unit.alive || unit.castT > 0) return this.atlas(pack.idle, 1, 0, row);
-      if (unit.whirlT > 0) return this.atlas(pack.run, 4, Math.floor(phase / 8) % 4, row);
+      if (unit.whirlT > 0) return this.atlas(pack.run, 4, Math.floor(phase / 10) % 4, row);
       if (unit.leap || unit.swing > 0) {
         const col = unit.leap ? 2 : Math.min(3, Math.floor((1 - Math.max(0, unit.swing)) * 4));
         return this.atlas(pack.attack, 4, col, row);
       }
       if (moving) {
-        const col = Math.floor(phase / 18) % 4;
+        const col = Math.floor(phase / 16) % 4;
         return this.atlas(this.inTown(unit) ? pack.walk : pack.run, 4, col, row);
       }
       return this.atlas(pack.idle, 1, 0, row);
@@ -651,18 +449,36 @@ export class Renderer {
     if (unit.defId === 'fallen' && unit.name === 'Bishibosh') {
       return this.cycle(this.mobs.shamanWalk, this.mobs.shamanIdle, moving, phase, row);
     }
-    if (unit.defId === 'fallen') return this.cycle(this.mobs.fallenWalk, this.mobs.fallenIdle, moving, phase, row);
-    if (unit.defId === 'zombie') return this.cycle(this.mobs.zombieWalk, this.mobs.zombieIdle, moving, phase, row);
+    if (unit.defId === 'fallen' || unit.defId === 'goatman') {
+      return this.cycle(this.mobs.fallenWalk, this.mobs.fallenIdle, moving, phase, row);
+    }
+    if (unit.defId === 'zombie' || unit.defId === 'skeleton' || unit.defId === 'hungry-dead' || unit.defId === 'mummy') {
+      return this.cycle(this.mobs.zombieWalk, this.mobs.zombieIdle, moving, phase, row);
+    }
+    if (unit.defId === 'demon' || unit.defId === 'willowisp' || unit.objective === 'dragon' || unit.objective === 'herald' || unit.objective === 'baron') {
+      return this.cycle(this.mobs.shamanWalk, this.mobs.shamanIdle, moving, phase, row);
+    }
     if (unit.defId === 'quillrat') {
       return this.atlas(this.mobs.quill, 2, moving ? Math.floor(phase / 16) % 2 : 0, row);
     }
     const flip = Math.cos(unit.facing) < -0.12;
     const step = Math.floor(phase / 22) % 2 === 0;
     if (unit.defId === 'blood-raven') return this.full(moving ? (step ? this.art.ravenWalk : this.art.raven) : this.art.raven, flip);
-    if (unit.defId === 'tower') return unit.alive ? this.full(this.art.tower, false) : null;
-    if (unit.defId === 'base-ally') return unit.alive ? this.full(this.art.tent, false) : null;
-    if (unit.defId === 'base-enemy') return unit.alive ? this.full(this.art.altar, false) : null;
     return null;
+  }
+
+  /** Turn at most one direction row per frame so a facing change does not pop. */
+  private stepRow(id: number, target: number): number {
+    const prev = this.facingRow.get(id);
+    if (prev == null) {
+      this.facingRow.set(id, target);
+      return target;
+    }
+    let delta = (target - prev + 8) % 8;
+    if (delta > 4) delta -= 8;
+    const next = delta === 0 ? prev : (prev + Math.sign(delta) + 8) % 8;
+    this.facingRow.set(id, next);
+    return next;
   }
 
   /** Walk and idle from one monster's own sheet. No flip: every direction is a row. */
@@ -701,142 +517,6 @@ export class Renderer {
     return { img, flip: false, sx: col * sw, sy: row * sh, sw, sh };
   }
 
-  private drawWorldstone(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    height: number,
-    team: Unit['team'],
-    alive: boolean,
-  ): void {
-    const color = team === 'ally' ? '#e6c56a' : '#b7d7e4';
-    const dark = team === 'ally' ? '#6a4a22' : '#2c4c5c';
-    ctx.fillStyle = alive ? dark : '#3a342c';
-    ctx.beginPath();
-    ctx.moveTo(x, y - height * 0.72);
-    ctx.lineTo(x + height * 0.22, y - height * 0.12);
-    ctx.lineTo(x - height * 0.22, y - height * 0.12);
-    ctx.closePath();
-    ctx.fill();
-    if (!alive) return;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(x, y - height * 0.86);
-    ctx.lineTo(x + height * 0.1, y - height * 0.34);
-    ctx.lineTo(x, y - height * 0.2);
-    ctx.lineTo(x - height * 0.1, y - height * 0.34);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  /** Act I shapes for monsters that have no sheet, in the game's browns and bone. */
-  private drawGenerated(ctx: CanvasRenderingContext2D, unit: Unit, x: number, y: number, height: number): boolean {
-    const h = height;
-    const ink = '#140e0a';
-    if (unit.kind === 'seal') {
-      ctx.fillStyle = unit.alive ? '#2c2622' : '#3a342c';
-      ctx.beginPath();
-      ctx.moveTo(x, y - h * 0.7);
-      ctx.lineTo(x + h * 0.22, y - h * 0.12);
-      ctx.lineTo(x - h * 0.22, y - h * 0.12);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = unit.team === 'ally' ? '#d4b46a' : '#c44536';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      return true;
-    }
-    if (unit.objective === 'dragon' || unit.objective === 'herald' || unit.objective === 'baron') {
-      const wide = unit.objective === 'dragon';
-      ctx.fillStyle = ink;
-      ctx.beginPath();
-      ctx.ellipse(x, y - h * 0.28, h * (wide ? 0.5 : 0.36), h * 0.28, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = unit.objective === 'dragon' ? '#8a2a18' : unit.objective === 'baron' ? '#6a6248' : '#8a7040';
-      ctx.beginPath();
-      ctx.ellipse(x, y - h * 0.3, h * (wide ? 0.42 : 0.28), h * 0.22, 0, 0, Math.PI * 2);
-      ctx.fill();
-      return true;
-    }
-    const known = ['skeleton', 'hungry-dead', 'goatman', 'willowisp', 'mummy', 'demon'];
-    if (!known.includes(unit.defId)) return false;
-    if (!unit.alive) {
-      ctx.fillStyle = '#3a342c';
-      ctx.beginPath();
-      ctx.ellipse(x, y - h * 0.16, h * 0.28, h * 0.1, 0, 0, Math.PI * 2);
-      ctx.fill();
-      return true;
-    }
-    if (unit.defId === 'willowisp') {
-      ctx.fillStyle = ink;
-      ctx.beginPath();
-      ctx.arc(x, y - h * 0.48, h * 0.3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#7aaa48';
-      ctx.beginPath();
-      ctx.arc(x, y - h * 0.48, h * 0.24, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#f2e6a8';
-      ctx.beginPath();
-      ctx.arc(x, y - h * 0.48, h * 0.1, 0, Math.PI * 2);
-      ctx.fill();
-      return true;
-    }
-    const body =
-      unit.defId === 'skeleton'
-        ? '#d7d0b8'
-        : unit.defId === 'hungry-dead'
-          ? '#5e6a48'
-          : unit.defId === 'goatman'
-            ? '#8a5a30'
-            : unit.defId === 'mummy'
-              ? '#e4d4ae'
-              : '#7a221c';
-    ctx.fillStyle = ink;
-    ctx.beginPath();
-    ctx.ellipse(x, y - h * 0.36, h * 0.26, h * 0.36, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = body;
-    ctx.beginPath();
-    ctx.ellipse(x, y - h * 0.38, h * 0.2, h * 0.3, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = ink;
-    ctx.beginPath();
-    ctx.arc(x, y - h * 0.62, h * 0.12, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = unit.defId === 'skeleton' ? '#f0ead8' : body;
-    ctx.beginPath();
-    ctx.arc(x, y - h * 0.63, h * 0.09, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = unit.defId === 'goatman' || unit.defId === 'demon' ? '#e6d3a1' : unit.defId === 'mummy' ? '#8a6840' : '#6a2030';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    if (unit.defId === 'goatman' || unit.defId === 'demon') {
-      ctx.moveTo(x - h * 0.05, y - h * 0.7);
-      ctx.lineTo(x - h * 0.16, y - h * 0.88);
-      ctx.moveTo(x + h * 0.05, y - h * 0.7);
-      ctx.lineTo(x + h * 0.16, y - h * 0.88);
-    } else if (unit.defId === 'mummy') {
-      ctx.moveTo(x - h * 0.16, y - h * 0.5);
-      ctx.lineTo(x + h * 0.16, y - h * 0.44);
-      ctx.moveTo(x - h * 0.14, y - h * 0.32);
-      ctx.lineTo(x + h * 0.14, y - h * 0.26);
-    } else if (unit.defId === 'skeleton') {
-      ctx.moveTo(x, y - h * 0.5);
-      ctx.lineTo(x, y - h * 0.18);
-      ctx.moveTo(x - h * 0.14, y - h * 0.42);
-      ctx.lineTo(x + h * 0.14, y - h * 0.42);
-    }
-    ctx.stroke();
-    return true;
-  }
-
-  private fallback(ctx: CanvasRenderingContext2D, unit: Unit, x: number, y: number, height: number): void {
-    ctx.fillStyle = unit.alive ? unit.color : '#3a342c';
-    ctx.beginPath();
-    ctx.ellipse(x, y - height * 0.35, height * 0.28, height * 0.42, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
 
   private inTown(unit: Unit): boolean {
     const map = this.mapRef;
@@ -907,46 +587,14 @@ export class Renderer {
     ctx.fillRect(x - w / 2, y, w, 4);
     ctx.fillStyle = unit.team === 'ally' ? '#c6d28a' : unit.team === 'wild' ? '#c49a3a' : '#e4553c';
     ctx.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, unit.hp / unit.maxHp)), 4);
-    if (unit.id === targetId) {
+    if (unit.id === targetId && unit.kind !== 'base') {
       ctx.fillStyle = '#f0e2bc';
-      ctx.font = '13px Georgia, serif';
+      ctx.font = '12px Georgia, serif';
       ctx.textAlign = 'center';
       ctx.fillText(unit.name, x, y - 4);
     }
   }
 
-  private drawLabel(x: number, y: number, text: string, color: string): void {
-    const p = this.project(x, y);
-    const w = this.camera.cssW;
-    const h = this.camera.cssH;
-    if (p.x < 24 || p.y < 0 || p.x > w - 24 || p.y > h - 8) return;
-    // The phone HUD owns the top-left level, xp, and gold row. Fade the zone
-    // name as it approaches that row and skip it if it would sit on top.
-    const clear = 96;
-    if (p.y < clear) return;
-    const fade = p.y < clear + 28 ? (p.y - clear) / 28 : 1;
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.globalAlpha = fade;
-    ctx.fillStyle = color;
-    ctx.font = '15px Georgia, serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(text, p.x, p.y);
-    ctx.restore();
-  }
-
-  private strokeEllipse(x: number, y: number, radius: number, color: string): void {
-    const c = this.project(x, y);
-    const e = this.project(x + radius, y);
-    const rx = Math.abs(e.x - c.x);
-    const ry = rx * 0.5;
-    const ctx = this.ctx;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(c.x, c.y, rx, ry, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  }
 
   private drawFx(ctx: CanvasRenderingContext2D, fx: Sim['fx'][number]): void {
     const alpha = Math.max(0, 1 - fx.t / fx.life);
@@ -1033,136 +681,7 @@ export class Renderer {
   }
 }
 
-function trace(ctx: CanvasRenderingContext2D, lane: Vec[]): void {
-  ctx.beginPath();
-  lane.forEach((point, index) => {
-    if (index === 0) ctx.moveTo(point.x, point.y);
-    else ctx.lineTo(point.x, point.y);
-  });
-}
-
 function roadPoints(map: ActDef, lane: Vec[]): Vec[] {
   return [map.playerBase, ...lane, map.enemyBase];
 }
 
-function pointAlong(lane: Vec[], t: number): Vec {
-  const lengths: number[] = [];
-  let total = 0;
-  for (let i = 1; i < lane.length; i++) {
-    const len = Math.hypot(lane[i].x - lane[i - 1].x, lane[i].y - lane[i - 1].y);
-    lengths.push(len);
-    total += len;
-  }
-  let dist = Math.min(1, Math.max(0, t)) * total;
-  for (let i = 0; i < lengths.length; i++) {
-    if (dist <= lengths[i] || i === lengths.length - 1) {
-      const f = lengths[i] ? dist / lengths[i] : 0;
-      return {
-        x: lane[i].x + (lane[i + 1].x - lane[i].x) * f,
-        y: lane[i].y + (lane[i + 1].y - lane[i].y) * f,
-      };
-    }
-    dist -= lengths[i];
-  }
-  return lane[lane.length - 1];
-}
-
-function offsetPoint(lane: Vec[], at: Vec, side: number): Vec {
-  let nearest = 0;
-  let best = Infinity;
-  for (let i = 1; i < lane.length; i++) {
-    const midX = (lane[i - 1].x + lane[i].x) / 2;
-    const midY = (lane[i - 1].y + lane[i].y) / 2;
-    const gap = Math.hypot(midX - at.x, midY - at.y);
-    if (gap < best) {
-      best = gap;
-      nearest = i;
-    }
-  }
-  const a = lane[Math.max(0, nearest - 1)];
-  const b = lane[nearest];
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const mag = Math.hypot(dx, dy) || 1;
-  return { x: at.x + (-dy / mag) * side, y: at.y + (dx / mag) * side };
-}
-
-function northOfRiver(map: ActDef, x: number, y: number): boolean {
-  const river = map.river;
-  if (!river || river.length < 2) return y < map.height * 0.45;
-  let yAt = river[0].y;
-  for (let i = 1; i < river.length; i++) {
-    const a = river[i - 1];
-    const b = river[i];
-    const spans = (x >= a.x && x <= b.x) || (x >= b.x && x <= a.x);
-    if (spans || i === river.length - 1) {
-      const f = b.x === a.x ? 0 : Math.min(1, Math.max(0, (x - a.x) / (b.x - a.x)));
-      yAt = a.y + (b.y - a.y) * f;
-      break;
-    }
-  }
-  return y < yAt;
-}
-
-function buildScenery(map: ActDef): Scenery[] {
-  const rng = new Rng(0xa11);
-  const props: Scenery[] = [];
-  const lanes = map.paths?.length ? map.paths.map((path) => roadPoints(map, path.lane)) : [map.lane];
-  const count = map.paths?.length ? 90 : 48;
-  for (let i = 0; i < count; i++) {
-    const x = rng.range(40, map.width - 40);
-    const y = rng.range(40, map.height - 40);
-    if (lanes.some((lane) => distToPolyline({ x, y }, lane) < map.laneWidth * 0.62)) continue;
-    if (map.river && distToPolyline({ x, y }, map.river) < 110) continue;
-    if (Math.hypot(x - map.playerBase.x, y - map.playerBase.y) < map.plaza * 0.9) continue;
-    if (Math.hypot(x - map.enemyBase.x, y - map.enemyBase.y) < map.plaza * 0.7) continue;
-    const frozen = northOfRiver(map, x, y);
-    const dead = map.paths?.length ? (frozen ? rng.next() > 0.16 : rng.next() > 0.78) : x > map.width * 0.62 || rng.next() > 0.7;
-    props.push({ kind: dead ? 'dead' : 'tree', x, y, s: rng.range(0.75, 1.45), flip: rng.next() > 0.5 });
-  }
-  const camp = map.playerBase;
-  props.push(
-    { kind: 'tent', x: camp.x - 30, y: camp.y - 175, s: 1.05, flip: false },
-    { kind: 'tent', x: camp.x + 155, y: camp.y - 140, s: 0.92, flip: true },
-    { kind: 'tent', x: camp.x + 130, y: camp.y + 155, s: 0.84, flip: false },
-    { kind: 'npc', x: camp.x + 48, y: camp.y - 36, s: 1, flip: false },
-    { kind: 'fountain', x: camp.x, y: camp.y + 20, s: 1, flip: false },
-    { kind: 'fountain', x: map.enemyBase.x, y: map.enemyBase.y + 16, s: 1, flip: false },
-  );
-  for (let i = 0; i < 16; i++) {
-    const angle = (i / 16) * Math.PI * 2;
-    if (Math.cos(angle) > 0.42) continue;
-    props.push({
-      kind: 'wall',
-      x: camp.x + Math.cos(angle) * 290,
-      y: camp.y + Math.sin(angle) * 200,
-      s: 0.82 + (i % 3) * 0.08,
-      flip: i % 2 === 0,
-    });
-  }
-  const lair = map.enemyBase;
-  if (map.theme.decor === 'sanctuary') {
-    for (let i = 0; i < 14; i++) {
-      const angle = (i / 14) * Math.PI * 2;
-      if (Math.cos(angle) < -0.35) continue;
-      props.push({
-        kind: 'wall',
-        x: lair.x + Math.cos(angle) * 280,
-        y: lair.y + Math.sin(angle) * 190,
-        s: 0.78 + (i % 3) * 0.08,
-        flip: i % 2 === 0,
-      });
-    }
-  }
-  for (let i = 0; i < 7; i++) {
-    const angle = (i / 7) * Math.PI * 2;
-    props.push({
-      kind: 'dead',
-      x: lair.x + Math.cos(angle) * 240,
-      y: lair.y + Math.sin(angle) * 160,
-      s: 1.25,
-      flip: i % 2 === 0,
-    });
-  }
-  return props;
-}
