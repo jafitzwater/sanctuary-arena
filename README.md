@@ -14,7 +14,18 @@ That URL updates when this branch is merged to `main` and the Pages workflow fin
 
 Destroy **Andariel's altar**. If the **Rogue Encampment** falls, you lose. You respawn beside the campfire after a short timer. Gold comes from last hits, hero kills, destroyed towers, and a slow trickle. Spend it at Akara while you are inside the Encampment (or while you are dead).
 
-Bash starts on the first belt slot. The other three slots are empty until you learn an active skill and assign it. **T** or **Tree** opens the 1.13c Barbarian tree (Combat Skills, Combat Masteries, Warcries). A gold **+** spends a skill point. Strength, dexterity, vitality, and energy take stat points. Passives stay in the tree and are not belted. Tap a learned active to put it on the highlighted Q W E R slot.
+Bash starts on Q. Shout, Stun, Leap Attack, Battle Orders, and Whirlwind unlock at levels 2, 4, 6, 8, and 10. A newly unlocked skill fills an empty belt slot. Only four skills are equipped. **T** or **Points** opens the list: spend a skill point with **+** (ranks go from 1 to 5), spend the five stat points per level on strength, dexterity, vitality, or energy, then drag a skill onto Q W E R or tap a skill and then a slot. The gold badge is the number of unspent points.
+
+| Skill | Level | Rank 1 | Each further rank |
+| --- | --- | --- | --- |
+| Bash | 1 | 150% damage, 8 mana, 5s | +15% damage, +2 mana |
+| Shout | 2 | +10 armor for 6s, you and nearby allies, 12 mana, 14s | +6 armor |
+| Stun | 4 | 115% damage and 0.6s stun, 10 mana, 7s | +5% damage, +0.25s stun |
+| Leap Attack | 6 | Jump and hit for 135% damage, 14 mana, 9s | +15% damage, +2 mana |
+| Battle Orders | 8 | +6% maximum life for 8s, 18 mana, 16s | +6% life |
+| Whirlwind | 10 | Spin, each hit 32% damage, 22 mana, 11s | +4% damage per hit, +4 mana |
+
+Akara sells one weapon, one armor, one helm, and one belt. A new piece replaces the old one and refunds half the old price. Club is cheap at level 1. Short Sword (40 strength) at level 3. Falchion (55 strength) at level 5. Two-Handed Sword (65 strength, 30 dexterity) at level 8. Armor and helms follow the same levels. You carry 3 health potions and 3 mana potions. A Sash (level 2) raises that to 4. A Belt (level 6, 45 strength) raises it to 5. Strength adds melee damage. Dexterity adds a little armor and attack speed. Vitality adds life and energy adds mana for every class.
 
 ### Touch (landscape)
 
@@ -22,7 +33,7 @@ Turn the phone sideways. Portrait shows a rotate hint and pauses the match. The 
 
 - Portrait, life bar, and mana bar sit at the top left. The target's name and health sit top center when something is selected or in reach. The minimap is top right, with Tree, Shop, Help, and Sound beside it.
 - The stick is the large control at the bottom left and the only way to move, including diagonally along the isometric ground. Tapping the map does not walk or chase.
-- **Attack** is the big round button in the bottom-right corner. It strikes whatever is already in reach. The four skills arc around it. A dark sweep and a number show the cooldown. A blue rim means you are short on mana.
+- **Attack** is the big round button in the bottom-right corner. It strikes whatever is already in reach. Exactly four skills arc around it. A dark sweep and a number show the cooldown. A blue rim means you are short on mana. Locked skills stay in the Points list until their level.
 - Smaller round **HP** and **MP** buttons sit above the arc and show potion counts.
 - **Shop** always opens Akara's list. Outside the Rogue Encampment the button reads **Camp**, the panel stays open, and buys stay disabled until you walk back.
 
@@ -32,9 +43,9 @@ The page sets `minimum-scale=1`, `maximum-scale=1`, and `user-scalable=no`. The 
 
 - Click the ground to move. Click an enemy to attack them. Either mouse button works. The life and mana orbs stay at the bottom corners, and the four skills stay in a belt along the bottom.
 - Arrow keys move as well.
-- **Q W E R** and **1–4** cast the four belt slots. An empty slot opens the tree. **Shift** plus a belt key ranks that skill up.
+- **Q W E R** and **1–4** cast the four belt slots. An empty slot opens Points. **Shift** plus a belt key ranks that skill up.
 - **Space** attacks the nearest enemy (and chases one if you are standing still).
-- **T** opens the skill tree. **B** opens and closes the shop. **5** drinks a health potion, **6** a mana potion. **Esc** closes panels.
+- **T** opens skills and stats. **B** opens and closes the shop. **5** drinks a health potion, **6** a mana potion. **Esc** closes panels. You can carry 3 of each potion. A Sash raises that to 4, and a Belt raises it to 5.
 
 ## Run locally
 
@@ -137,7 +148,7 @@ The frames under `src/assets/art/` are original stand-ins, including run, get-hi
 ## Known gaps
 
 - One playable class and one act. The other six classes have CharStats rows in JSON only. No fog of war, no jungle camps, no inhibitors.
-- Skill synergies are the prerequisite text plus a few timers (Battle Orders, Battle Command, Frenzy, Berserk), not the full Diablo II calc expressions. Find Item, Find Potion, and Grim Ward are match approximations, not corpse clicks.
+- The match uses six Barbarian skills and a four-slot belt, not the full 30-skill tree. The 1.13c JSON is still in the repo as the reference for names and raw numbers. Ranks stop at 5. Battle Orders raises life only. Shout raises defense for a few seconds.
 - Cooldowns and monster damage are scaled for a short match. Exceptional and elite items are not in the shop. Dual wield uses the slower swing and about half the offhand damage.
 - Blood Raven kites and retreats; she does not cast a skill kit. The quill rat has one pose. Rogue archers reuse Blood Raven's bow pose with a blue tint.
 - Art is generated pixel sprites in the PlrMode layout, not 16-direction BA sheets. The Spriters Resource download was blocked, as noted above. Trees are drawn in code. Audio is synthesized, not the Diablo II soundtrack.

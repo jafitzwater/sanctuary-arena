@@ -38,7 +38,7 @@
           <div class="help-grid">
             <div>
               <h3>Touch</h3>
-              <p>The large stick on the left is the only way to move. Tapping the map does nothing. Attack sits in the bottom-right corner, with four skills in an arc around it and health and mana potions above that arc. Tree spends skill points and assigns the four skills. Shop opens anywhere; Akara only sells inside the Encampment.</p>
+              <p>The large stick on the left is the only way to move. Tapping the map does nothing. Attack sits in the bottom-right corner, with four skill slots in an arc. Points spends skill and stat points. Drag a skill onto a slot, or tap a skill and then a slot. Shop opens anywhere; Akara only sells inside the Encampment.</p>
             </div>
             <div>
               <h3>Mouse and keys</h3>
@@ -63,7 +63,7 @@
           <div class="stat slim"><span id="kd"></span><span id="cs"></span></div>
           <div class="stat slim"><span id="clock">0:00</span><span id="loadout">Unarmed</span></div>
           <div class="top-actions">
-            <button id="tree-btn" type="button">Tree</button>
+            <button id="tree-btn" type="button">Points</button>
             <button id="shop-btn" type="button">Shop</button>
             <button id="help-btn" type="button">Help</button>
             <button id="mute-btn" type="button">Sound on</button>
@@ -111,11 +111,12 @@
         <section id="tree" hidden role="dialog" aria-modal="true" aria-labelledby="tree-heading">
           <div class="sheet">
             <header>
-              <h2 id="tree-heading">Barbarian</h2>
+              <h2 id="tree-heading">Skills</h2>
               <button id="tree-close" type="button">Close</button>
             </header>
             <p id="tree-points"></p>
             <div id="attr-row"></div>
+            <p id="equip-hint"></p>
             <div id="belt-pick"></div>
             <div id="tree-cols"></div>
           </div>
@@ -141,11 +142,11 @@
             <div class="help-grid">
               <div>
                 <h3>Touch</h3>
-                <p>Move only with the large stick on the left. Tapping the ground does not walk you. The big Attack button is in the bottom-right corner. Four skills arc around it and show a cooldown sweep. Round HP and MP buttons sit above that arc. Life and mana are the bars beside your portrait. Tree spends skill points and stat points, and a learned active can be placed on the highlighted belt slot. Shop, Help, and Sound sit beside the minimap. Akara only sells inside the Rogue Encampment.</p>
+                <p>Move only with the large stick on the left. Tapping the ground does not walk you. The big Attack button is in the bottom-right corner, with four skill slots around it. Round HP and MP buttons sit above the arc. Points (the badge turns gold when you have points) spends skill and stat points. Drag a skill onto Q W E R, or tap a skill and then a slot. Life and mana are the bars beside your portrait. Akara only sells inside the Rogue Encampment.</p>
               </div>
               <div>
                 <h3>Mouse and keyboard</h3>
-                <p>Click ground to move, click an enemy to attack. Arrow keys move. Q W E R cast the belt. Shift plus a belt key ranks that skill. T opens the tree. Space attacks. B toggles the shop. 5 drinks a health potion, 6 a mana potion. Esc closes panels.</p>
+                <p>Click ground to move, click an enemy to attack. Arrow keys move. Q W E R cast the four belt slots. Shift plus a belt key ranks that skill. T opens skills and stats. Drag a skill onto the belt, or click a skill and then a slot. Space attacks. B toggles the shop. 5 drinks a health potion, 6 a mana potion. Esc closes panels.</p>
               </div>
             </div>
             <p class="fine">Win by destroying Andariel's altar. If the Rogue Encampment falls, the match is lost. You respawn beside the campfire.</p>
