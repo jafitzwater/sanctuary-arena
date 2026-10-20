@@ -52,8 +52,8 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   const hero = player(sim);
   assert.equal(hero.maxHp, 240);
   assert.equal(hero.ad, 15);
-  assert.equal(hero.moveSpeed, 120);
-  assert.equal(barbarian.stats.walkSpeed, 80);
+  assert.equal(hero.moveSpeed, 216);
+  assert.equal(barbarian.stats.walkSpeed, 144);
   const raven = sim.units.find((unit) => unit.defId === 'blood-raven');
   assert.equal(raven?.moveSpeed, 93);
   assert.ok(raven && hero.moveSpeed > raven.moveSpeed, 'the hero should still catch Blood Raven');

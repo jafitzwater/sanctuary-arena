@@ -973,6 +973,8 @@ body.touch .side-col {
 }
 body.touch #potion-hp,
 body.touch #potion-mp {
+  position: relative;
+  z-index: 3;
   width: var(--pot);
   height: var(--pot);
   min-height: 0;
