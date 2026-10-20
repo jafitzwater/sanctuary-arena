@@ -1,9 +1,10 @@
 import { actProps, d2Atlas, monsterSheets } from './art/sheets';
+import { locomotionColumn, RUN_FRAMES } from './gait';
 import type { ActDef } from './data/acts/types';
 import { projectIso, unprojectIso } from './iso';
 import type { Prop } from './landscape';
 import { sceneryFor } from './landscape';
-import type { Vec } from './math';
+import { nearestOnPolyline, type Vec } from './math';
 import { player } from './query';
 import { groundAt, type GroundKind } from './terrain';
 import type { Camera, Sim, Unit } from './types';
@@ -34,8 +35,60 @@ interface Glyph {
   foot?: { x: number; y: number };
 }
 
-/** One direction of the Spriters run cycle. The source row continues past this into the next weapon. */
-const RUN_FRAMES = 12;
+/** Grass side of each blend diamond, in screen space: east, south, west, north. */
+const BLEND_GRASS: readonly Vec[] = [
+  { x: 1, y: 0 },
+  { x: 0, y: 1 },
+  { x: -1, y: 0 },
+  { x: 0, y: -1 },
+];
+
+function crisp(ctx: CanvasRenderingContext2D): void {
+  ctx.imageSmoothingEnabled = false;
+}
+
+/** #FF00FF and the near-magenta NPC matte, plus a despill of pixels that touch it. */
+function nearMagenta(r: number, g: number, b: number, a: number): boolean {
+  if (a < 16) return true;
+  if (g > 110) return false;
+  const rb = Math.min(r, b);
+  return r > 170 && b > 120 && rb - g > 70 && Math.abs(r - b) < 120;
+}
+
+function stripMatte(data: ImageData): void {
+  const px = data.data;
+  const w = data.width;
+  const h = data.height;
+  const kill = new Uint8Array(w * h);
+  for (let p = 0; p < kill.length; p++) {
+    const i = p * 4;
+    if (nearMagenta(px[i], px[i + 1], px[i + 2], px[i + 3])) kill[p] = 1;
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const p = y * w + x;
+      const i = p * 4;
+      if (kill[p]) {
+        px[i] = 0;
+        px[i + 1] = 0;
+        px[i + 2] = 0;
+        px[i + 3] = 0;
+        continue;
+      }
+      const edge =
+        (x > 0 && kill[p - 1] === 1) ||
+        (x + 1 < w && kill[p + 1] === 1) ||
+        (y > 0 && kill[p - w] === 1) ||
+        (y + 1 < h && kill[p + w] === 1);
+      if (!edge) continue;
+      const spill = Math.min(px[i], px[i + 2]) - px[i + 1];
+      if (spill > 12) {
+        px[i] = Math.max(0, px[i] - spill);
+        px[i + 2] = Math.max(0, px[i + 2] - spill);
+      }
+    }
+  }
+}
 
 function loadImage(src: string): HTMLImageElement {
   const img = new Image();
@@ -79,6 +132,8 @@ export class Renderer {
     tree: actProps.tree.map(loadImage),
     rock: actProps.rock.map(loadImage),
     fence: actProps.fence.map(loadImage),
+    stump: actProps.stump.map(loadImage),
+    wagon: actProps.wagon.map(loadImage),
     tent: actProps.tent.map(loadImage),
     stone: actProps.stone.map(loadImage),
   };
@@ -124,9 +179,12 @@ export class Renderer {
       ...this.props.tree,
       ...this.props.rock,
       ...this.props.fence,
+      ...this.props.stump,
+      ...this.props.wagon,
       ...this.props.tent,
       ...this.props.stone,
       this.akaraSheet,
+      this.rogueSheet,
     ]) this.cutSources.add(img);
     const bump = () => {
       this.mapKey = '';
@@ -139,7 +197,8 @@ export class Renderer {
     const rect = this.canvas.getBoundingClientRect();
     const cssW = Math.max(1, rect.width);
     const cssH = Math.max(1, rect.height);
-    const dpr = Math.min(window.devicePixelRatio || 1, cssW < 1100 ? 1.5 : 2);
+    const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+    this.canvas.style.imageRendering = 'pixelated';
     const width = Math.round(cssW * dpr);
     const height = Math.round(cssH * dpr);
     if (this.canvas.width !== width || this.canvas.height !== height) {
@@ -199,7 +258,7 @@ export class Renderer {
     const ctx = this.ctx;
     const { dpr, cssW, cssH } = this.camera;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.imageSmoothingEnabled = false;
+    crisp(ctx);
     ctx.fillStyle = '#1c2410';
     ctx.fillRect(0, 0, cssW, cssH);
     if (this.mapCanvas) {
@@ -292,7 +351,7 @@ export class Renderer {
     if (!ctx) return;
     const ox = map.height * hw + PAD;
     const oy = PAD;
-    ctx.imageSmoothingEnabled = false;
+    crisp(ctx);
     ctx.fillStyle = '#1c2410';
     ctx.fillRect(0, 0, width, height);
     if (ready) this.stampGround(ctx, map, ox, oy, hw);
@@ -313,6 +372,7 @@ export class Renderer {
       river: 5,
       bank: 1,
       dark: 5,
+      blend: 6,
     };
     const i1 = Math.ceil(map.width / step) + 2;
     const j1 = Math.ceil(map.height / step) + 2;
@@ -320,7 +380,7 @@ export class Renderer {
       for (let i = -2; i <= i1; i++) {
         const kind = groundAt(map, i * step, j * step);
         const row = rows[kind];
-        const col = floorCol(kind, i, j);
+        const col = kind === 'blend' ? this.blendCol(map, i * step, j * step) : floorCol(kind, i, j);
         const sx = Math.round((i - j) * 80 + ox);
         const sy = Math.round((i + j) * 40 + oy);
         // One extra pixel on every side so integer diamonds meet with no seam.
@@ -335,14 +395,18 @@ export class Renderer {
     const height =
       prop.kind === 'tree' ? 168 :
       prop.kind === 'tent' ? 108 :
-      prop.kind === 'fence' ? 64 :
+      prop.kind === 'fence' ? 110 :
+      prop.kind === 'stump' ? 52 :
+      prop.kind === 'wagon' ? 78 :
       prop.kind === 'npc' ? 102 :
-      86;
+      72;
     const sheet =
       prop.kind === 'npc' ? this.akaraSheet :
       prop.kind === 'tree' ? this.props.tree[prop.variant % this.props.tree.length] :
       prop.kind === 'rock' ? this.props.rock[prop.variant % this.props.rock.length] :
       prop.kind === 'fence' ? this.props.fence[prop.variant % this.props.fence.length] :
+      prop.kind === 'stump' ? this.props.stump[prop.variant % this.props.stump.length] :
+      prop.kind === 'wagon' ? this.props.wagon[prop.variant % this.props.wagon.length] :
       this.props.tent[prop.variant % this.props.tent.length];
     if (sheet.complete && sheet.naturalWidth > 0) this.blit(ctx, sheet, p.x, p.y, height * u, prop.flip);
   }
@@ -372,7 +436,7 @@ export class Renderer {
       ctx.scale(1, 0.5);
       ctx.translate(-footX, -y);
     }
-    const glyph = this.sheetFor(unit, gait.moving, gait.d, tier);
+    const glyph = this.sheetFor(unit, gait.moving, gait.d, gait.walking, tier);
     const outlined = unit.kind === 'minion' || unit.kind === 'champion';
     if (glyph) this.blit(ctx, glyph.img, footX, y, height, glyph.flip, glyph, outlined);
     if (unit.whirlT > 0) {
@@ -441,7 +505,7 @@ export class Renderer {
     }
   }
 
-  private sheetFor(unit: Unit, moving: boolean, phase: number, tier: ArmorTier): Glyph | null {
+  private sheetFor(unit: Unit, moving: boolean, phase: number, walking: boolean, tier: ArmorTier): Glyph | null {
     const delta = this.screenDelta(unit.facing);
     const row = unit.whirlT > 0 ? this.rowOf(delta) : this.heldRow(unit.id, this.smoothAim(unit.id, delta));
     if (unit.kind === 'seal') return this.full(this.props.rock[0], false);
@@ -458,9 +522,10 @@ export class Renderer {
         return this.atlas(pack.attack, 4, col, row, true);
       }
       if (moving) {
-        // Distance only. A facing change does not send the cycle back to frame 0.
-        const col = Math.floor(phase / 16) % RUN_FRAMES;
-        return this.atlas(pack.run, RUN_FRAMES, col, row, true);
+        // Same 0–1 cycle for walk and run, so a speed change does not hitch.
+        const frames = walking ? 4 : RUN_FRAMES;
+        const col = locomotionColumn(phase, frames);
+        return this.atlas(walking ? pack.walk : pack.run, frames, col, row, true);
       }
       return this.atlas(pack.idle, 1, 0, row, true);
     }
@@ -585,6 +650,7 @@ export class Renderer {
     canvas.height = h;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return null;
+    crisp(ctx);
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
     const data = ctx.getImageData(0, 0, w, h).data;
     const rows: number[][] = Array.from({ length: h }, () => []);
@@ -610,17 +676,37 @@ export class Renderer {
   }
 
 
-  private gaitOf(unit: Unit): { moving: boolean; d: number } {
+  private gaitOf(unit: Unit): { moving: boolean; d: number; walking: boolean } {
     const prev = this.gait.get(unit.id);
     let d = prev?.d ?? 0;
     let moving = false;
+    let step = 0;
     if (prev) {
-      const step = Math.hypot(unit.x - prev.x, unit.y - prev.y);
+      step = Math.hypot(unit.x - prev.x, unit.y - prev.y);
       moving = step > 0.4;
       if (moving) d += step;
     }
     this.gait.set(unit.id, { x: unit.x, y: unit.y, d });
-    return { moving, d };
+    // Town pace is 144 and the open run is 216. The midpoint keeps the cycle fraction.
+    const speed = this.frameDt > 0 ? step / this.frameDt : 0;
+    return { moving, d, walking: moving && speed < 180 };
+  }
+
+  /** Column of the grass-to-dirt row whose grass faces away from the lane. */
+  private blendCol(map: ActDef, x: number, y: number): number {
+    const roads = map.paths?.length ? map.paths.map((path) => path.lane) : [map.lane];
+    let best = { x, y };
+    let bestD = Infinity;
+    for (const lane of roads) {
+      const near = nearestOnPolyline({ x, y }, lane);
+      if (near.dist < bestD) {
+        bestD = near.dist;
+        best = near.point;
+      }
+    }
+    const dx = x - best.x;
+    const dy = y - best.y;
+    return blendIndex(dx - dy, (dx + dy) * 0.5);
   }
 
   /** Drop the magenta RGB stored in the floor sheet's transparent pixels. */
@@ -633,6 +719,7 @@ export class Renderer {
     canvas.height = img.naturalHeight;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return img;
+    crisp(ctx);
     ctx.drawImage(img, 0, 0);
     const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const px = data.data;
@@ -650,15 +737,7 @@ export class Renderer {
         }
       }
     }
-    for (let i = 0; i < px.length; i += 4) {
-      const magenta = px[i] > 200 && px[i + 2] > 180 && px[i + 1] < 80;
-      if (px[i + 3] < 16 || magenta) {
-        px[i] = 28;
-        px[i + 1] = 34;
-        px[i + 2] = 14;
-        px[i + 3] = 0;
-      }
-    }
+    stripMatte(data);
     ctx.putImageData(data, 0, 0);
     this.floor = canvas;
     return canvas;
@@ -681,46 +760,10 @@ export class Renderer {
     canvas.height = h;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return img;
+    crisp(ctx);
     ctx.drawImage(img, 0, 0);
     const data = ctx.getImageData(0, 0, w, h);
-    const px = data.data;
-    const matte = (i: number) => {
-      const r = px[i];
-      const g = px[i + 1];
-      const b = px[i + 2];
-      const a = px[i + 3];
-      if (a < 16) return true;
-      if (r > 200 && b > 180 && g < 80) return true;
-      if (r > 140 && b > 100 && g < 60 && b > g + 60 && r > g + 80) return true;
-      if (r > 240 && g > 240 && b > 240) return true;
-      return r < 20 && g < 20 && b < 20;
-    };
-    const kill = new Uint8Array(w * h);
-    const queue: number[] = [];
-    const seed = (p: number) => {
-      if (kill[p] || !matte(p * 4)) return;
-      kill[p] = 1;
-      queue.push(p);
-    };
-    for (let y = 0; y < h; y++) {
-      seed(y * w);
-      seed(y * w + w - 1);
-    }
-    for (let x = 0; x < w; x++) {
-      seed(x);
-      seed((h - 1) * w + x);
-    }
-    while (queue.length) {
-      const p = queue.pop() as number;
-      const x = p % w;
-      if (x > 0) seed(p - 1);
-      if (x + 1 < w) seed(p + 1);
-      if (p >= w) seed(p - w);
-      if (p + w < w * h) seed(p + w);
-    }
-    for (let p = 0; p < kill.length; p++) {
-      if (kill[p]) px[p * 4 + 3] = 0;
-    }
+    stripMatte(data);
     ctx.putImageData(data, 0, 0);
     this.cutouts.set(img, canvas);
     return canvas;
@@ -743,7 +786,7 @@ export class Renderer {
     const dh = Math.max(1, Math.round(height));
     const dw = Math.max(1, Math.round((iw / ih) * dh));
     ctx.save();
-    ctx.imageSmoothingEnabled = false;
+    crisp(ctx);
     ctx.translate(Math.round(x), Math.round(y));
     if (flip) ctx.scale(-1, 1);
     const footX = src?.foot ? (src.foot.x / src.sw) * dw : dw / 2;
@@ -827,6 +870,7 @@ export class Renderer {
     }
     const ctx = mini.getContext('2d');
     if (!ctx) return;
+    crisp(ctx);
     const map = sim.map;
     const sx = w / map.width;
     const sy = h / map.height;
@@ -880,7 +924,22 @@ const FLOOR_SEAT: readonly (readonly number[])[] = [
   [0, 0, 0, 0],
   [0, 0, 0, 0],
   [6, 6, 6, 0],
+  [0, 0, 0, 0],
 ];
+
+/** Blend column whose grass side points away from the nearest lane. */
+function blendIndex(sx: number, sy: number): number {
+  let best = 0;
+  let score = -Infinity;
+  for (let i = 0; i < BLEND_GRASS.length; i++) {
+    const dot = BLEND_GRASS[i].x * sx + BLEND_GRASS[i].y * sy;
+    if (dot > score) {
+      score = dot;
+      best = i;
+    }
+  }
+  return best;
+}
 
 function floorCol(kind: GroundKind, i: number, j: number): number {
   if (kind === 'path' || kind === 'town' || kind === 'pale') return 0;

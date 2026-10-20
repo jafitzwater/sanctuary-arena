@@ -2,7 +2,7 @@ import type { ActDef } from './data/acts/types';
 import { distToPolyline, type Vec } from './math';
 
 export interface Prop {
-  kind: 'tree' | 'rock' | 'fence' | 'tent' | 'npc';
+  kind: 'tree' | 'rock' | 'fence' | 'tent' | 'npc' | 'stump' | 'wagon';
   variant: number;
   x: number;
   y: number;
@@ -65,6 +65,8 @@ function onRoad(map: ActDef, x: number, y: number, pad: number): boolean {
 /** Same shoulder the walk check uses, so a solid stays off the path. */
 const PATH_SHOULDER = 40;
 const OPENING = 150;
+/** Matches the walk check: four floor diamonds across each base mouth. */
+const ENTRANCE_HALF = (80 / 0.85) * 2;
 
 function offPath(map: ActDef, x: number, y: number, radius: number): boolean {
   const limit = map.laneWidth / 2 + PATH_SHOULDER + radius + 4;
@@ -74,20 +76,41 @@ function offPath(map: ActDef, x: number, y: number, radius: number): boolean {
 }
 
 function place(props: Prop[], map: ActDef, prop: Prop): void {
-  if (prop.block <= 0 && (prop.kind === 'tree' || prop.kind === 'fence' || prop.kind === 'tent')) {
-    const radius = prop.kind === 'tree' ? 38 : prop.kind === 'fence' ? 24 : 42;
-    if (offPath(map, prop.x, prop.y, radius)) prop.block = radius;
+  if (prop.block <= 0) {
+    const radius =
+      prop.kind === 'tree' ? 38 :
+      prop.kind === 'fence' ? 24 :
+      prop.kind === 'tent' ? 42 :
+      prop.kind === 'wagon' ? 36 :
+      prop.kind === 'stump' ? 18 :
+      0;
+    if (radius > 0 && offPath(map, prop.x, prop.y, radius)) prop.block = radius;
   }
   props.push(prop);
 }
 
+function distToSegment(x: number, y: number, a: Vec, b: Vec): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 < 1 ? 0 : Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / len2));
+  return Math.hypot(x - (a.x + dx * t), y - (a.y + dy * t));
+}
+
+function inEntrance(map: ActDef, x: number, y: number): boolean {
+  for (const lane of lanesOf(map)) {
+    if (distToSegment(x, y, map.playerBase, lane[0]) <= ENTRANCE_HALF) return true;
+    if (distToSegment(x, y, map.enemyBase, lane[lane.length - 1]) <= ENTRANCE_HALF) return true;
+  }
+  return false;
+}
+
 function borderClear(map: ActDef, x: number, y: number): boolean {
-  if (Math.hypot(x - map.playerBase.x, y - map.playerBase.y) <= map.fountainRadius) return false;
-  if (Math.hypot(x - map.enemyBase.x, y - map.enemyBase.y) <= map.fountainRadius) return false;
-  if (map.river && distToPolyline({ x, y }, map.river) < 78) return false;
+  if (map.river && distToPolyline({ x, y }, map.river) < 36) return false;
   if (onRoad(map, x, y, 24)) return false;
+  if (inEntrance(map, x, y)) return false;
   const spots = [...(map.dens ?? []), ...(map.shrines ?? []), ...(map.pits ?? [])];
-  return spots.every((spot) => Math.hypot(x - spot.x, y - spot.y) >= OPENING);
+  return spots.every((spot) => Math.hypot(x - spot.x, y - spot.y) >= 90);
 }
 
 function inPlaza(map: ActDef, x: number, y: number, scale: number): boolean {
@@ -103,11 +126,11 @@ function build(map: ActDef): Prop[] {
     ? map.paths.map((path) => ({ id: path.id, lane: path.lane }))
     : [{ id: 'center', lane: map.lane }];
 
-  // Contiguous borders: a run of trees, then fences, then rocks, on both sides of every lane.
+  // Contiguous borders: dead trees, then stumps, then stone piles, on both sides of every lane.
   const groups: { kind: Prop['kind']; count: number; step: number; block: number; variants: number }[] = [
-    { kind: 'tree', count: 4, step: 80, block: 0, variants: 5 },
-    { kind: 'fence', count: 3, step: 52, block: 0, variants: 2 },
-    { kind: 'rock', count: 2, step: 72, block: 34, variants: 3 },
+    { kind: 'tree', count: 4, step: 62, block: 0, variants: 5 },
+    { kind: 'stump', count: 3, step: 46, block: 0, variants: 3 },
+    { kind: 'rock', count: 2, step: 58, block: 30, variants: 3 },
   ];
   for (const road of roads) {
     const len = lengthOf(road.lane);
@@ -170,19 +193,77 @@ function build(map: ActDef): Prop[] {
     }
   }
 
-  const camp = map.playerBase;
-  place(props, map, { kind: 'tent', variant: 0, x: camp.x - 190, y: camp.y - 70, flip: false, block: 46 });
-  place(props, map, { kind: 'tent', variant: 1, x: camp.x + 30, y: camp.y - 210, flip: true, block: 42 });
-  place(props, map, { kind: 'tent', variant: 2, x: camp.x + 220, y: camp.y + 90, flip: false, block: 40 });
-  place(props, map, { kind: 'npc', variant: 0, x: camp.x - 20, y: camp.y - 78, flip: false, block: 20 });
-  place(props, map, { kind: 'fence', variant: 0, x: camp.x - 250, y: camp.y + 40, flip: false, block: 28 });
-  place(props, map, { kind: 'fence', variant: 1, x: camp.x - 250, y: camp.y + 120, flip: false, block: 28 });
-  place(props, map, { kind: 'rock', variant: 1, x: camp.x + 250, y: camp.y - 150, flip: false, block: 34 });
-
-  const lair = map.enemyBase;
-  place(props, map, { kind: 'rock', variant: 0, x: lair.x + 40, y: lair.y - 180, flip: false, block: 36 });
-  place(props, map, { kind: 'rock', variant: 2, x: lair.x + 180, y: lair.y + 30, flip: false, block: 34 });
-  place(props, map, { kind: 'fence', variant: 0, x: lair.x - 40, y: lair.y - 200, flip: true, block: 26 });
-  place(props, map, { kind: 'tree', variant: 4, x: lair.x + 220, y: lair.y - 80, flip: false, block: 0 });
+  campAssembly(props, map, map.playerBase, true);
+  campAssembly(props, map, map.enemyBase, false);
   return props;
+}
+
+/** Palisade, gate posts, tents, and a wagon around a banner, open toward its lanes. */
+function campAssembly(props: Prop[], map: ActDef, base: Vec, npc: boolean): void {
+  const lanes = lanesOf(map);
+  const ally = base === map.playerBase;
+  const mouths = lanes.map((lane) => (ally ? lane[0] : lane[lane.length - 1]));
+  const radius = 270;
+  const spots: { x: number; y: number; ang: number }[] = [];
+  const count = 28;
+  for (let i = 0; i < count; i++) {
+    const ang = -Math.PI + ((i + 0.5) / count) * Math.PI * 2;
+    const x = base.x + Math.cos(ang) * radius;
+    const y = base.y + Math.sin(ang) * radius;
+    if (mouths.some((mouth) => distToSegment(x, y, base, mouth) <= ENTRANCE_HALF)) continue;
+    if (x < 64 || y < 64 || x > map.width - 64 || y > map.height - 64) continue;
+    spots.push({ x, y, ang });
+  }
+  let gateA = 0;
+  let gateB = 0;
+  let entrance = 0;
+  if (spots.length >= 2) {
+    let biggest = -1;
+    for (let i = 0; i < spots.length; i++) {
+      let gap = spots[(i + 1) % spots.length].ang - spots[i].ang;
+      if (gap <= 0) gap += Math.PI * 2;
+      if (gap > biggest) {
+        biggest = gap;
+        gateA = i;
+        gateB = (i + 1) % spots.length;
+        entrance = spots[i].ang + gap / 2;
+      }
+    }
+  }
+  let run = 0;
+  let variant = 0;
+  spots.forEach((spot, i) => {
+    const gate = i === gateA || i === gateB;
+    place(props, map, {
+      kind: 'fence',
+      variant: gate ? 2 : variant,
+      x: spot.x,
+      y: spot.y,
+      flip: false,
+      block: 26,
+    });
+    if (!gate) {
+      run += 1;
+      if (run === 4) {
+        run = 0;
+        variant = (variant + 1) % 2;
+      }
+    }
+  });
+  const back = entrance + Math.PI;
+  const seat = (ang: number, dist: number) => ({
+    x: base.x + Math.cos(ang) * dist,
+    y: base.y + Math.sin(ang) * dist,
+  });
+  const furnish = (kind: Prop['kind'], variant: number, ang: number, dist: number, block: number, flip: boolean) => {
+    const at = seat(ang, dist);
+    if (at.x < 80 || at.y < 80 || at.x > map.width - 80 || at.y > map.height - 80) return;
+    if (kind !== 'npc' && mouths.some((mouth) => distToSegment(at.x, at.y, base, mouth) <= ENTRANCE_HALF)) return;
+    if (onRoad(map, at.x, at.y, 16)) return;
+    place(props, map, { kind, variant, x: at.x, y: at.y, flip, block });
+  };
+  furnish('tent', 0, back, 230, 42, false);
+  furnish('tent', 1, back + 0.55, 210, 40, true);
+  furnish('wagon', 0, back - 0.5, 245, 36, false);
+  if (npc) furnish('npc', 0, back, 96, 20, false);
 }

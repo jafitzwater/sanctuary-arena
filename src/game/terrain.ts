@@ -10,8 +10,13 @@ const RIVER = 62;
 const SHOULDER = 40;
 const OPENING = 150;
 const CORRIDOR = 64;
+/** World size of one baked floor diamond. The entrance is four of these across. */
+const FLOOR_STEP = 80 / 0.85;
+const ENTRANCE_HALF = FLOOR_STEP * 2;
+/** Obstacles collide on the bottom of the sprite, not the full visual box. */
+const FOOTPRINT = 0.3;
 
-export type GroundKind = 'grass' | 'edge' | 'path' | 'town' | 'pale' | 'river' | 'bank' | 'dark';
+export type GroundKind = 'grass' | 'edge' | 'path' | 'town' | 'pale' | 'river' | 'bank' | 'dark' | 'blend';
 
 function lanes(map: ActDef): Vec[][] {
   return map.paths?.length ? map.paths.map((path) => path.lane) : [map.lane];
@@ -67,11 +72,32 @@ function inOpening(map: ActDef, x: number, y: number): boolean {
   return false;
 }
 
+function distToSegment(x: number, y: number, a: Vec, b: Vec): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 < 1 ? 0 : Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / len2));
+  return Math.hypot(x - (a.x + dx * t), y - (a.y + dy * t));
+}
+
+/** Corridor from each banner to each of its lane mouths. Props do not block it. */
+function inEntrance(map: ActDef, x: number, y: number): boolean {
+  for (const lane of lanes(map)) {
+    if (distToSegment(x, y, map.playerBase, lane[0]) <= ENTRANCE_HALF) return true;
+    if (distToSegment(x, y, map.enemyBase, lane[lane.length - 1]) <= ENTRANCE_HALF) return true;
+  }
+  return false;
+}
+
+function onRoad(map: ActDef, x: number, y: number): boolean {
+  return nearestRoad(map, x, y) <= roadLimit(map);
+}
+
 function hitProp(map: ActDef, x: number, y: number): boolean {
   if (!map.paths) return false;
   for (const prop of sceneryFor(map)) {
     if (prop.block <= 0) continue;
-    if (Math.hypot(x - prop.x, y - prop.y) < prop.block) return true;
+    if (Math.hypot(x - prop.x, y - prop.y) < prop.block * FOOTPRINT) return true;
   }
   return false;
 }
@@ -80,6 +106,7 @@ function hitProp(map: ActDef, x: number, y: number): boolean {
 export function walkable(map: ActDef, x: number, y: number): boolean {
   if (!map.paths) return true;
   if (x < EDGE || y < EDGE || x > map.width - EDGE || y > map.height - EDGE) return false;
+  if (onRoad(map, x, y) || inEntrance(map, x, y)) return true;
   if (hitProp(map, x, y)) return false;
   if (inOpening(map, x, y)) return true;
   const road = nearestRoad(map, x, y);
@@ -114,14 +141,15 @@ function anchor(map: ActDef, x: number, y: number): Vec {
 export function resolveSanctuary(map: ActDef, x: number, y: number): Vec {
   let px = clamp(x, EDGE, map.width - EDGE);
   let py = clamp(y, EDGE, map.height - EDGE);
-  if (map.paths) {
+  if (map.paths && !onRoad(map, px, py) && !inEntrance(map, px, py)) {
     for (const prop of sceneryFor(map)) {
       if (prop.block <= 0) continue;
+      const foot = prop.block * FOOTPRINT;
       const dx = px - prop.x;
       const dy = py - prop.y;
       const dist = Math.hypot(dx, dy);
-      if (dist < prop.block) {
-        const scale = (prop.block + 1) / (dist || 1);
+      if (dist < foot) {
+        const scale = (foot + 1) / (dist || 1);
         px = prop.x + dx * scale;
         py = prop.y + dy * scale;
       }
@@ -158,5 +186,6 @@ export function groundAt(map: ActDef, x: number, y: number): GroundKind {
   const yard = map.paths ? map.fountainRadius : map.plaza;
   if (camp <= yard) return 'town';
   if (lair <= yard) return map.theme.decor === 'sanctuary' ? 'pale' : 'town';
+  if (road <= cobble + FLOOR_STEP) return 'blend';
   return 'grass';
 }

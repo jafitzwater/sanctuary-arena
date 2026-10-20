@@ -18,10 +18,64 @@ import { UNIT_DEFS } from '../src/game/data/units';
 import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
 import { sceneryFor } from '../src/game/landscape';
 import { groundAt, walkable } from '../src/game/terrain';
+import { locomotionColumn } from '../src/game/gait';
 
 function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   const frames = Math.max(1, Math.round(seconds / dt));
   for (let i = 0; i < frames; i++) updateSim(sim, input, dt);
+}
+
+function steer(sim: Sim, x: number, y: number, seconds = 7): void {
+  const hero = player(sim);
+  const input = emptyInput();
+  const frames = Math.round(seconds / (1 / 30));
+  for (let i = 0; i < frames; i++) {
+    input.moveX = x - hero.x;
+    input.moveY = y - hero.y;
+    updateSim(sim, input, 1 / 30);
+    if (Math.hypot(hero.x - x, hero.y - y) < 28) return;
+  }
+}
+
+function roadside(lane: { x: number; y: number }[], side: number): number[] {
+  const props = sceneryFor(sanctuary).filter((prop) => prop.kind === 'tree' || prop.kind === 'stump' || prop.kind === 'rock');
+  let total = 0;
+  const marks: { at: number; x: number; y: number }[] = [];
+  for (let i = 1; i < lane.length; i++) {
+    const len = Math.hypot(lane[i].x - lane[i - 1].x, lane[i].y - lane[i - 1].y);
+    marks.push({ at: total, x: lane[i - 1].x, y: lane[i - 1].y });
+    total += len;
+  }
+  marks.push({ at: total, x: lane[lane.length - 1].x, y: lane[lane.length - 1].y });
+  const hit: number[] = [];
+  for (const prop of props) {
+    let best = Infinity;
+    let at = 0;
+    let cross = 0;
+    for (let i = 1; i < marks.length; i++) {
+      const ax = marks[i - 1].x;
+      const ay = marks[i - 1].y;
+      const bx = marks[i].x;
+      const by = marks[i].y;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const len2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((prop.x - ax) * dx + (prop.y - ay) * dy) / len2));
+      const qx = ax + dx * t;
+      const qy = ay + dy * t;
+      const dist = Math.hypot(prop.x - qx, prop.y - qy);
+      if (dist < best) {
+        best = dist;
+        at = marks[i - 1].at + Math.hypot(qx - ax, qy - ay);
+        cross = dx * (prop.y - ay) - dy * (prop.x - ax);
+      }
+    }
+    if (Math.sign(cross) !== Math.sign(side)) continue;
+    const offset = sanctuary.laneWidth / 2 + 88;
+    if (best < Infinity && Math.abs(best - offset) < 50 && at > 400 && at < total - 400) hit.push(at);
+  }
+  hit.sort((a, b) => a - b);
+  return hit;
 }
 
 {
@@ -326,6 +380,65 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   if (tree) assert.equal(walkable(sanctuary, tree.x, tree.y), false, 'a large tree blocks passage');
   const tent = sceneryFor(sanctuary).find((prop) => prop.kind === 'tent' && prop.block > 0);
   assert.ok(tent && !walkable(sanctuary, tent.x, tent.y), 'a tent blocks passage');
+  assert.equal(groundAt(sanctuary, 2418, 1367), 'blend', 'the lane shoulder uses a grass-to-dirt transition');
+  {
+    const home = sanctuary.playerBase;
+    const mouth = sanctuary.paths?.[2].lane[0];
+    if (!mouth) throw new Error('south lane missing');
+    const mx = (home.x + mouth.x) / 2;
+    const my = (home.y + mouth.y) / 2;
+    const dx = mouth.x - home.x;
+    const dy = mouth.y - home.y;
+    const mag = Math.hypot(dx, dy) || 1;
+    const wide = (80 / 0.85) * 1.6;
+    assert.equal(walkable(sanctuary, mx + (-dy / mag) * wide, my + (dx / mag) * wide), true, 'the south entrance is at least three tiles wide');
+  }
+  for (const path of sanctuary.paths ?? []) {
+    for (const [home, mouth] of [
+      [sanctuary.playerBase, path.lane[0]],
+      [sanctuary.enemyBase, path.lane[path.lane.length - 1]],
+    ] as const) {
+      for (let t = 0; t <= 1; t += 0.05) {
+        const x = home.x + (mouth.x - home.x) * t;
+        const y = home.y + (mouth.y - home.y) * t;
+        assert.equal(walkable(sanctuary, x, y), true, `${path.name} entrance stays open at ${t.toFixed(2)}`);
+      }
+    }
+    for (const side of [1, -1]) {
+      const band = roadside(path.lane, side);
+      assert.ok(band.length >= 8, `${path.name} side ${side} is a continuous border`);
+      let worst = 0;
+      for (let i = 1; i < band.length; i++) worst = Math.max(worst, band[i] - band[i - 1]);
+      assert.ok(worst < 240, `${path.name} side ${side} gap is ${worst.toFixed(0)}`);
+    }
+  }
+  const runHome = createMatch(sanctuary, barbarian, 3);
+  const runner = player(runHome);
+  runner.hp = 100000;
+  runner.invuln = 60;
+  for (const path of sanctuary.paths ?? []) {
+    for (const [home, mouth] of [
+      [sanctuary.playerBase, path.lane[0]],
+      [sanctuary.enemyBase, path.lane[path.lane.length - 1]],
+    ] as const) {
+      const dx = mouth.x - home.x;
+      const dy = mouth.y - home.y;
+      const len = Math.hypot(dx, dy) || 1;
+      runner.x = home.x + (dx / len) * 120;
+      runner.y = home.y + (dy / len) * 120;
+      const startX = runner.x;
+      const startY = runner.y;
+      steer(runHome, mouth.x, mouth.y);
+      assert.ok(distToPolyline(runner, path.lane) < sanctuary.laneWidth / 2, `${path.name} lets the hero out of the base`);
+      steer(runHome, startX, startY);
+      assert.ok(Math.hypot(runner.x - startX, runner.y - startY) < 48, `${path.name} lets the hero back into the base`);
+    }
+  }
+  const held = 80;
+  const runCol = locomotionColumn(held, 12);
+  const walkCol = locomotionColumn(held, 4);
+  assert.notEqual(runCol, 0, 'a mid-cycle run is not frame 0');
+  assert.ok(Math.abs(walkCol / 4 - runCol / 12) < 0.2, 'walk keeps the run cycle fraction');
   step(sim, emptyInput(), sanctuary.waves.first + 0.25);
   const minions = sim.units.filter((unit) => unit.kind === 'minion' && unit.alive);
   for (const index of [0, 1, 2]) {
