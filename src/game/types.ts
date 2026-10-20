@@ -42,6 +42,8 @@ export interface Unit {
   ranged: boolean;
   projectileSpeed: number;
   waypoint: number;
+  /** Index into map.paths. Single-lane maps stay on 0. */
+  path: number;
   targetId: number | null;
   facing: number;
   swing: number;

@@ -284,6 +284,8 @@ export class Hud {
     this.text('#title-class', sim.classDef.name);
     this.text('#title-blurb', sim.classDef.blurb);
     this.text('#title-act', `Act ${sim.map.actNumber} · ${sim.map.name}`);
+    const play = this.root.querySelector('#play-btn');
+    if (play) play.textContent = sim.map.id === 'sanctuary' ? 'Enter Sanctuary' : 'Enter the Moor';
     const keyed = sim.classDef.skills.filter((skill) => skill.key);
     this.text(
       '#title-skills',
@@ -299,8 +301,8 @@ export class Hud {
     this.text(
       '#end-copy',
       won
-        ? "Andariel's altar is silent. The road back to the Rogue Encampment is clear."
-        : 'The Rogue Encampment has fallen. The Blood Moor belongs to the Fallen.',
+        ? (sim.map.victory ?? "Andariel's altar is silent. The road back to the Rogue Encampment is clear.")
+        : (sim.map.defeat ?? 'The Rogue Encampment has fallen. The Blood Moor belongs to the Fallen.'),
     );
     this.text(
       '#end-stats',

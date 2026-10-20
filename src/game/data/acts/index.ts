@@ -1,4 +1,5 @@
 import { act1 } from './act1';
+import { sanctuary } from './sanctuary';
 import type { ActDef } from './types';
 
 /**
@@ -7,10 +8,12 @@ import type { ActDef } from './types';
  * 2. Register it here.
  * 3. If the act needs new scenery, add a theme.decor id and a paint branch
  *    in src/game/render.ts. New monsters go in src/game/data/units.ts.
- * The simulator treats every act the same: one lane, two bases, towers, waves.
+ * The simulator treats every act the same: lanes, two bases, towers, waves.
+ * Sanctuary adds paths, a river, and roam. Act I stays a single lane.
  */
 export const ACTS: Record<string, ActDef> = {
   act1,
+  sanctuary,
 };
 
 export function getAct(id: string): ActDef {

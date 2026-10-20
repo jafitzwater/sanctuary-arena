@@ -1,4 +1,4 @@
-import { act1 } from './data/acts/act1';
+import { sanctuary } from './data/acts/sanctuary';
 import { barbarian } from './data/classes/barbarian';
 import { AudioBus } from './audio';
 import { Hud } from './hud';
@@ -12,7 +12,7 @@ type Mode = 'title' | 'play' | 'end';
 /**
  * Wires the simulator, the canvas, and the DOM HUD. New classes and acts are
  * chosen by passing a different ClassDef / ActDef into createMatch — the
- * default match is the Barbarian on Act I.
+ * default match is the Barbarian on Sanctuary.
  */
 export class Game {
   private sim: Sim;
@@ -25,7 +25,7 @@ export class Game {
   private audio = new AudioBus();
 
   constructor(canvas: HTMLCanvasElement, root: HTMLElement) {
-    this.sim = createMatch(act1, barbarian);
+    this.sim = createMatch(sanctuary, barbarian);
     this.renderer = new Renderer(canvas);
     this.hud = new Hud(root);
     this.input = new InputController(canvas, {
@@ -120,7 +120,7 @@ export class Game {
 
   private begin(): void {
     this.audio.unlock();
-    this.sim = createMatch(act1, barbarian);
+    this.sim = createMatch(sanctuary, barbarian);
     this.mode = 'play';
     this.hud.shopOpen = false;
     this.hud.helpOpen = false;

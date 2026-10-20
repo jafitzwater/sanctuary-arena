@@ -1,6 +1,6 @@
 # Sanctuary Arena
 
-A personal, non-commercial browser MOBA with a Diablo II theme. This proof of concept is one lane on Act I: the Barbarian walks from the Rogue Encampment, across the Blood Moor, to Andariel's altar in the Catacombs.
+A personal, non-commercial browser MOBA with a Diablo II theme. The match is Sanctuary: three paths from the Rogue Encampment to Harrogath, split by a blood-red river. The Barbarian's goal is the enemy Worldstone. Act I's single Blood Moor lane is still in the data files for the older tests.
 
 The look is an isometric take on Act I. Real Spriters Resource frames (Barbarian light, medium, and heavy; Rogue mercenary; Akara; Act I town and outdoor floor) are bundled under `src/assets/art/d2/`. Whirlwind, leap, cast, get-hit, death, Fallen, zombies, Blood Raven, the quill rat, and the props are generated for this project. The page does not hotlink art or audio. Sound effects and the ambient bed are synthesized in the browser (`src/game/audio.ts`).
 
@@ -12,7 +12,7 @@ That URL updates when this branch is merged to `main` and the Pages workflow fin
 
 ## How to play
 
-Destroy **Andariel's altar**. If the **Rogue Encampment** falls, you lose. You respawn beside the campfire after a short timer. Gold comes from last hits, hero kills, destroyed towers, and a slow trickle. Spend it at Akara while you are inside the Encampment (or while you are dead).
+Destroy the **Harrogath Worldstone**. If the **Encampment Worldstone** falls, you lose. Three paths leave each town: the frozen Barricade, the Blood Moor, and the Kurast road. You can walk the wilderness between them. You respawn beside the campfire after a short timer. Gold comes from last hits, hero kills, destroyed towers, and a slow trickle. Spend it at Akara while you are inside the Encampment (or while you are dead).
 
 Bash starts on Q at rank 1. Shout, Stun, Leap Attack, Battle Orders, and Whirlwind unlock at levels 2, 4, 6, 8, and 10. A skill can be viewed as soon as its level arrives, but it goes on the belt only after you spend a point and it reaches rank 1. Learning one fills an empty slot. Only four skills are equipped. A gold **+** on a skill button, or on a loadout icon, spends a skill point (ranks go from 1 to 5). **T** or **Points** opens a compact stats panel: four big **+** buttons for strength, dexterity, vitality, and energy (five points each level after level 1). The Loadout tab is where you drag a learned skill onto Q W E R, or tap it and then a slot. The gold badge on Points is the number of unspent skill and stat points.
 
@@ -87,7 +87,7 @@ src/game/hud.ts          DOM HUD, skill tree, and shop
 src/game/Game.ts         Composition root. This is the file that picks the act and class.
 ```
 
-The simulator does not hard-code Barbarian or Act I beyond `Game.ts` calling `createMatch(act1, barbarian)`. Registries live in `src/game/data/classes/index.ts` and `src/game/data/acts/index.ts`.
+The simulator does not hard-code Barbarian or Sanctuary beyond `Game.ts` calling `createMatch(sanctuary, barbarian)`. Registries live in `src/game/data/classes/index.ts` and `src/game/data/acts/index.ts`.
 
 ### Add a class
 
@@ -111,7 +111,7 @@ Acts II–V are another `ActDef`:
 4. New scenery: extend `buildScenery` / `paintRoad` in `render.ts`. Unknown props still draw as trees.
 5. Pass the act into `createMatch` from `Game.ts`.
 
-The walkable ground is the road, a jungle shoulder beside it, and a plaza around each base. That keeps one lane without a path that walks around every tower. Towers should stay on the polyline so minions march into them.
+Act I keeps the hero on the road, a jungle shoulder beside it, and a plaza around each base. Sanctuary sets `roam` so the whole map is walkable, and `paths` so each road has its own minions. A `river` polyline is drawn and does not block movement. Towers on a path should stay on that path's polyline so minions march into them. Guardians stand off the road, beside the Worldstone.
 
 ## Deploy
 
@@ -161,7 +161,7 @@ Generated stand-ins, drawn for this project to match the Diablo II shapes rather
 
 ## Known gaps
 
-- One playable class and one act. The other six classes have CharStats rows in JSON only. No fog of war, no jungle camps, no inhibitors.
+- One playable class. Sanctuary has three paths, a river, and a tower chain (outer, inner, seal tower, two guardians, and a Worldstone at each town). The seal stones are scenery. Destroying one does not yet spawn Super Monsters. No wilderness dens, river pits, fog of war, or the other six classes.
 - The match uses six Barbarian skills and a four-slot belt, not the full 30-skill tree. The 1.13c JSON is still in the repo as the reference for names and raw numbers. Ranks stop at 5. Battle Orders raises life only. Shout raises defense for a few seconds.
 - Cooldowns and monster damage are scaled for a short match. Exceptional and elite items are not in the shop. Dual wield uses the slower swing and about half the offhand damage.
 - Blood Raven kites and retreats; she does not cast a skill kit. The quill rat has one pose. Rogues use the mercenary sheet, not a separate archer body.
