@@ -161,7 +161,7 @@ Generated stand-ins, drawn for this project to match the Diablo II shapes rather
 
 ## Known gaps
 
-- The title screen lists all seven classes. Only the Barbarian can be played. Four allied heroes and five enemies spawn with that kit under other names until more classes exist. They lane, last-hit, retreat, and hit towers when a minion is with them. Sanctuary also has dens, seals, river pits, shrines, and a fountain recall (G).
+- The title screen lists all seven classes. Only the Barbarian can be played. Four allied heroes and five enemies reuse that kit. Akara can hire one rogue for 45 seconds. Item records can carry a tier (base, magic, rare, unique, set), magic find, gold find, sockets, runes, and charms. The shop still sells only the four base slots, potions, and the hire.
 - The match uses six Barbarian skills and a four-slot belt, not the full 30-skill tree. The 1.13c JSON is still in the repo as the reference for names and raw numbers. Ranks stop at 5. Battle Orders raises life only. Shout raises defense for a few seconds.
 - Cooldowns and monster damage are scaled for a short match. Exceptional and elite items are not in the shop. Dual wield uses the slower swing and about half the offhand damage.
 - Blood Raven kites and retreats; she does not cast a skill kit. The quill rat has one pose. Rogues use the mercenary sheet, not a separate archer body.

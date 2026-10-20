@@ -58,6 +58,9 @@ export interface Unit {
   recall: number;
   /** Computer-controlled hero. The player stays false. */
   bot: boolean;
+  /** Temporary hired rogue. Lane minions stay false. */
+  merc: boolean;
+  mercT: number;
   targetId: number | null;
   facing: number;
   swing: number;
