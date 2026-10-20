@@ -25,15 +25,31 @@ import fire from '../../assets/art/props/fire.png';
 import wall from '../../assets/art/props/wall.png';
 import tower from '../../assets/art/props/watchtower.png';
 import altar from '../../assets/art/props/andariel.png';
+import lightIdle from '../../assets/art/d2/barb-light-idle.webp';
+import lightWalk from '../../assets/art/d2/barb-light-walk.webp';
+import lightRun from '../../assets/art/d2/barb-light-run.webp';
+import lightAttack from '../../assets/art/d2/barb-light-attack.webp';
+import mediumIdle from '../../assets/art/d2/barb-medium-idle.webp';
+import mediumWalk from '../../assets/art/d2/barb-medium-walk.webp';
+import mediumRun from '../../assets/art/d2/barb-medium-run.webp';
+import mediumAttack from '../../assets/art/d2/barb-medium-attack.webp';
+import heavyIdle from '../../assets/art/d2/barb-heavy-idle.webp';
+import heavyWalk from '../../assets/art/d2/barb-heavy-walk.webp';
+import heavyRun from '../../assets/art/d2/barb-heavy-run.webp';
+import heavyAttack from '../../assets/art/d2/barb-heavy-attack.webp';
+import rogueMerc from '../../assets/art/d2/rogue.webp';
+import akaraSheet from '../../assets/art/d2/akara.webp';
+import townFloor from '../../assets/art/d2/town-floor.webp';
+import outdoorFloor from '../../assets/art/d2/outdoor-floor.webp';
 
 /**
  * Sprite slots follow Diablo II PlrMode tokens (NU, WL, RN, A1, A2, S1, GH, DD).
  * The Barbarian token is BA. Weapon class from Weapons.txt picks A1 (1HS / 1HT / HTH)
  * or A2 (2HS / 2HT / STF). Replace any URL here to swap a sheet without touching combat.
  *
- * Character frames under src/assets/art/barbarian and monsters/ are original generated art.
- * Blood Raven and the quill rat use the stand-ins in src/assets/art/generated.
- * Spriters Resource sheets were not clean enough to ship; see the README.
+ * Barbarian walk, run, idle, and attack, the Rogue mercenary, and Akara are
+ * whole frames cut from Spriters Resource sheets (see d2Atlas). Whirl, leap,
+ * cast, get-hit, and death stay on the generated frames below.
  */
 export const barbarianSheets = {
   token: 'BA',
@@ -68,6 +84,17 @@ export const propSheets = {
   wall,
   tower,
   altar,
+};
+
+/** Real Spriters Resource atlases. Eight direction rows, south then clockwise. */
+export const d2Atlas = {
+  light: { idle: lightIdle, walk: lightWalk, run: lightRun, attack: lightAttack },
+  medium: { idle: mediumIdle, walk: mediumWalk, run: mediumRun, attack: mediumAttack },
+  heavy: { idle: heavyIdle, walk: heavyWalk, run: heavyRun, attack: heavyAttack },
+  rogue: rogueMerc,
+  akara: akaraSheet,
+  town: townFloor,
+  outdoor: outdoorFloor,
 };
 
 export const TWO_HAND_WCLASS = new Set(['2HS', '2HT', 'STF']);

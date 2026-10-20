@@ -816,11 +816,11 @@ body.touch #stick { display: block; }
 
 /* Phone landscape: Diablo Immortal thumb layout. Desktop keeps the bottom belt. */
 body.touch {
-  --atk: clamp(80px, 20vmin, 100px);
-  --sk: clamp(64px, 16.5vmin, 78px);
+  --atk: clamp(88px, 23vmin, 108px);
+  --sk: clamp(54px, 14vmin, 68px);
   --pot: clamp(40px, 10vmin, 50px);
-  /* Radius keeps about 16px between 64px skill buttons on an 844×390 phone. */
-  --arc: clamp(168px, 43vmin, 210px);
+  /* Quarter-arc radius. On 844×390 this leaves ~8px between skill circles and ~49px to Attack. */
+  --arc: clamp(118px, 31vmin, 150px);
 }
 
 body.touch #topbar {
@@ -922,22 +922,33 @@ body.touch .skill {
   padding: 2px;
   pointer-events: auto;
 }
+/* The round border clips the painted face, not the hit target. A ring past the
+   circle catches taps in the square corner that would otherwise hit the map. */
+body.touch .skill::after,
+body.touch #attack-btn::after,
+body.touch #potion-hp::after,
+body.touch #potion-mp::after {
+  content: '';
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+}
 body.touch .skill .key { font-size: 9px; }
 body.touch .skill .sname { font-size: 9px; line-height: 1.05; }
 body.touch .skill.locked .sname { font-size: 18px; color: var(--gold); }
 body.touch .skill .rank { font-size: 9px; }
-/* Quarter arc. 8°, 35°, 62°, 90° leaves a gap between neighbors and the Attack button. */
+/* Quarter arc at 10°, 36°, 63°, 90° so the buttons sit on one circle around Attack. */
 body.touch .skill:nth-child(1) {
-  right: calc(var(--atk) / 2 + var(--arc) * 0.990 - var(--sk) / 2);
-  bottom: calc(var(--atk) / 2 + var(--arc) * 0.139 - var(--sk) / 2);
+  right: calc(var(--atk) / 2 + var(--arc) * 0.985 - var(--sk) / 2);
+  bottom: calc(var(--atk) / 2 + var(--arc) * 0.174 - var(--sk) / 2);
 }
 body.touch .skill:nth-child(2) {
-  right: calc(var(--atk) / 2 + var(--arc) * 0.819 - var(--sk) / 2);
-  bottom: calc(var(--atk) / 2 + var(--arc) * 0.574 - var(--sk) / 2);
+  right: calc(var(--atk) / 2 + var(--arc) * 0.809 - var(--sk) / 2);
+  bottom: calc(var(--atk) / 2 + var(--arc) * 0.588 - var(--sk) / 2);
 }
 body.touch .skill:nth-child(3) {
-  right: calc(var(--atk) / 2 + var(--arc) * 0.469 - var(--sk) / 2);
-  bottom: calc(var(--atk) / 2 + var(--arc) * 0.883 - var(--sk) / 2);
+  right: calc(var(--atk) / 2 + var(--arc) * 0.454 - var(--sk) / 2);
+  bottom: calc(var(--atk) / 2 + var(--arc) * 0.891 - var(--sk) / 2);
 }
 body.touch .skill:nth-child(4) {
   right: calc(var(--atk) / 2 - var(--sk) / 2);

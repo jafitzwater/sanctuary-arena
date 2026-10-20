@@ -59,8 +59,13 @@ export function grantXp(sim: Sim, amount: number): void {
     fillEmptyBelt(sim);
     recomputeHero(sim);
     const hero = player(sim);
-    hero.hp = Math.min(hero.maxHp, hero.hp + hero.maxHp * 0.08);
-    banner(sim, `Level ${sim.level} — skill and stat points were gained`);
+    if (hero.alive) {
+      hero.hp = hero.maxHp;
+      hero.mana = hero.maxMana;
+    }
+    banner(sim, `Level ${sim.level} — life and mana restored`);
+    floater(sim, hero.x, hero.y - hero.radius - 28, `Level ${sim.level}`, '#e6c864');
+    pushFx(sim, { kind: 'ring', x: hero.x, y: hero.y, r: 54, color: '#e6c864', life: 0.75, t: 0 });
     sfx(sim, 'level');
   }
 }

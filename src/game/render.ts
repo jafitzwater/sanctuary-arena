@@ -1,5 +1,5 @@
 import moorUrl from '../assets/art/moor.png';
-import { barbarianSheets, monsterSheets, propSheets, TWO_HAND_WCLASS } from './art/sheets';
+import { barbarianSheets, d2Atlas, monsterSheets, propSheets, TWO_HAND_WCLASS } from './art/sheets';
 import type { ActDef } from './data/acts/types';
 import { projectIso, unprojectIso } from './iso';
 import { distToPolyline, Rng, type Vec } from './math';
@@ -7,7 +7,7 @@ import { player } from './query';
 import type { Camera, Sim, Unit } from './types';
 
 interface Scenery {
-  kind: 'tree' | 'dead' | 'tent' | 'wall';
+  kind: 'tree' | 'dead' | 'tent' | 'wall' | 'npc';
   x: number;
   y: number;
   s: number;
@@ -27,6 +27,16 @@ const PAD = 64;
 const WORLD_ACROSS = 1040;
 
 type Sheet = HTMLImageElement | HTMLCanvasElement;
+type ArmorTier = 'light' | 'medium' | 'heavy';
+
+interface Glyph {
+  img: Sheet;
+  flip: boolean;
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
+}
 
 function loadImage(src: string): HTMLImageElement {
   const img = new Image();
@@ -36,8 +46,8 @@ function loadImage(src: string): HTMLImageElement {
 }
 
 /**
- * Isometric view of the Blood Moor. The ground is baked once; characters are
- * original generated sprites drawn as billboards so they are not skewed.
+ * Isometric view of the Blood Moor. The ground is baked once. Real character
+ * frames are billboards; generated poses fill the modes the sheets do not include.
  */
 export class Renderer {
   camera: Camera = { x: 0, y: 0, viewW: 800, viewH: 500, zoom: 1, cssW: 800, cssH: 500, dpr: 1 };
@@ -88,6 +98,30 @@ export class Renderer {
     tower: loadImage(propSheets.tower),
     altar: loadImage(propSheets.altar),
   };
+  private readonly d2 = {
+    light: {
+      idle: loadImage(d2Atlas.light.idle),
+      walk: loadImage(d2Atlas.light.walk),
+      run: loadImage(d2Atlas.light.run),
+      attack: loadImage(d2Atlas.light.attack),
+    },
+    medium: {
+      idle: loadImage(d2Atlas.medium.idle),
+      walk: loadImage(d2Atlas.medium.walk),
+      run: loadImage(d2Atlas.medium.run),
+      attack: loadImage(d2Atlas.medium.attack),
+    },
+    heavy: {
+      idle: loadImage(d2Atlas.heavy.idle),
+      walk: loadImage(d2Atlas.heavy.walk),
+      run: loadImage(d2Atlas.heavy.run),
+      attack: loadImage(d2Atlas.heavy.attack),
+    },
+  };
+  private readonly rogueSheet = loadImage(d2Atlas.rogue);
+  private readonly akaraSheet = loadImage(d2Atlas.akara);
+  private readonly townFloor = loadImage(d2Atlas.town);
+  private readonly outdoorFloor = loadImage(d2Atlas.outdoor);
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -97,6 +131,8 @@ export class Renderer {
       this.mapKey = '';
     };
     this.moor.onload = bump;
+    this.townFloor.onload = bump;
+    this.outdoorFloor.onload = bump;
     for (const img of Object.values(this.art)) img.onload = bump;
   }
 
@@ -199,7 +235,7 @@ export class Renderer {
     for (const unit of units) {
       layers.push({
         depth: unit.x + unit.y + (unit.kind === 'base' ? -8 : 0),
-        paint: () => this.drawUnit(ctx, unit, opts, u),
+        paint: () => this.drawUnit(ctx, unit, opts, u, this.armorTier(sim)),
       });
     }
     layers.sort((a, b) => a.depth - b.depth);
@@ -221,8 +257,8 @@ export class Renderer {
       this.strokeEllipse(camp.x, camp.y, sim.map.fountainRadius, 'rgba(230, 190, 110, 0.22)');
     }
 
-    this.drawLabel(camp.x, camp.y - 230, 'Rogue Encampment', '#e6d3a1');
-    this.drawLabel(lair.x, lair.y - 230, 'Catacombs', '#e7b2a4');
+    this.drawLabel(camp.x, camp.y - 96, 'Rogue Encampment', '#e6d3a1');
+    this.drawLabel(lair.x, lair.y - 96, 'Catacombs', '#e7b2a4');
 
     const vignette = ctx.createRadialGradient(cssW / 2, cssH / 2, cssH * 0.2, cssW / 2, cssH / 2, cssH * 0.78);
     vignette.addColorStop(0, 'rgba(0,0,0,0)');
@@ -263,7 +299,9 @@ export class Renderer {
 
   private ensureMap(map: ActDef): void {
     const ready = this.moor.complete && this.moor.naturalWidth > 0;
-    const key = `${map.id}:${ready ? this.moor.naturalWidth : 0}`;
+    const townW = this.townFloor.complete ? this.townFloor.naturalWidth : 0;
+    const roadW = this.outdoorFloor.complete ? this.outdoorFloor.naturalWidth : 0;
+    const key = `${map.id}:${ready ? this.moor.naturalWidth : 0}:${townW}:${roadW}`;
     if (this.mapCanvas && this.mapKey === key) return;
     const hw = BAKE_HW;
     const width = Math.ceil((map.width + map.height) * hw + PAD * 2);
@@ -296,7 +334,8 @@ export class Renderer {
   private paintRoad(ctx: CanvasRenderingContext2D, map: ActDef): void {
     const camp = map.playerBase;
     const lair = map.enemyBase;
-    ctx.fillStyle = 'rgba(92, 68, 40, 0.22)';
+    const town = this.townFloor.complete && this.townFloor.naturalWidth > 0 ? ctx.createPattern(this.townFloor, 'repeat') : null;
+    ctx.fillStyle = town ?? 'rgba(92, 68, 40, 0.22)';
     ctx.beginPath();
     ctx.arc(camp.x, camp.y, map.plaza, 0, Math.PI * 2);
     ctx.fill();
@@ -317,7 +356,8 @@ export class Renderer {
     ctx.strokeStyle = '#3a2b22';
     ctx.lineWidth = map.laneWidth + 18;
     ctx.stroke();
-    ctx.strokeStyle = '#5a4032';
+    const outdoor = this.outdoorFloor.complete && this.outdoorFloor.naturalWidth > 0 ? ctx.createPattern(this.outdoorFloor, 'repeat') : null;
+    ctx.strokeStyle = outdoor ?? '#5a4032';
     ctx.lineWidth = map.laneWidth * 0.72;
     ctx.stroke();
     ctx.strokeStyle = 'rgba(120, 36, 28, 0.28)';
@@ -368,6 +408,12 @@ export class Renderer {
       this.blit(ctx, this.art.wall, p.x, p.y, 70 * u * prop.s, prop.flip);
       return;
     }
+    if (prop.kind === 'npc') {
+      if (this.akaraSheet.complete && this.akaraSheet.naturalWidth > 0) {
+        this.blit(ctx, this.akaraSheet, p.x, p.y, 108 * u * prop.s, false);
+      }
+      return;
+    }
     this.drawTree(ctx, p.x, p.y, prop.s * u, prop.kind === 'dead');
   }
 
@@ -405,7 +451,7 @@ export class Renderer {
     this.blit(ctx, this.art.fire, p.x, p.y, height, false);
   }
 
-  private drawUnit(ctx: CanvasRenderingContext2D, unit: Unit, opts: DrawOpts, u: number): void {
+  private drawUnit(ctx: CanvasRenderingContext2D, unit: Unit, opts: DrawOpts, u: number, tier: ArmorTier): void {
     const p = this.project(unit.x, unit.y);
     if (p.x < -160 || p.y < -200 || p.x > this.camera.cssW + 160 || p.y > this.camera.cssH + 60) return;
     const gait = this.gaitOf(unit);
@@ -436,9 +482,8 @@ export class Renderer {
       ctx.scale(1, 0.55);
       ctx.translate(-p.x, -y);
     }
-    const sheet = this.sheetFor(unit, gait.moving, gait.d);
-    const flip = Math.cos(unit.facing) < -0.12;
-    if (sheet) this.blit(ctx, sheet, p.x, y, height, flip);
+    const glyph = this.sheetFor(unit, gait.moving, gait.d, tier);
+    if (glyph) this.blit(ctx, glyph.img, p.x, y, height, glyph.flip, glyph);
     else this.fallback(ctx, unit, p.x, y, height);
     if (unit.whirlT > 0) {
       ctx.strokeStyle = 'rgba(240, 220, 170, 0.8)';
@@ -490,34 +535,73 @@ export class Renderer {
     }
   }
 
-  private sheetFor(unit: Unit, moving: boolean, phase: number): Sheet | null {
+  private sheetFor(unit: Unit, moving: boolean, phase: number, tier: ArmorTier): Glyph | null {
+    const flip = Math.cos(unit.facing) < -0.12;
     const step = Math.floor(phase / 22) % 2 === 0;
     if (unit.defId === 'barbarian') {
-      if (!unit.alive) return this.art.death;
-      if (unit.whirlT > 0) return this.art.whirl;
-      if (unit.leap) return this.art.leap;
-      if (unit.castT > 0) return this.art.cast;
-      if (unit.hitFlash > 0 && unit.swing <= 0) return this.art.gethit;
-      if (unit.swing > 0) return TWO_HAND_WCLASS.has(unit.wclass) ? this.art.atk2 : this.art.atk1;
-      const north = Math.sin(unit.facing) < -0.62 && Math.abs(Math.cos(unit.facing)) < 0.72;
-      if (!moving && north) return this.art.north;
-      if (moving) {
-        const town = this.inTown(unit);
-        if (town) return step ? this.art.walk1 : this.art.walk2;
-        return step ? this.art.run1 : this.art.run2;
+      const row = this.dirRow(unit.facing);
+      const pack = this.d2[tier];
+      if (!unit.alive) return this.full(this.art.death, flip);
+      if (unit.whirlT > 0) return this.full(this.art.whirl, flip);
+      if (unit.leap) return this.full(this.art.leap, flip);
+      if (unit.castT > 0) return this.full(this.art.cast, flip);
+      if (unit.hitFlash > 0 && unit.swing <= 0) return this.full(this.art.gethit, flip);
+      if (unit.swing > 0) {
+        const col = Math.min(3, Math.floor((1 - Math.max(0, unit.swing)) * 4));
+        return this.atlas(pack.attack, 4, col, row) ?? this.full(TWO_HAND_WCLASS.has(unit.wclass) ? this.art.atk2 : this.art.atk1, flip);
       }
-      return this.art.idle;
+      if (moving) {
+        const col = Math.floor(phase / 18) % 4;
+        const img = this.inTown(unit) ? pack.walk : pack.run;
+        const fallback = this.inTown(unit) ? (step ? this.art.walk1 : this.art.walk2) : step ? this.art.run1 : this.art.run2;
+        return this.atlas(img, 4, col, row) ?? this.full(fallback, flip);
+      }
+      return this.atlas(pack.idle, 1, 0, row) ?? this.full(this.art.idle, flip);
     }
-    if (unit.defId === 'fallen') return moving ? (step ? this.art.fallenWalk : this.art.fallen) : this.art.fallen;
-    if (unit.defId === 'zombie') return moving ? (step ? this.art.zombieWalk : this.art.zombie) : this.art.zombie;
-    if (unit.defId === 'quillrat') return moving ? (step ? this.art.quillWalk : this.art.quill) : this.art.quill;
-    if (unit.defId === 'rogue') return this.art.rogue;
-    if (unit.defId === 'rogue-archer') return this.archer ?? this.art.rogue;
-    if (unit.defId === 'blood-raven') return moving ? (step ? this.art.ravenWalk : this.art.raven) : this.art.raven;
-    if (unit.defId === 'tower') return unit.alive ? this.art.tower : null;
-    if (unit.defId === 'base-ally') return unit.alive ? this.art.tent : null;
-    if (unit.defId === 'base-enemy') return unit.alive ? this.art.altar : null;
+    if (unit.defId === 'rogue' || unit.defId === 'rogue-archer') {
+      const real = this.atlas(this.rogueSheet, 2, moving ? 1 : 0, this.dirRow(unit.facing));
+      if (real) return real;
+      if (unit.defId === 'rogue-archer') return this.full(this.archer ?? this.art.rogue, flip);
+      return this.full(this.art.rogue, flip);
+    }
+    if (unit.defId === 'fallen') return this.full(moving ? (step ? this.art.fallenWalk : this.art.fallen) : this.art.fallen, flip);
+    if (unit.defId === 'zombie') return this.full(moving ? (step ? this.art.zombieWalk : this.art.zombie) : this.art.zombie, flip);
+    if (unit.defId === 'quillrat') return this.full(moving ? (step ? this.art.quillWalk : this.art.quill) : this.art.quill, flip);
+    if (unit.defId === 'blood-raven') return this.full(moving ? (step ? this.art.ravenWalk : this.art.raven) : this.art.raven, flip);
+    if (unit.defId === 'tower') return unit.alive ? this.full(this.art.tower, false) : null;
+    if (unit.defId === 'base-ally') return unit.alive ? this.full(this.art.tent, false) : null;
+    if (unit.defId === 'base-enemy') return unit.alive ? this.full(this.art.altar, false) : null;
     return null;
+  }
+
+  private armorTier(sim: Sim): ArmorTier {
+    const id = sim.loadout.armor;
+    if (id === 'stu' || id === 'rng') return 'heavy';
+    if (id === 'lea') return 'medium';
+    return 'light';
+  }
+
+  /** Sheet row 0 faces the camera. Later rows turn clockwise, two source rows per step. */
+  private dirRow(facing: number): number {
+    const sx = Math.cos(facing) - Math.sin(facing);
+    const sy = Math.cos(facing) + Math.sin(facing);
+    let delta = Math.atan2(sy, sx) - Math.PI / 2;
+    if (delta < 0) delta += Math.PI * 2;
+    return Math.floor((Math.round(delta / (Math.PI / 8)) % 16) / 2) % 8;
+  }
+
+  private full(img: Sheet, flip: boolean): Glyph | null {
+    const iw = img instanceof HTMLImageElement ? img.naturalWidth : img.width;
+    const ih = img instanceof HTMLImageElement ? img.naturalHeight : img.height;
+    if (!iw || !ih) return null;
+    return { img, flip, sx: 0, sy: 0, sw: iw, sh: ih };
+  }
+
+  private atlas(img: HTMLImageElement, cols: number, col: number, row: number): Glyph | null {
+    if (!img.complete || !img.naturalWidth || !img.naturalHeight) return null;
+    const sw = img.naturalWidth / cols;
+    const sh = img.naturalHeight / 8;
+    return { img, flip: false, sx: col * sw, sy: row * sh, sw, sh };
   }
 
   private fallback(ctx: CanvasRenderingContext2D, unit: Unit, x: number, y: number, height: number): void {
@@ -547,15 +631,24 @@ export class Renderer {
     return { moving, d };
   }
 
-  private blit(ctx: CanvasRenderingContext2D, img: Sheet, x: number, y: number, height: number, flip: boolean): void {
-    const iw = img instanceof HTMLImageElement ? img.naturalWidth : img.width;
-    const ih = img instanceof HTMLImageElement ? img.naturalHeight : img.height;
+  private blit(
+    ctx: CanvasRenderingContext2D,
+    img: Sheet,
+    x: number,
+    y: number,
+    height: number,
+    flip: boolean,
+    src?: Glyph,
+  ): void {
+    const iw = src ? src.sw : img instanceof HTMLImageElement ? img.naturalWidth : img.width;
+    const ih = src ? src.sh : img instanceof HTMLImageElement ? img.naturalHeight : img.height;
     if (!iw || !ih) return;
     const w = (iw / ih) * height;
     ctx.save();
     ctx.translate(x, y);
     if (flip) ctx.scale(-1, 1);
-    ctx.drawImage(img, -w / 2, -height, w, height);
+    if (src) ctx.drawImage(img, src.sx, src.sy, src.sw, src.sh, -w / 2, -height, w, height);
+    else ctx.drawImage(img, -w / 2, -height, w, height);
     ctx.restore();
   }
 
@@ -579,12 +672,22 @@ export class Renderer {
 
   private drawLabel(x: number, y: number, text: string, color: string): void {
     const p = this.project(x, y);
-    if (p.x < 0 || p.y < 0 || p.x > this.camera.cssW || p.y > this.camera.cssH) return;
+    const w = this.camera.cssW;
+    const h = this.camera.cssH;
+    if (p.x < 24 || p.y < 0 || p.x > w - 24 || p.y > h - 8) return;
+    // The phone HUD owns the top-left level, xp, and gold row. Fade the zone
+    // name as it approaches that row and skip it if it would sit on top.
+    const clear = 76;
+    if (p.y < clear) return;
+    const fade = p.y < clear + 28 ? (p.y - clear) / 28 : 1;
     const ctx = this.ctx;
+    ctx.save();
+    ctx.globalAlpha = fade;
     ctx.fillStyle = color;
     ctx.font = '20px Georgia, serif';
     ctx.textAlign = 'center';
     ctx.fillText(text, p.x, p.y);
+    ctx.restore();
   }
 
   private strokeEllipse(x: number, y: number, radius: number, color: string): void {
@@ -702,6 +805,7 @@ function buildScenery(map: ActDef): Scenery[] {
     { kind: 'tent', x: camp.x - 30, y: camp.y - 175, s: 1.05, flip: false },
     { kind: 'tent', x: camp.x + 155, y: camp.y - 140, s: 0.92, flip: true },
     { kind: 'tent', x: camp.x + 130, y: camp.y + 155, s: 0.84, flip: false },
+    { kind: 'npc', x: camp.x + 48, y: camp.y - 36, s: 1, flip: false },
   );
   for (let i = 0; i < 16; i++) {
     const angle = (i / 16) * Math.PI * 2;
