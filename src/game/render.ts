@@ -1,23 +1,5 @@
 import moorUrl from '../assets/art/moor.png';
-import barbIdle from '../assets/art/barbarian/idle.png';
-import barbWalk1 from '../assets/art/barbarian/walk1.png';
-import barbWalk2 from '../assets/art/barbarian/walk2.png';
-import barbAtk1 from '../assets/art/barbarian/atk1.png';
-import barbAtk2 from '../assets/art/barbarian/atk2.png';
-import barbWhirl from '../assets/art/barbarian/whirl.png';
-import barbLeap from '../assets/art/barbarian/leap.png';
-import barbNorth from '../assets/art/barbarian/north.png';
-import fallenUrl from '../assets/art/monsters/fallen.png';
-import fallenWalkUrl from '../assets/art/monsters/fallen-walk.png';
-import zombieUrl from '../assets/art/monsters/zombie.png';
-import zombieWalkUrl from '../assets/art/monsters/zombie-walk.png';
-import ravenUrl from '../assets/art/monsters/raven.png';
-import rogueUrl from '../assets/art/monsters/rogue.png';
-import tentUrl from '../assets/art/props/tent.png';
-import fireUrl from '../assets/art/props/fire.png';
-import wallUrl from '../assets/art/props/wall.png';
-import towerUrl from '../assets/art/props/watchtower.png';
-import altarUrl from '../assets/art/props/andariel.png';
+import { barbarianSheets, monsterSheets, propSheets, TWO_HAND_WCLASS } from './art/sheets';
 import type { ActDef } from './data/acts/types';
 import { projectIso, unprojectIso } from './iso';
 import { distToPolyline, Rng, type Vec } from './math';
@@ -75,27 +57,34 @@ export class Renderer {
   private gait = new Map<number, { x: number; y: number; d: number }>();
   private archer: HTMLCanvasElement | null = null;
 
+  private mapRef: ActDef | null = null;
   private readonly moor = loadImage(moorUrl);
   private readonly art = {
-    idle: loadImage(barbIdle),
-    walk1: loadImage(barbWalk1),
-    walk2: loadImage(barbWalk2),
-    atk1: loadImage(barbAtk1),
-    atk2: loadImage(barbAtk2),
-    whirl: loadImage(barbWhirl),
-    leap: loadImage(barbLeap),
-    north: loadImage(barbNorth),
-    fallen: loadImage(fallenUrl),
-    fallenWalk: loadImage(fallenWalkUrl),
-    zombie: loadImage(zombieUrl),
-    zombieWalk: loadImage(zombieWalkUrl),
-    raven: loadImage(ravenUrl),
-    rogue: loadImage(rogueUrl),
-    tent: loadImage(tentUrl),
-    fire: loadImage(fireUrl),
-    wall: loadImage(wallUrl),
-    tower: loadImage(towerUrl),
-    altar: loadImage(altarUrl),
+    idle: loadImage(barbarianSheets.NU),
+    north: loadImage(barbarianSheets.north),
+    walk1: loadImage(barbarianSheets.WL[0]),
+    walk2: loadImage(barbarianSheets.WL[1]),
+    run1: loadImage(barbarianSheets.RN[0]),
+    run2: loadImage(barbarianSheets.RN[1]),
+    atk1: loadImage(barbarianSheets.A1),
+    atk2: loadImage(barbarianSheets.A2),
+    cast: loadImage(barbarianSheets.S1),
+    gethit: loadImage(barbarianSheets.GH),
+    death: loadImage(barbarianSheets.DD),
+    whirl: loadImage(barbarianSheets.whirl),
+    leap: loadImage(barbarianSheets.leap),
+    fallen: loadImage(monsterSheets.fallen),
+    fallenWalk: loadImage(monsterSheets.fallenWalk),
+    zombie: loadImage(monsterSheets.zombie),
+    zombieWalk: loadImage(monsterSheets.zombieWalk),
+    raven: loadImage(monsterSheets.raven),
+    rogue: loadImage(monsterSheets.rogue),
+    quill: loadImage(monsterSheets.quill),
+    tent: loadImage(propSheets.tent),
+    fire: loadImage(propSheets.fire),
+    wall: loadImage(propSheets.wall),
+    tower: loadImage(propSheets.tower),
+    altar: loadImage(propSheets.altar),
   };
 
   constructor(private canvas: HTMLCanvasElement) {
@@ -168,6 +157,7 @@ export class Renderer {
   }
 
   draw(sim: Sim, opts: DrawOpts): void {
+    this.mapRef = sim.map;
     this.ensureMap(sim.map);
     this.ensureArcher();
     const ctx = this.ctx;
@@ -439,7 +429,7 @@ export class Renderer {
     ctx.save();
     if (!unit.alive) ctx.globalAlpha = 0.55;
     else if (unit.invuln > 0 && Math.sin(opts.time * 28) > 0) ctx.globalAlpha = 0.55;
-    if (!unit.alive && (unit.kind === 'minion' || unit.kind === 'champion')) {
+    if (!unit.alive && unit.kind === 'minion') {
       ctx.translate(p.x, y);
       ctx.scale(1, 0.55);
       ctx.translate(-p.x, -y);
@@ -482,6 +472,8 @@ export class Renderer {
         return 64;
       case 'zombie':
         return 92;
+      case 'quillrat':
+        return 70;
       case 'rogue':
       case 'rogue-archer':
         return 86;
@@ -499,17 +491,24 @@ export class Renderer {
   private sheetFor(unit: Unit, moving: boolean, phase: number): Sheet | null {
     const step = Math.floor(phase / 22) % 2 === 0;
     if (unit.defId === 'barbarian') {
+      if (!unit.alive) return this.art.death;
       if (unit.whirlT > 0) return this.art.whirl;
       if (unit.leap) return this.art.leap;
-      if (unit.swing > 0.45) return this.art.atk1;
-      if (unit.swing > 0) return this.art.atk2;
+      if (unit.castT > 0) return this.art.cast;
+      if (unit.hitFlash > 0 && unit.swing <= 0) return this.art.gethit;
+      if (unit.swing > 0) return TWO_HAND_WCLASS.has(unit.wclass) ? this.art.atk2 : this.art.atk1;
       const north = Math.sin(unit.facing) < -0.62 && Math.abs(Math.cos(unit.facing)) < 0.72;
       if (!moving && north) return this.art.north;
-      if (moving) return step ? this.art.walk1 : this.art.walk2;
+      if (moving) {
+        const town = this.inTown(unit);
+        if (town) return step ? this.art.walk1 : this.art.walk2;
+        return step ? this.art.run1 : this.art.run2;
+      }
       return this.art.idle;
     }
     if (unit.defId === 'fallen') return moving ? (step ? this.art.fallenWalk : this.art.fallen) : this.art.fallen;
     if (unit.defId === 'zombie') return moving ? (step ? this.art.zombieWalk : this.art.zombie) : this.art.zombie;
+    if (unit.defId === 'quillrat') return this.art.quill;
     if (unit.defId === 'rogue') return this.art.rogue;
     if (unit.defId === 'rogue-archer') return this.archer ?? this.art.rogue;
     if (unit.defId === 'blood-raven') return this.art.raven;
@@ -524,6 +523,13 @@ export class Renderer {
     ctx.beginPath();
     ctx.ellipse(x, y - height * 0.35, height * 0.28, height * 0.42, 0, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  private inTown(unit: Unit): boolean {
+    const map = this.mapRef;
+    if (!map) return false;
+    const base = map.playerBase;
+    return Math.hypot(unit.x - base.x, unit.y - base.y) <= map.shopRadius;
   }
 
   private gaitOf(unit: Unit): { moving: boolean; d: number } {

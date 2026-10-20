@@ -34,11 +34,24 @@ export class Game {
       isPlaying: () => this.mode === 'play' && !portrait(),
       toggleShop: () => {
         this.hud.helpOpen = false;
+        this.hud.treeOpen = false;
         this.hud.shopOpen = !this.hud.shopOpen;
+      },
+      toggleTree: () => {
+        this.hud.shopOpen = false;
+        this.hud.helpOpen = false;
+        this.hud.treeOpen = !this.hud.treeOpen;
+      },
+      openTree: (slot) => {
+        this.hud.beltSlot = slot;
+        this.hud.shopOpen = false;
+        this.hud.helpOpen = false;
+        this.hud.treeOpen = true;
       },
       closeOverlays: () => {
         this.hud.shopOpen = false;
         this.hud.helpOpen = false;
+        this.hud.treeOpen = false;
       },
     });
     this.hud.onPlay = () => this.begin();
@@ -59,11 +72,32 @@ export class Game {
     this.hud.onToggleShop = () => {
       this.audio.unlock();
       this.hud.helpOpen = false;
+      this.hud.treeOpen = false;
       this.hud.shopOpen = !this.hud.shopOpen;
     };
     this.hud.onToggleHelp = () => {
       this.hud.shopOpen = false;
+      this.hud.treeOpen = false;
       this.hud.helpOpen = !this.hud.helpOpen;
+    };
+    this.hud.onToggleTree = () => {
+      this.audio.unlock();
+      this.hud.shopOpen = false;
+      this.hud.helpOpen = false;
+      this.hud.treeOpen = !this.hud.treeOpen;
+    };
+    this.hud.onOpenTree = (slot) => {
+      this.hud.beltSlot = slot;
+      this.hud.shopOpen = false;
+      this.hud.helpOpen = false;
+      this.hud.treeOpen = true;
+    };
+    this.hud.onAssign = (id) => {
+      this.input.assignSkill = id;
+      this.input.assignSlot = this.hud.beltSlot;
+    };
+    this.hud.onAttribute = (key) => {
+      this.input.attribute = key;
     };
     this.hud.onToggleMute = () => {
       const muted = this.audio.toggleMute();
@@ -90,6 +124,7 @@ export class Game {
     this.mode = 'play';
     this.hud.shopOpen = false;
     this.hud.helpOpen = false;
+    this.hud.treeOpen = false;
     this.input.targetId = null;
     this.input.dest = null;
     this.input.endFrame();
@@ -107,6 +142,8 @@ export class Game {
       if (this.sim.phase !== 'playing') {
         this.mode = 'end';
         this.hud.shopOpen = false;
+        this.hud.helpOpen = false;
+        this.hud.treeOpen = false;
       }
     }
     this.input.endFrame();
@@ -118,7 +155,7 @@ export class Game {
       attack: this.input.attack,
       time: this.time,
     });
-    this.hud.sync(this.sim, this.mode);
+    this.hud.sync(this.sim, this.mode, playing ? this.input.targetId : null);
     requestAnimationFrame(this.frame);
   };
 

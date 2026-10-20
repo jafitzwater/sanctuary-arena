@@ -1,0 +1,176 @@
+[
+  {
+    "id": "fallen",
+    "monId": "fallen1",
+    "name": "Fallen",
+    "ai": "Fallen",
+    "raw": {
+      "level": 1,
+      "minHp": 21,
+      "maxHp": 61,
+      "ac": 84,
+      "exp": 61,
+      "velocity": 5,
+      "run": 5,
+      "a1MinD": 51,
+      "a1MaxD": 101
+    },
+    "moba": {
+      "hp": 246,
+      "ad": 18,
+      "armor": 2,
+      "moveSpeed": 118,
+      "attackRange": 48,
+      "attackInterval": 0.95,
+      "gold": 27,
+      "xp": 34,
+      "ranged": false,
+      "projectileSpeed": 0
+    }
+  },
+  {
+    "id": "zombie",
+    "monId": "zombie1",
+    "name": "Zombie",
+    "ai": "Zombie",
+    "raw": {
+      "level": 1,
+      "minHp": 101,
+      "maxHp": 181,
+      "ac": 84,
+      "exp": 111,
+      "velocity": 1,
+      "run": 3,
+      "a1MinD": 51,
+      "a1MaxD": 151
+    },
+    "moba": {
+      "hp": 564,
+      "ad": 24,
+      "armor": 2,
+      "moveSpeed": 62,
+      "attackRange": 48,
+      "attackInterval": 1.32,
+      "gold": 50,
+      "xp": 61,
+      "ranged": false,
+      "projectileSpeed": 0
+    }
+  },
+  {
+    "id": "quillrat",
+    "monId": "quillrat1",
+    "name": "QuillRat",
+    "ai": "QuillRat",
+    "raw": {
+      "level": 1,
+      "minHp": 21,
+      "maxHp": 81,
+      "ac": 84,
+      "exp": 71,
+      "velocity": 3,
+      "run": 3,
+      "a1MinD": 51,
+      "a1MaxD": 101
+    },
+    "moba": {
+      "hp": 306,
+      "ad": 18,
+      "armor": 2,
+      "moveSpeed": 90,
+      "attackRange": 190,
+      "attackInterval": 1.25,
+      "gold": 32,
+      "xp": 39,
+      "ranged": true,
+      "projectileSpeed": 460
+    }
+  },
+  {
+    "id": "bloodraven",
+    "monId": "bloodraven",
+    "name": "Bloodraven",
+    "ai": "BloodRaven",
+    "raw": {
+      "level": 10,
+      "minHp": 323,
+      "maxHp": 323,
+      "ac": 64,
+      "exp": 151,
+      "velocity": 6,
+      "run": 8,
+      "a1MinD": 60,
+      "a1MaxD": 95
+    },
+    "moba": {
+      "hp": 969,
+      "ad": 43,
+      "armor": 8,
+      "moveSpeed": 210,
+      "attackRange": 250,
+      "attackInterval": 1.15,
+      "gold": 174,
+      "xp": 189,
+      "ranged": true,
+      "projectileSpeed": 460
+    }
+  },
+  {
+    "id": "darkhunter",
+    "monId": "corruptrogue1",
+    "name": "DarkHunter",
+    "ai": "CorruptRogue",
+    "raw": {
+      "level": 2,
+      "minHp": 58,
+      "maxHp": 101,
+      "ac": 84,
+      "exp": 78,
+      "velocity": 5,
+      "run": 5,
+      "a1MinD": 34,
+      "a1MaxD": 101
+    },
+    "moba": {
+      "hp": 477,
+      "ad": 16,
+      "armor": 2,
+      "moveSpeed": 118,
+      "attackRange": 190,
+      "attackInterval": 1.25,
+      "gold": 35,
+      "xp": 43,
+      "ranged": true,
+      "projectileSpeed": 460
+    }
+  },
+  {
+    "id": "fallenshaman",
+    "monId": "fallenshaman1",
+    "name": "FallenShaman",
+    "ai": "FallenShaman",
+    "raw": {
+      "level": 2,
+      "minHp": 58,
+      "maxHp": 101,
+      "ac": 84,
+      "exp": 81,
+      "velocity": 4,
+      "run": 4,
+      "a1MinD": 34,
+      "a1MaxD": 101
+    },
+    "moba": {
+      "hp": 477,
+      "ad": 16,
+      "armor": 2,
+      "moveSpeed": 104,
+      "attackRange": 48,
+      "attackInterval": 0.95,
+      "gold": 36,
+      "xp": 45,
+      "ranged": false,
+      "projectileSpeed": 0
+    }
+  }
+]

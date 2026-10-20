@@ -1,16 +1,33 @@
 export interface SkillDef {
   id: string;
   name: string;
-  /** Keyboard key, a single letter. Avoid W/A/S/D if the class should keep WASD movement. */
+  /** Unused when the belt assigns Q W E R. Kept so a class can still pin a key. */
   key: string;
-  /** Alternate digit hotkey, "1" through "4". */
   digit: string;
   cooldown: number;
+  /** Mana at rank 1, already scaled for the match. */
   mana: number;
+  manaPerRank: number;
+  minMana: number;
   maxRank: number;
-  /** Hero level required before the first point can be spent. */
+  /** Match level required before the first point can be spent. */
   unlockLevel: number;
+  /** Diablo II reqlevel, before the match-length scale. */
+  reqLevel: number;
   description: string;
+  short: string;
+  tab: number;
+  tabName: string;
+  row: number;
+  col: number;
+  passive: boolean;
+  prereqs: string[];
+  anim: string;
+  param1: number;
+  param2: number;
+  srcDam: number;
+  starter: boolean;
+  d2Id: number;
 }
 
 export interface ClassStats {
@@ -29,6 +46,17 @@ export interface ClassStats {
   armorPerLevel: number;
   regenHp: number;
   regenMana: number;
+  str: number;
+  dex: number;
+  vit: number;
+  energy: number;
+  hpPerVit: number;
+  manaPerEnergy: number;
+  statPointsPerLevel: number;
+  adPerStr: number;
+  armorPerDex: number;
+  walkSpeed: number;
+  runSpeed: number;
 }
 
 export interface ClassColors {
@@ -51,5 +79,9 @@ export interface ClassDef {
   blurb: string;
   stats: ClassStats;
   skills: SkillDef[];
+  /** Four belt slots. Empty string means the slot is unassigned. */
+  startingBelt: string[];
+  /** PlrMode animation token, such as BA for the Barbarian. */
+  token: string;
   colors: ClassColors;
 }

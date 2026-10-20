@@ -13,6 +13,7 @@ export interface LeapState {
   x1: number;
   y1: number;
   rank: number;
+  kind: 'leap' | 'leap-attack';
 }
 
 export interface Unit {
@@ -57,6 +58,16 @@ export interface Unit {
   whirlTick: number;
   whirlRank: number;
   leap: LeapState | null;
+  /** PlrMode weapon class driving the attack pose: HTH, 1HS, 2HS, STF, 2HT. */
+  wclass: string;
+  castT: number;
+  boT: number;
+  frenzyT: number;
+  berserkT: number;
+  concentrateT: number;
+  commandT: number;
+  tauntT: number;
+  findGold: number;
   combat: number;
   respawn: number;
   corpse: number;
@@ -93,8 +104,10 @@ export interface Fx {
 
 export interface Loadout {
   weapon: string | null;
+  offhand: string | null;
   armor: string | null;
   helm: string | null;
+  belt: string | null;
 }
 
 export interface Sim {
@@ -114,6 +127,10 @@ export interface Sim {
   skillPoints: number;
   skillRanks: Record<string, number>;
   cooldowns: Record<string, number>;
+  attributes: { str: number; dex: number; vit: number; energy: number };
+  statPoints: number;
+  /** Q W E R. Empty string is an open slot. */
+  belt: string[];
   potions: { health: number; mana: number };
   loadout: Loadout;
   phase: Phase;
@@ -142,6 +159,9 @@ export interface FrameInput {
   buy: string | null;
   potion: 'health' | 'mana' | null;
   upgrade: string | null;
+  attribute: 'str' | 'dex' | 'vit' | 'energy' | null;
+  assignSkill: string | null;
+  assignSlot: number;
 }
 
 export function emptyInput(): FrameInput {
@@ -158,6 +178,9 @@ export function emptyInput(): FrameInput {
     buy: null,
     potion: null,
     upgrade: null,
+    attribute: null,
+    assignSkill: null,
+    assignSlot: 0,
   };
 }
 

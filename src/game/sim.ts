@@ -6,11 +6,16 @@ import { clampToPlayable } from './lane';
 import {
   banner,
   damageUnit,
+  heroNumbers,
   inShopRange,
+  manaCost,
+  recomputeHero,
   ring,
   sfx,
+  tryAssignBelt,
   tryBuy,
   tryPotion,
+  trySpendAttribute,
   tryUpgrade,
 } from './combat';
 import { byId, findBase, inRange, isStructure, nearestEnemy, player } from './query';
@@ -37,13 +42,21 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     skillPoints: 0,
     skillRanks: {},
     cooldowns: {},
+    attributes: {
+      str: classDef.stats.str,
+      dex: classDef.stats.dex,
+      vit: classDef.stats.vit,
+      energy: classDef.stats.energy,
+    },
+    statPoints: 0,
+    belt: [...classDef.startingBelt],
     potions: { health: 0, mana: 0 },
-    loadout: { weapon: null, armor: null, helm: null },
+    loadout: { weapon: null, offhand: null, armor: null, helm: null, belt: null },
     phase: 'playing',
     waveIn: map.waves.first,
     announcedWave: false,
     banner: null,
-    tip: 'Last-hit Fallen for gold. Destroy Andariel\'s altar to win. Shop at the Encampment.',
+    tip: 'Last-hit Fallen for gold. T opens the skill tree. Shop at the Encampment.',
     tipT: 9,
     cs: 0,
     kills: 0,
@@ -55,7 +68,8 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     sim.skillRanks[skill.id] = 0;
     sim.cooldowns[skill.id] = 0;
   }
-  sim.skillRanks[classDef.skills[0]?.id ?? 'bash'] = 1;
+  const starter = classDef.skills.find((skill) => skill.starter) ?? classDef.skills[0];
+  if (starter) sim.skillRanks[starter.id] = 1;
 
   spawnBase(sim, 'ally');
   spawnBase(sim, 'enemy');
@@ -108,6 +122,15 @@ function blankUnit(sim: Sim, partial: Pick<Unit, 'defId' | 'kind' | 'team' | 'na
     whirlTick: 0,
     whirlRank: 0,
     leap: null,
+    wclass: partial.wclass ?? 'HTH',
+    castT: 0,
+    boT: 0,
+    frenzyT: 0,
+    berserkT: 0,
+    concentrateT: 0,
+    commandT: 0,
+    tauntT: 0,
+    findGold: 0,
     combat: 0,
     respawn: 0,
     corpse: 0,
@@ -172,6 +195,7 @@ function spawnTower(sim: Sim, spec: ActDef['towers'][number]): Unit {
 
 function spawnPlayer(sim: Sim): Unit {
   const stats = sim.classDef.stats;
+  const built = heroNumbers(sim, { bo: false, berserk: false });
   const base = sim.map.playerBase;
   return blankUnit(sim, {
     defId: sim.classDef.id,
@@ -181,15 +205,16 @@ function spawnPlayer(sim: Sim): Unit {
     x: base.x + 150,
     y: base.y,
     radius: stats.radius,
-    hp: stats.hp,
-    maxHp: stats.hp,
-    mana: stats.mana,
-    maxMana: stats.mana,
-    ad: stats.ad,
-    armor: stats.armor,
-    moveSpeed: stats.moveSpeed,
-    attackRange: stats.attackRange,
-    attackInterval: stats.attackInterval,
+    hp: built.hp,
+    maxHp: built.hp,
+    mana: built.mana,
+    maxMana: built.mana,
+    ad: built.ad,
+    armor: built.armor,
+    moveSpeed: built.moveSpeed,
+    attackRange: built.attackRange,
+    attackInterval: built.attackInterval,
+    wclass: built.wclass,
     aggro: 360,
     gold: 0,
     xp: 0,
@@ -301,6 +326,8 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
   if (input.upgrade) tryUpgrade(sim, input.upgrade);
   if (input.buy) tryBuy(sim, input.buy);
   if (input.potion) tryPotion(sim, input.potion);
+  if (input.attribute) trySpendAttribute(sim, input.attribute);
+  if (input.assignSkill) tryAssignBelt(sim, input.assignSkill, input.assignSlot);
 
   waves(sim, step);
 
@@ -323,6 +350,21 @@ function tickStatus(sim: Sim, unit: Unit, dt: number): void {
     unit.buffArmor = 0;
   }
   unit.bashT = Math.max(0, unit.bashT - dt);
+  unit.castT = Math.max(0, unit.castT - dt);
+  unit.frenzyT = Math.max(0, unit.frenzyT - dt);
+  unit.concentrateT = Math.max(0, unit.concentrateT - dt);
+  unit.commandT = Math.max(0, unit.commandT - dt);
+  unit.tauntT = Math.max(0, unit.tauntT - dt);
+  if (unit.id === sim.playerId) {
+    const bo = unit.boT;
+    const berserk = unit.berserkT;
+    unit.boT = Math.max(0, unit.boT - dt);
+    unit.berserkT = Math.max(0, unit.berserkT - dt);
+    if ((bo > 0 && unit.boT === 0) || (berserk > 0 && unit.berserkT === 0)) recomputeHero(sim);
+  } else {
+    unit.boT = Math.max(0, unit.boT - dt);
+    unit.berserkT = Math.max(0, unit.berserkT - dt);
+  }
   unit.invuln = Math.max(0, unit.invuln - dt);
   unit.hitFlash = Math.max(0, unit.hitFlash - dt);
   unit.swing = Math.max(0, unit.swing - dt * 3.4);
@@ -357,7 +399,7 @@ function advanceLeap(sim: Sim, unit: Unit, dt: number): void {
   unit.y = leap.y0 + (leap.y1 - leap.y0) * e;
   if (p < 1) return;
   const radius = 80 + leap.rank * 6;
-  const damage = 26 + leap.rank * 18 + unit.ad * 0.5;
+  const damage = (26 + leap.rank * 18 + unit.ad * 0.5) * (leap.kind === 'leap-attack' ? 1.7 : 1);
   for (const other of [...sim.units]) {
     if (!other.alive || other.team === unit.team) continue;
     if (Math.hypot(other.x - unit.x, other.y - unit.y) <= radius + other.radius) {
@@ -389,31 +431,38 @@ function moveToward(unit: Unit, x: number, y: number, dt: number, scale = 1): vo
   unit.facing = Math.atan2(dy, dx);
 }
 
+function playerPace(sim: Sim, hero: Unit): number {
+  let scale = hero.whirlT > 0 ? 1.06 : 1;
+  if (hero.frenzyT > 0) scale *= 1.18;
+  if (inShopRange(sim, hero)) scale *= sim.classDef.stats.walkSpeed / sim.classDef.stats.runSpeed;
+  return scale;
+}
+
 function updatePlayer(sim: Sim, hero: Unit, input: FrameInput, dt: number): void {
   if (hero.stun > 0 || hero.leap) return;
   const direct = Math.hypot(input.moveX, input.moveY) > 0.15;
   const lock = byId(sim, input.targetId);
   const target = lock && lock.alive && lock.team !== hero.team ? lock : null;
+  const pace = playerPace(sim, hero);
   if (direct) {
     const mag = Math.hypot(input.moveX, input.moveY);
-    const scale = hero.whirlT > 0 ? 1.06 : 1;
-    const speed = moveSpeed(hero) * scale;
+    const speed = moveSpeed(hero) * pace;
     hero.x += (input.moveX / mag) * speed * dt;
     hero.y += (input.moveY / mag) * speed * dt;
     if (!target) hero.facing = Math.atan2(input.moveY, input.moveX);
     return;
   }
   if (target && !inRange(hero, target)) {
-    moveToward(hero, target.x, target.y, dt);
+    moveToward(hero, target.x, target.y, dt, pace);
     return;
   }
   if (!target && input.attack) {
     const near = nearestEnemy(sim, hero, 380, (unit) => unit.kind !== 'base' || distTo(hero, unit) < 280);
-    if (near && !inRange(hero, near)) moveToward(hero, near.x, near.y, dt);
+    if (near && !inRange(hero, near)) moveToward(hero, near.x, near.y, dt, pace);
     return;
   }
   if (input.destX != null && input.destY != null) {
-    moveToward(hero, input.destX, input.destY, dt);
+    moveToward(hero, input.destX, input.destY, dt, pace);
   }
 }
 
@@ -445,6 +494,10 @@ function updateMinion(sim: Sim, unit: Unit, dt: number): void {
 }
 
 function acquireCreepTarget(sim: Sim, unit: Unit): void {
+  if (unit.tauntT > 0) {
+    const taunted = byId(sim, unit.targetId);
+    if (taunted?.alive && taunted.team !== unit.team) return;
+  }
   const current = byId(sim, unit.targetId);
   if (current?.alive && current.team !== unit.team) {
     const gap = Math.hypot(current.x - unit.x, current.y - unit.y);
@@ -614,11 +667,16 @@ function tryStrike(sim: Sim, unit: Unit): void {
       unit.bashT = 0;
       sfx(sim, 'bash');
     }
+    if (unit.concentrateT > 0) {
+      raw *= 1.35;
+      unit.concentrateT = 0;
+    }
     damageUnit(sim, target, raw, unit);
     unit.swing = 1;
     ring(sim, target.x, target.y, 18, unit.accent);
   }
-  unit.attackCd = unit.attackInterval;
+  const haste = unit.frenzyT > 0 ? 0.75 : 1;
+  unit.attackCd = unit.attackInterval * haste;
 }
 
 function shoot(sim: Sim, attacker: Unit, target: Unit, damage: number): void {
@@ -668,7 +726,8 @@ function regen(sim: Sim, dt: number): void {
       unit.hp = Math.min(unit.maxHp, unit.hp + unit.maxHp * 0.14 * dt);
       unit.mana = Math.min(unit.maxMana, unit.mana + Math.max(20, unit.maxMana) * 0.16 * dt);
     } else if (unit.combat <= 0) {
-      const regen = unit.id === sim.playerId ? sim.classDef.stats.regenHp : 1.4;
+      const stamina = unit.id === sim.playerId ? (sim.skillRanks['increased-stamina'] ?? 0) : 0;
+      const regen = unit.id === sim.playerId ? sim.classDef.stats.regenHp + stamina * 0.4 : 1.4;
       unit.hp = Math.min(unit.maxHp, unit.hp + regen * dt);
     }
     if (!inTown && unit.id === sim.playerId) {
@@ -750,6 +809,10 @@ function tryCast(sim: Sim, input: FrameInput): void {
   if (!id) return;
   const def = sim.classDef.skills.find((skill) => skill.id === id);
   if (!def) return;
+  if (def.passive) {
+    banner(sim, `${def.name} is passive.`);
+    return;
+  }
   const rank = sim.skillRanks[id] ?? 0;
   if (rank <= 0) {
     tryUpgrade(sim, id);
@@ -758,7 +821,8 @@ function tryCast(sim: Sim, input: FrameInput): void {
   const hero = player(sim);
   if (!hero.alive || hero.stun > 0 || hero.leap || hero.whirlT > 0) return;
   if ((sim.cooldowns[id] ?? 0) > 0) return;
-  if (hero.mana < def.mana) {
+  const cost = manaCost(def, rank);
+  if (hero.mana < cost) {
     banner(sim, 'Not enough mana.');
     return;
   }
@@ -766,7 +830,7 @@ function tryCast(sim: Sim, input: FrameInput): void {
   if (!handler) return;
   const ok = handler({ sim, hero, rank, aimX: input.aimX, aimY: input.aimY });
   if (!ok) return;
-  hero.mana -= def.mana;
+  hero.mana -= cost;
   sim.cooldowns[id] = def.cooldown;
 }
 

@@ -1,4 +1,8 @@
+import monsters from '../d2/monsters-act1.json';
 import type { ActDef } from './types';
+
+const raven = monsters.find((entry) => entry.monId === 'bloodraven');
+if (!raven) throw new Error('Blood Raven missing from MonStats import');
 
 /**
  * Act I — the road from the Rogue Encampment across the Blood Moor
@@ -68,23 +72,24 @@ export const act1: ActDef = {
       { unit: 'rogue-archer', count: 1 },
     ],
     enemy: [
-      { unit: 'fallen', count: 3 },
+      { unit: 'fallen', count: 2 },
       { unit: 'zombie', count: 1 },
+      { unit: 'quillrat', count: 1 },
     ],
   },
   enemyChampion: {
     name: 'Blood Raven',
     title: 'The Corrupted Sister',
-    hp: 980,
-    ad: 44,
-    armor: 12,
-    moveSpeed: 210,
-    attackRange: 250,
-    attackInterval: 1.15,
-    projectileSpeed: 480,
+    hp: raven.moba.hp,
+    ad: raven.moba.ad,
+    armor: raven.moba.armor,
+    moveSpeed: raven.moba.moveSpeed,
+    attackRange: raven.moba.attackRange,
+    attackInterval: raven.moba.attackInterval,
+    projectileSpeed: raven.moba.projectileSpeed,
     radius: 20,
-    gold: 170,
-    xp: 190,
+    gold: raven.moba.gold,
+    xp: raven.moba.xp,
     color: '#6e2430',
     accent: '#e0c07a',
   },
