@@ -1,0 +1,141 @@
+import { act1 } from './data/acts/act1';
+import { barbarian } from './data/classes/barbarian';
+import { inShopRange } from './combat';
+import { AudioBus } from './audio';
+import { Hud } from './hud';
+import { InputController } from './input';
+import { player } from './query';
+import { Renderer } from './render';
+import { createMatch, updateSim } from './sim';
+import type { Sim } from './types';
+
+type Mode = 'title' | 'play' | 'end';
+
+/**
+ * Wires the simulator, the canvas, and the DOM HUD. New classes and acts are
+ * chosen by passing a different ClassDef / ActDef into createMatch — the
+ * default match is the Barbarian on Act I.
+ */
+export class Game {
+  private sim: Sim;
+  private mode: Mode = 'title';
+  private last = 0;
+  private time = 0;
+  private renderer: Renderer;
+  private input: InputController;
+  private hud: Hud;
+  private audio = new AudioBus();
+
+  constructor(canvas: HTMLCanvasElement, root: HTMLElement) {
+    this.sim = createMatch(act1, barbarian);
+    this.renderer = new Renderer(canvas);
+    this.hud = new Hud(root);
+    this.input = new InputController(canvas, {
+      getSim: () => this.sim,
+      getWorld: (sx, sy) => this.renderer.screenToWorld(sx, sy),
+      isPlaying: () => this.mode === 'play' && !portrait(),
+      toggleShop: () => {
+        this.hud.helpOpen = false;
+        this.hud.shopOpen = !this.hud.shopOpen;
+      },
+      closeOverlays: () => {
+        this.hud.shopOpen = false;
+        this.hud.helpOpen = false;
+      },
+    });
+    this.hud.onPlay = () => this.begin();
+    this.hud.onAgain = () => this.begin();
+    this.hud.onCast = (id) => {
+      this.audio.unlock();
+      this.input.cast = id;
+    };
+    this.hud.onUpgrade = (id) => {
+      this.input.upgrade = id;
+    };
+    this.hud.onBuy = (id) => {
+      this.input.buy = id;
+    };
+    this.hud.onPotion = (kind) => {
+      this.input.potion = kind;
+    };
+    this.hud.onToggleShop = () => {
+      this.audio.unlock();
+      this.hud.helpOpen = false;
+      this.hud.shopOpen = !this.hud.shopOpen;
+    };
+    this.hud.onToggleHelp = () => {
+      this.hud.shopOpen = false;
+      this.hud.helpOpen = !this.hud.helpOpen;
+    };
+    this.hud.onToggleMute = () => {
+      const muted = this.audio.toggleMute();
+      this.hud.setMuteLabel(muted);
+    };
+  }
+
+  start(): void {
+    this.hud.bind();
+    this.hud.setMuteLabel(this.audio.muted);
+    this.input.attach();
+    this.syncTouchClass();
+    window.addEventListener('resize', () => this.syncTouchClass());
+    const coarse = window.matchMedia('(pointer: coarse), (hover: none)');
+    coarse.addEventListener('change', () => this.syncTouchClass());
+    this.renderer.resize();
+    this.renderer.updateCamera(this.sim, 'title', 0, 0);
+    this.hud.sync(this.sim, this.mode);
+    requestAnimationFrame(this.frame);
+  }
+
+  private begin(): void {
+    this.audio.unlock();
+    this.sim = createMatch(act1, barbarian);
+    this.mode = 'play';
+    this.hud.shopOpen = false;
+    this.hud.helpOpen = false;
+    this.input.targetId = null;
+    this.input.dest = null;
+    this.input.endFrame();
+  }
+
+  private frame = (now: number): void => {
+    const dt = this.last ? Math.min(0.05, (now - this.last) / 1000) : 0;
+    this.last = now;
+    this.time += dt;
+    this.renderer.resize();
+    const playing = this.mode === 'play' && !portrait();
+    if (playing) {
+      const input = this.input.snapshot();
+      updateSim(this.sim, input, dt);
+      if (this.hud.shopOpen) {
+        const hero = player(this.sim);
+        if (hero.alive && !inShopRange(this.sim, hero)) this.hud.shopOpen = false;
+      }
+      if (this.sim.phase !== 'playing') {
+        this.mode = 'end';
+        this.hud.shopOpen = false;
+      }
+    }
+    this.input.endFrame();
+    this.audio.consume(this.sim);
+    this.renderer.updateCamera(this.sim, this.mode === 'end' ? 'play' : this.mode, dt, this.time);
+    this.renderer.draw(this.sim, {
+      mode: this.mode,
+      targetId: this.input.targetId,
+      attack: this.input.attack,
+      time: this.time,
+    });
+    this.hud.sync(this.sim, this.mode);
+    requestAnimationFrame(this.frame);
+  };
+
+  private syncTouchClass(): void {
+    const coarse = window.matchMedia('(pointer: coarse), (hover: none)').matches;
+    const phoneLandscape = window.innerHeight <= 520 && window.innerWidth > window.innerHeight;
+    document.body.classList.toggle('touch', coarse || phoneLandscape);
+  }
+}
+
+function portrait(): boolean {
+  return window.matchMedia('(orientation: portrait)').matches;
+}

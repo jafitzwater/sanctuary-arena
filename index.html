@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#120e0b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="description" content="Sanctuary Arena — a personal Diablo II themed MOBA in the browser." />
+    <title>Sanctuary Arena</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%23120e0b' width='32' height='32'/%3E%3Cpath fill='%23e6d3a1' d='M16 4l3 8h8l-6.5 5 2.5 8L16 20l-7 5 2.5-8L5 12h8z'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="view"></canvas>
+
+      <div id="rotate" role="status">
+        <div class="phone" aria-hidden="true"></div>
+        <h2>Rotate to landscape</h2>
+        <p>Sanctuary Arena is played with the phone on its side.</p>
+      </div>
+
+      <section id="title">
+        <p class="eyebrow" id="title-act">Act I · Blood Moor</p>
+        <h1>Sanctuary Arena</h1>
+        <p class="class-name" id="title-class">Barbarian</p>
+        <p class="blurb" id="title-blurb"></p>
+        <button id="play-btn" type="button">Enter the Moor</button>
+        <p class="skill-row" id="title-skills"></p>
+        <details>
+          <summary>How to play</summary>
+          <div class="help-grid">
+            <div>
+              <h3>Touch</h3>
+              <p>Stick on the left moves. Attack and skills sit on the right. Tap the ground to walk, or tap an enemy to chase them. Shop at the Encampment. Drink potions with the two small buttons.</p>
+            </div>
+            <div>
+              <h3>Mouse and keys</h3>
+              <p>Click the ground to move. Click an enemy to attack. Arrow keys also move. Q W E R cast skills (Shift+key ranks one up). Space attacks. B opens the shop. 5 and 6 drink potions.</p>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <div id="hud" hidden>
+        <header id="topbar">
+          <div class="portrait" aria-hidden="true">B</div>
+          <div class="vitals">
+            <div class="bar hp"><span id="hp-fill"></span><em id="hp-text"></em></div>
+            <div class="bar mp"><span id="mp-fill"></span><em id="mp-text"></em></div>
+            <div class="bar xp"><span id="xp-fill"></span></div>
+          </div>
+          <div class="stat"><b id="level">1</b><small>lv</small></div>
+          <div class="stat gold"><b id="gold">0</b><small>gold</small></div>
+          <div class="stat slim"><span id="kd"></span><span id="cs"></span></div>
+          <div class="stat slim"><span id="clock">0:00</span><span id="loadout">Unarmed</span></div>
+          <div class="top-actions">
+            <button id="shop-btn" type="button">Shop</button>
+            <button id="help-btn" type="button">Help</button>
+            <button id="mute-btn" type="button">Sound on</button>
+          </div>
+        </header>
+
+        <canvas id="minimap" width="180" height="64" aria-hidden="true"></canvas>
+        <p id="banner" hidden></p>
+        <p id="tip" hidden></p>
+        <p id="death" hidden></p>
+
+        <div id="stick" aria-hidden="true">
+          <div id="stick-knob"></div>
+        </div>
+
+        <div id="cluster">
+          <div id="skills"></div>
+          <div class="side-col">
+            <button id="potion-hp" type="button" aria-label="Drink health potion">
+              <span>HP</span><b id="potion-hp-count">0</b><small>5</small>
+            </button>
+            <button id="potion-mp" type="button" aria-label="Drink mana potion">
+              <span>MP</span><b id="potion-mp-count">0</b><small>6</small>
+            </button>
+          </div>
+          <button id="attack-btn" type="button">Attack</button>
+          <p id="skill-hint"></p>
+        </div>
+
+        <section id="shop" hidden role="dialog" aria-modal="true" aria-labelledby="shop-heading">
+          <div class="sheet">
+            <header>
+              <h2 id="shop-heading">Akara's Goods</h2>
+              <button id="shop-close" type="button">Close</button>
+            </header>
+            <p id="shop-note"></p>
+            <div id="shop-grid"></div>
+          </div>
+        </section>
+
+        <section id="help" hidden role="dialog" aria-modal="true" aria-labelledby="help-heading">
+          <div class="sheet">
+            <header>
+              <h2 id="help-heading">Controls</h2>
+              <button id="help-close" type="button">Close</button>
+            </header>
+            <div class="help-grid">
+              <div>
+                <h3>Touch</h3>
+                <p>Move with the stick. Hold Attack to strike whatever is in reach, or tap an enemy to lock onto them. Skill buttons are on the right. A glowing + spends a skill point. Open the shop inside the Rogue Encampment. HP and MP buttons drink potions.</p>
+              </div>
+              <div>
+                <h3>Mouse and keyboard</h3>
+                <p>Click ground to move, click an enemy to attack. Arrow keys move. Q Bash, W Leap, E War Cry, R Whirlwind. Shift plus a skill key ranks it up. Space attacks. B toggles the shop. 5 drinks a health potion, 6 a mana potion. Esc closes panels.</p>
+              </div>
+            </div>
+            <p class="fine">Win by destroying Andariel's altar. If the Rogue Encampment falls, the match is lost. You respawn beside the campfire.</p>
+          </div>
+        </section>
+      </div>
+
+      <section id="end" hidden>
+        <h2 id="end-title">Victory</h2>
+        <p id="end-copy"></p>
+        <p id="end-stats"></p>
+        <button id="again-btn" type="button">Fight again</button>
+      </section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
