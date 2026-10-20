@@ -1,5 +1,6 @@
 import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
+import { dealTeams } from './teams';
 import type { ClassDef } from './data/classes/types';
 import { unitDef } from './data/units';
 import { Rng } from './math';
@@ -89,6 +90,7 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     sim.denIn[den.id] = den.respawn;
   }
   for (const seal of map.seals ?? []) spawnSeal(sim, seal);
+  if (map.paths?.length) spawnRoster(sim, seed);
   return sim;
 }
 
@@ -129,6 +131,7 @@ function blankUnit(sim: Sim, partial: Pick<Unit, 'defId' | 'kind' | 'team' | 'na
     guardT: 0,
     haste: 0,
     recall: 0,
+    bot: partial.bot ?? false,
     targetId: null,
     facing: partial.facing ?? 0,
     swing: 0,
@@ -347,6 +350,10 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
   if (hero.alive) updatePlayer(sim, hero, input, step);
   const raven = byId(sim, sim.enemyChampionId);
   if (raven) updateEnemyChampion(sim, raven, step);
+  for (const unit of sim.units) {
+    if (!unit.bot || unit.kind !== 'champion') continue;
+    updateHeroAi(sim, unit, step);
+  }
   for (const unit of sim.units) {
     if (unit.kind !== 'minion') continue;
     if (unit.team === 'wild') updateCamp(sim, unit, step);
@@ -964,7 +971,88 @@ export function spawnHero(sim: Sim, team: Team, x: number, y: number, name: stri
     attackInterval: 1,
     color: team === 'ally' ? '#c4a574' : '#8a3030',
     accent: '#e6d3a1',
+    bot: true,
   });
+}
+
+function spawnRoster(sim: Sim, seed: number): void {
+  const dealt = dealTeams(seed, sim.classDef.id);
+  const allyHome = sim.map.playerBase;
+  const enemyHome = sim.map.enemyBase;
+  dealt.allies.forEach((seat, index) => {
+    const unit = spawnHero(sim, 'ally', allyHome.x + 200 + index * 36, allyHome.y - 90 + seat.lane * 48, seat.name);
+    unit.path = seat.lane;
+    unit.waypoint = 1;
+    unit.color = seat.tint;
+    unit.accent = seat.tint;
+  });
+  dealt.enemies.forEach((seat, index) => {
+    const unit = spawnHero(sim, 'enemy', enemyHome.x - 200 - index * 36, enemyHome.y + 70 - seat.lane * 40, seat.name);
+    unit.path = seat.lane;
+    unit.waypoint = Math.max(0, laneAt(sim, seat.lane).length - 2);
+    unit.color = seat.tint;
+    unit.accent = seat.tint;
+  });
+}
+
+function updateHeroAi(sim: Sim, unit: Unit, dt: number): void {
+  if (!unit.alive || unit.stun > 0 || unit.leap || unit.whirlT > 0) return;
+  const home = unit.team === 'ally' ? sim.map.playerBase : sim.map.enemyBase;
+  if (unit.hp / unit.maxHp < 0.32) {
+    unit.targetId = null;
+    moveToward(unit, home.x, home.y, dt);
+    return;
+  }
+  const nearby = sim.units.filter((other) => {
+    if (!other.alive || other.team === unit.team || other.team === 'wild') return false;
+    if (other.kind !== 'minion' && other.kind !== 'champion') return false;
+    return Math.hypot(other.x - unit.x, other.y - unit.y) < 300;
+  });
+  const low = nearby
+    .filter((other) => other.kind === 'minion' && other.hp / other.maxHp < 0.45)
+    .sort((a, b) => Math.hypot(a.x - unit.x, a.y - unit.y) - Math.hypot(b.x - unit.x, b.y - unit.y))[0];
+  if (low) {
+    unit.targetId = low.id;
+    if (!inRange(unit, low)) moveToward(unit, low.x, low.y, dt);
+    return;
+  }
+  const cover = sim.units.some(
+    (other) => other.alive && other.kind === 'minion' && other.team === unit.team && Math.hypot(other.x - unit.x, other.y - unit.y) < 240,
+  );
+  if (cover) {
+    const tower = sim.units
+      .filter((other) => other.alive && other.kind === 'tower' && other.team !== unit.team)
+      .sort((a, b) => Math.hypot(a.x - unit.x, a.y - unit.y) - Math.hypot(b.x - unit.x, b.y - unit.y))[0];
+    if (tower && Math.hypot(tower.x - unit.x, tower.y - unit.y) < 360) {
+      unit.targetId = tower.id;
+      if (!inRange(unit, tower)) moveToward(unit, tower.x, tower.y, dt);
+      return;
+    }
+  }
+  const threat = nearby.sort(
+    (a, b) => Math.hypot(a.x - unit.x, a.y - unit.y) - Math.hypot(b.x - unit.x, b.y - unit.y),
+  )[0];
+  if (threat && threat.kind === 'champion' && Math.hypot(threat.x - unit.x, threat.y - unit.y) < 160) {
+    unit.targetId = threat.id;
+    if (!inRange(unit, threat)) moveToward(unit, threat.x, threat.y, dt);
+    return;
+  }
+  const lane = laneAt(sim, unit.path);
+  const forward = unit.team === 'ally';
+  const finalIndex = forward ? lane.length - 1 : 0;
+  if (unit.waypoint === finalIndex || !lane[unit.waypoint]) {
+    const base = findBase(sim, forward ? 'enemy' : 'ally');
+    unit.targetId = base.alive ? base.id : null;
+    if (base.alive && !inRange(unit, base)) moveToward(unit, base.x, base.y, dt);
+    return;
+  }
+  const wp = lane[unit.waypoint];
+  unit.targetId = threat && Math.hypot(threat.x - unit.x, threat.y - unit.y) < 220 ? threat.id : null;
+  moveToward(unit, wp.x, wp.y, dt);
+  if (Math.hypot(unit.x - wp.x, unit.y - wp.y) < 36) {
+    const next = unit.waypoint + (forward ? 1 : -1);
+    if (next >= 0 && next < lane.length) unit.waypoint = next;
+  }
 }
 
 function spawnOnLane(

@@ -56,6 +56,8 @@ export interface Unit {
   guardT: number;
   haste: number;
   recall: number;
+  /** Computer-controlled hero. The player stays false. */
+  bot: boolean;
   targetId: number | null;
   facing: number;
   swing: number;

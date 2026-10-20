@@ -557,6 +557,13 @@ export class Renderer {
     ctx.beginPath();
     ctx.ellipse(p.x, p.y + 2, height * 0.26, height * 0.1, 0, 0, Math.PI * 2);
     ctx.fill();
+    if (unit.bot && unit.alive) {
+      ctx.strokeStyle = unit.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, height * 0.3, height * 0.12, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     if (opts.targetId === unit.id && unit.alive) {
       ctx.strokeStyle = '#f0e2bc';
       ctx.lineWidth = 2;
