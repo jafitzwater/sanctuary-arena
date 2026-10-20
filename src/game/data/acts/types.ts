@@ -123,14 +123,14 @@ export interface ActDef {
   lane: { x: number; y: number }[];
   /** When set, minions march every path. `lane` stays the central road. */
   paths?: PathDef[];
-  /** Blood river drawn across the map. It does not block movement. */
+  /** Blood river. Sanctuary blocks it except where a road or clearing crosses. */
   river?: { x: number; y: number }[];
   /** Neutral packs in the wilderness. They respawn on their own timer. */
   dens?: DenSpawn[];
   seals?: SealSpawn[];
   pits?: PitSpawn[];
   shrines?: ShrineSpawn[];
-  /** The whole rectangle is walkable, not only the road shoulder. */
+  /** Not clamped to a single lane. Sanctuary still blocks cliffs, the river, and buildings. */
   roam?: boolean;
   /** Town names drawn over each base. The base unit name stays the Worldstone. */
   towns?: { ally: string; enemy: string };

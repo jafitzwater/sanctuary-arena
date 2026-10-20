@@ -15,6 +15,7 @@ import { ROSTER } from '../src/game/data/classes/roster';
 import { dealTeams } from '../src/game/teams';
 import { FUTURE_ITEMS, isShopItem, ITEMS } from '../src/game/data/items';
 import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
+import { walkable } from '../src/game/terrain';
 
 function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   const frames = Math.max(1, Math.round(seconds / dt));
@@ -286,10 +287,17 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
     assert.ok(gap < 80, `${spec.name} is ${gap.toFixed(1)}px off ${path.name}`);
   }
   const hero = player(sim);
-  hero.x = 2200;
-  hero.y = 1400;
+  hero.x = 2360;
+  hero.y = 1240;
   updateSim(sim, emptyInput(), 0.1);
-  assert.ok(Math.hypot(hero.x - 2200, hero.y - 1400) < 40, 'the wilderness between paths stays walkable');
+  assert.ok(Math.hypot(hero.x - 2360, hero.y - 1240) < 40, 'the blood moor road stays open');
+  hero.x = 1500;
+  hero.y = 1100;
+  updateSim(sim, emptyInput(), 0.1);
+  assert.ok(Math.hypot(hero.x - 1500, hero.y - 1100) > 40, 'ground between the paths blocks movement');
+  assert.ok(walkable(sanctuary, 1680, 160), 'a den clearing stays open');
+  assert.equal(walkable(sanctuary, 1500, 860), false, 'the river stays shut off the roads');
+  assert.ok(walkable(sanctuary, sanctuary.playerBase.x + 150, sanctuary.playerBase.y), 'camp spawn stays open');
   step(sim, emptyInput(), sanctuary.waves.first + 0.25);
   const minions = sim.units.filter((unit) => unit.kind === 'minion' && unit.alive);
   for (const index of [0, 1, 2]) {

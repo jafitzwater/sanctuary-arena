@@ -276,7 +276,8 @@ export class Hud {
     if (treeBtn) {
       const pts = sim.skillPoints + sim.statPoints;
       const touch = document.body.classList.contains('touch');
-      treeBtn.textContent = pts > 0 ? `+${pts}` : touch ? 'Pts' : 'Points';
+      treeBtn.textContent = pts > 0 ? (touch ? `Pts ${pts}` : `Points ${pts}`) : touch ? 'Pts' : 'Points';
+      treeBtn.setAttribute('aria-label', pts > 0 ? `${pts} points to spend` : 'Points');
       treeBtn.classList.toggle('has-points', pts > 0);
     }
     if (!this.treeOpen || this.tab !== 'skills') this.pendingSkill = null;
@@ -358,11 +359,18 @@ export class Hud {
         <span class="cd" data-cd="${slot}" hidden></span>
         <span class="plus" data-upgrade="" hidden>+</span>
       `;
-      button.addEventListener('pointerenter', () => {
+      const showHint = () => {
         const id = sim.belt[slot];
         const skill = sim.classDef.skills.find((entry) => entry.id === id);
-        this.text('#skill-hint', skill ? skill.description : 'Empty belt slot. Open the tree to assign a skill.');
+        this.text('#skill-hint', skill ? skill.description : '');
+      };
+      const hideHint = () => this.text('#skill-hint', '');
+      button.addEventListener('pointerdown', (ev) => {
+        showHint();
+        if (button.setPointerCapture) button.setPointerCapture(ev.pointerId);
       });
+      button.addEventListener('pointerup', hideHint);
+      button.addEventListener('pointercancel', hideHint);
       host.appendChild(button);
     }
   }
@@ -383,7 +391,7 @@ export class Hud {
         icon.hidden = !src;
         if (src) icon.src = src;
       }
-      button.title = skill?.description ?? 'Empty belt slot.';
+      button.removeAttribute('title');
       const rank = skill ? (sim.skillRanks[skill.id] ?? 0) : 0;
       const cd = skill ? (sim.cooldowns[skill.id] ?? 0) : 0;
       const cost = skill && rank > 0 ? manaCost(skill, rank) : 0;
@@ -519,13 +527,10 @@ export class Hud {
   private paintQuick(sim: Sim, item: ItemDef | null, near: boolean): void {
     const chip = this.root.querySelector<HTMLButtonElement>('#quick-buy');
     if (!chip) return;
-    if (!item) {
-      chip.hidden = true;
-      return;
-    }
+    chip.hidden = true;
+    if (!item) return;
     const quote = this.quote(sim, item);
     const ok = this.affordable(quote, near);
-    chip.hidden = false;
     chip.disabled = !ok;
     chip.classList.toggle('ready', ok);
     const icon = chip.querySelector('img');

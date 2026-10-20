@@ -6,7 +6,8 @@ if (!raven) throw new Error('Blood Raven missing from MonStats import');
 
 /**
  * Sanctuary. Three paths join the Rogue Encampment to Harrogath.
- * A diagonal river crosses the wilderness. Each path has an outer tower,
+ * A diagonal river crosses the wilderness and blocks movement off the fords.
+ * Each path has an outer tower,
  * an inner tower, and a seal tower. Two guardians stand at each Worldstone.
  * The seal behind the third tower is scenery until the seal rules land.
  */
