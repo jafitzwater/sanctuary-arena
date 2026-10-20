@@ -924,4 +924,79 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   }
 }
 
+{
+  const sheets = readFileSync(new URL('../src/game/art/sheets.ts', import.meta.url), 'utf8');
+  const render = readFileSync(new URL('../src/game/render.ts', import.meta.url), 'utf8');
+  const height = Number(sheets.match(/export const HERO_HEIGHT = (\d+)/)?.[1]);
+  const block = sheets.match(/export const HERO_NATIVE_PX = \{([^}]+)\}/)?.[1] ?? '';
+  const native: Record<string, number> = {};
+  for (const match of block.matchAll(/(light|medium|heavy):\s*(\d+)/g)) native[match[1]] = Number(match[2]);
+  const parseRun = (name: string): number[][][] => {
+    const start = sheets.indexOf(`export const ${name}`);
+    const end = sheets.indexOf('};', start);
+    const rows = [...sheets.slice(start, end).matchAll(/\[(\d+(?:,\d+)*)\]/g)].map((m) => m[1].split(',').map(Number));
+    assert.equal(rows.length, 24, name);
+    return [rows.slice(0, 8), rows.slice(8, 16), rows.slice(16, 24)];
+  };
+  const tops = parseRun('HERO_RUN_TOP');
+  const bottoms = parseRun('HERO_RUN_BOTTOM');
+  assert.ok(sheets.includes('const lift = baseline - bottom'));
+  assert.ok(sheets.includes('drawY: y - frameHeight - lift * scale'));
+  assert.ok(sheets.includes('drawX: x - frameWidth / 2'));
+  assert.equal(render.match(/heroRunDraw\(/g)?.length, 1);
+  assert.equal(render.match(/heroDrawBox\(/g)?.length, 1);
+  assert.ok(render.includes('y - run.lift * run.scale'));
+  assert.ok(render.includes('!walking'));
+  const tiers = ['light', 'medium', 'heavy'];
+  let footTravel = false;
+  for (let tier = 0; tier < tiers.length; tier++) {
+    const drawScale: number = height / native[tiers[tier]];
+    for (let row = 0; row < 8; row++) {
+      const top = tops[tier][row];
+      const bottom = bottoms[tier][row];
+      assert.equal(top.length, 12);
+      assert.equal(bottom.length, 12);
+      let baseline = bottom[0];
+      for (const edge of bottom) if (edge > baseline) baseline = edge;
+      const ground: number[] = [];
+      const head: number[] = [];
+      const snapped: number[] = [];
+      for (let frame = 0; frame < 12; frame++) {
+        const nativeH: number = bottom[frame] - top[frame] + 1;
+        const lift: number = baseline - bottom[frame];
+        assert.ok(lift >= 0);
+        const frameHeight: number = nativeH * drawScale;
+        const drawY: number = 200 - frameHeight - lift * drawScale;
+        ground.push(drawY + frameHeight + lift * drawScale);
+        head.push(200 - drawY);
+        snapped.push(nativeH * drawScale);
+      }
+      const span = (values: number[]): number => Math.max(...values) - Math.min(...values);
+      const natural: number = (Math.max(...top) - Math.min(...top)) * drawScale;
+      const drawnSpan: number = span(head);
+      const snapSpan: number = span(snapped);
+      for (const line of ground) {
+        assert.ok(Math.abs(line - 200) < 1e-6, `${tiers[tier]} row ${row} baseline moved`);
+      }
+      assert.ok(bottom.some((edge) => edge === baseline), `${tiers[tier]} row ${row} never plants`);
+      assert.ok(Math.abs(drawnSpan - natural) < 1, `${tiers[tier]} row ${row} head span ${drawnSpan} vs source ${natural}`);
+      if (snapSpan - natural > 1) {
+        footTravel = true;
+        assert.ok(snapSpan - drawnSpan > 1, `${tiers[tier]} row ${row} still includes the snap delta`);
+      }
+    }
+  }
+  assert.ok(footTravel, 'expected a run row whose snapped head travel exceeds the source');
+  const camera = bottoms[0][0];
+  const northwest = bottoms[0][4];
+  const camSpan: number = Math.max(...camera) - Math.min(...camera);
+  const nwSpan: number = Math.max(...northwest) - Math.min(...northwest);
+  assert.equal(Math.min(...camera), 103);
+  assert.equal(Math.max(...camera), 104);
+  assert.equal(camSpan, 1);
+  assert.equal(Math.min(...northwest), 90);
+  assert.equal(Math.max(...northwest), 109);
+  assert.equal(nwSpan, 19);
+}
+
 console.log('match tests passed');

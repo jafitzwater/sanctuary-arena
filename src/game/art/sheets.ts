@@ -97,6 +97,113 @@ export function heroDrawBox(
   return { scale, frameWidth, frameHeight, drawX: x - frameWidth / 2, drawY: y - frameHeight };
 }
 
+export const HERO_RUN_TOP: Record<HeroScaleTier, readonly (readonly number[])[]> = {
+  light: [
+    [26,28,20,11,9,10,13,18,20,23,26,27],
+    [15,16,12,9,10,11,14,18,17,17,17,16],
+    [7,4,1,3,6,8,12,14,11,9,8,8],
+    [1,0,0,0,0,0,2,4,2,1,1,2],
+    [16,7,0,0,2,3,7,10,9,11,14,16],
+    [26,19,7,1,3,4,8,12,13,15,21,26],
+    [29,28,14,3,2,3,7,12,13,17,25,32],
+    [22,25,13,0,0,0,2,7,11,16,22,24],
+  ],
+  medium: [
+    [18,20,13,9,10,10,14,17,16,16,18,19],
+    [1,3,0,1,4,3,7,10,5,3,3,2],
+    [0,0,0,3,10,7,12,15,6,2,0,0],
+    [0,0,0,0,4,1,7,10,0,0,0,0],
+    [2,0,0,3,11,8,15,19,7,4,4,3],
+    [9,4,0,5,10,7,13,18,9,9,10,11],
+    [11,9,0,0,2,1,7,13,6,11,12,12],
+    [8,9,0,0,2,0,0,5,2,5,8,9],
+  ],
+  heavy: [
+    [14,21,14,5,3,4,8,13,14,16,19,17],
+    [9,10,6,3,4,6,9,13,12,11,11,10],
+    [8,5,2,5,9,11,15,17,14,11,10,9],
+    [6,0,0,0,5,7,12,13,9,7,7,7],
+    [10,1,0,0,0,1,6,8,6,6,9,11],
+    [11,7,0,0,0,0,3,6,6,10,15,13],
+    [17,18,13,3,3,4,8,12,16,20,21,19],
+    [8,14,10,0,0,0,0,5,9,14,13,11],
+  ],
+};
+
+export const HERO_RUN_BOTTOM: Record<HeroScaleTier, readonly (readonly number[])[]> = {
+  light: [
+    [103,103,103,103,103,103,103,103,104,103,103,103],
+    [104,104,104,104,104,104,104,104,104,104,104,104],
+    [99,110,110,110,99,99,99,99,99,99,99,99],
+    [87,87,100,100,87,87,87,87,87,87,87,87],
+    [100,93,90,109,90,90,91,91,91,90,100,100],
+    [104,100,91,91,91,91,92,91,92,93,104,104],
+    [102,99,91,115,115,115,91,91,91,97,102,102],
+    [90,89,89,89,89,89,89,89,91,93,90,90],
+  ],
+  medium: [
+    [114,114,114,129,114,129,114,114,115,114,114,114],
+    [116,116,116,105,105,105,105,105,105,105,105,105],
+    [116,116,116,103,103,103,103,103,103,103,116,116],
+    [105,106,106,90,90,90,90,90,90,90,90,90],
+    [105,117,117,96,95,95,96,96,96,95,105,105],
+    [110,106,97,97,97,97,98,97,98,99,110,110],
+    [107,104,96,117,96,117,96,96,96,102,107,107],
+    [98,97,97,115,115,115,97,97,99,101,98,98],
+  ],
+  heavy: [
+    [104,104,104,104,104,104,104,104,104,104,104,104],
+    [105,105,105,105,105,105,105,105,105,105,105,105],
+    [106,116,116,116,106,106,106,106,106,106,106,106],
+    [97,97,110,97,97,97,97,97,97,97,98,97],
+    [100,96,112,112,112,90,90,90,90,90,100,100],
+    [100,98,87,111,111,111,87,87,87,88,100,100],
+    [108,105,95,119,119,119,95,95,95,102,108,108],
+    [95,94,93,113,113,113,93,93,96,97,95,95],
+  ],
+};
+
+
+/** Lowest opaque row in each run direction. The same value for all 12 frames. */
+export function heroRunBaseline(tier: HeroScaleTier, row: number): number {
+  const bottoms = HERO_RUN_BOTTOM[tier][row % 8];
+  let baseline = bottoms[0];
+  for (const bottom of bottoms) if (bottom > baseline) baseline = bottom;
+  return baseline;
+}
+
+/**
+ * Run only. The trimmed bitmap keeps its size at the shared scale, and its bottom
+ * sits `lift` source pixels above the row baseline so a raised foot is not snapped down.
+ * drawX is the center of the trimmed frame.
+ */
+export function heroRunDraw(
+  x: number,
+  y: number,
+  nativeW: number,
+  nativeH: number,
+  tier: HeroScaleTier,
+  row: number,
+  frame: number,
+  zoom = 1,
+): { scale: number; frameWidth: number; frameHeight: number; drawX: number; drawY: number; baseline: number; lift: number } {
+  const scale = heroDrawScale(tier, zoom);
+  const frameWidth = nativeW * scale;
+  const frameHeight = nativeH * scale;
+  const baseline = heroRunBaseline(tier, row);
+  const bottom = HERO_RUN_BOTTOM[tier][row % 8][frame % 12];
+  const lift = baseline - bottom;
+  return {
+    scale,
+    frameWidth,
+    frameHeight,
+    baseline,
+    lift,
+    drawX: x - frameWidth / 2,
+    drawY: y - frameHeight - lift * scale,
+  };
+}
+
 /**
  * Fallen, zombie, and fallen shaman walk the same way. The quill rat has no
  * sheet here — the plain rat sheet is not used — so quillrat.webp is drawn
