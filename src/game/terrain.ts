@@ -140,21 +140,23 @@ export function resolveSanctuary(map: ActDef, x: number, y: number): Vec {
 }
 
 /**
- * Tile class for the baked iso floor. Cobbles and town tiles meet grass
- * directly. There is no edge ring and no empty dark tile.
+ * Tile class for the baked iso floor. Each lane is one cobble strip.
+ * Around a Sanctuary banner the yard is wood or pale stone, and the road
+ * stays cobble where it meets that yard.
  */
 export function groundAt(map: ActDef, x: number, y: number): GroundKind {
   const camp = Math.hypot(x - map.playerBase.x, y - map.playerBase.y);
   const lair = Math.hypot(x - map.enemyBase.x, y - map.enemyBase.y);
   const road = nearestRoad(map, x, y);
   const cobble = map.laneWidth / 2 + 10;
+  if (road <= cobble) return 'path';
   if (map.river && map.river.length > 1) {
     const water = distToPolyline({ x, y }, map.river);
-    if (water < 46 && road > cobble) return 'river';
-    if (water < 92 && road > cobble) return 'bank';
+    if (water < 46) return 'river';
+    if (water < 92) return 'bank';
   }
-  if (camp <= map.plaza) return 'town';
-  if (lair <= map.plaza) return map.theme.decor === 'sanctuary' ? 'pale' : 'town';
-  if (road <= cobble) return 'path';
+  const yard = map.paths ? map.fountainRadius : map.plaza;
+  if (camp <= yard) return 'town';
+  if (lair <= yard) return map.theme.decor === 'sanctuary' ? 'pale' : 'town';
   return 'grass';
 }

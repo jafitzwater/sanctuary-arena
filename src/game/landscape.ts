@@ -81,6 +81,15 @@ function place(props: Prop[], map: ActDef, prop: Prop): void {
   props.push(prop);
 }
 
+function borderClear(map: ActDef, x: number, y: number): boolean {
+  if (Math.hypot(x - map.playerBase.x, y - map.playerBase.y) <= map.fountainRadius) return false;
+  if (Math.hypot(x - map.enemyBase.x, y - map.enemyBase.y) <= map.fountainRadius) return false;
+  if (map.river && distToPolyline({ x, y }, map.river) < 78) return false;
+  if (onRoad(map, x, y, 24)) return false;
+  const spots = [...(map.dens ?? []), ...(map.shrines ?? []), ...(map.pits ?? [])];
+  return spots.every((spot) => Math.hypot(x - spot.x, y - spot.y) >= OPENING);
+}
+
 function inPlaza(map: ActDef, x: number, y: number, scale: number): boolean {
   return (
     Math.hypot(x - map.playerBase.x, y - map.playerBase.y) < map.plaza * scale ||
@@ -94,22 +103,35 @@ function build(map: ActDef): Prop[] {
     ? map.paths.map((path) => ({ id: path.id, lane: path.lane }))
     : [{ id: 'center', lane: map.lane }];
 
+  // Contiguous borders: a run of trees, then fences, then rocks, on both sides of every lane.
+  const groups: { kind: Prop['kind']; count: number; step: number; block: number; variants: number }[] = [
+    { kind: 'tree', count: 4, step: 80, block: 0, variants: 5 },
+    { kind: 'fence', count: 3, step: 52, block: 0, variants: 2 },
+    { kind: 'rock', count: 2, step: 72, block: 34, variants: 3 },
+  ];
   for (const road of roads) {
     const len = lengthOf(road.lane);
-    let n = 0;
-    for (let dist = 140; dist < len - 80; dist += 200) {
-      const side = n % 2 === 0 ? 1 : -1;
-      const at = sideAt(road.lane, dist, side * (map.laneWidth / 2 + 88));
-      n += 1;
-      if (inPlaza(map, at.x, at.y, 0.85)) continue;
-      if (map.river && distToPolyline(at, map.river) < 78) continue;
-      if (onRoad(map, at.x, at.y, 24)) continue;
-      if (road.id === 'north' && n % 2 === 0) {
-        place(props, map, { kind: 'fence', variant: n % 2, x: at.x, y: at.y, flip: side < 0, block: 0 });
-      } else if (road.id === 'south' && n % 3 === 0) {
-        place(props, map, { kind: 'rock', variant: n % 3, x: at.x, y: at.y, flip: false, block: 0 });
-      } else {
-        place(props, map, { kind: 'tree', variant: n % 5, x: at.x, y: at.y, flip: side < 0, block: 0 });
+    const sideOffset = map.laneWidth / 2 + 88;
+    for (const side of [1, -1]) {
+      let dist = 100;
+      let variant = 0;
+      while (dist < len - 100) {
+        for (const group of groups) {
+          for (let i = 0; i < group.count && dist < len - 100; i++) {
+            const at = sideAt(road.lane, dist, side * sideOffset);
+            dist += group.step;
+            if (!borderClear(map, at.x, at.y)) continue;
+            place(props, map, {
+              kind: group.kind,
+              variant: variant % group.variants,
+              x: at.x,
+              y: at.y,
+              flip: side < 0,
+              block: group.block,
+            });
+            variant += 1;
+          }
+        }
       }
     }
   }

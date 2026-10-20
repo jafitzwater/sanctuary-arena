@@ -41,6 +41,8 @@ import banner from '../../assets/art/d2/banner.webp';
 
 /**
  * Real Spriters Resource atlases. Eight direction rows, south then clockwise.
+ * Run sheets keep the first 12 frames of each direction (the cycle that returns
+ * to the start pose). Later blobs on that row are the next weapon group.
  * Barbarian whirl, leap, cast, get-hit, and death reuse these same sheets
  * (run, attack, or idle) so a state never swaps in an older drawing.
  * Fallen, zombie, and fallen shaman walk the same way. The quill rat has no

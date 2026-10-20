@@ -102,6 +102,11 @@ def pick(count: int, want: int) -> list[int]:
     return [round(i * (count - 1) / (want - 1)) for i in range(want)]
 
 
+def leading(count: int, want: int) -> list[int]:
+    """First frames of the row. Later blobs on a Spriters row are the next weapon group."""
+    return list(range(min(count, want)))
+
+
 def keyed(im: Image.Image, box: tuple[int, int, int, int]) -> Image.Image:
     crop = im.crop(box).convert("RGBA")
     pix = crop.load()
@@ -115,6 +120,50 @@ def keyed(im: Image.Image, box: tuple[int, int, int, int]) -> Image.Image:
     if not bbox:
         return crop
     return crop.crop(bbox)
+
+
+def foot_of_image(im: Image.Image) -> tuple[int, int]:
+    px = im.load()
+    w, h = im.size
+    rows: list[list[int]] = [[] for _ in range(h)]
+    bottom = -1
+    for y in range(h):
+        for x in range(w):
+            if px[x, y][3] > 24:
+                rows[y].append(x)
+                bottom = y
+    if bottom < 0:
+        return w // 2, h - 1
+    y = bottom
+    limit = max(0, bottom - 40)
+    while y > limit and len(rows[y]) < 4:
+        y -= 1
+    cols = rows[y] or rows[bottom]
+    return cols[len(cols) // 2], y
+
+
+def pack_feet(frames: list[list[Image.Image]], name: str) -> None:
+    """Place every frame so its opaque foot sits on the same cell point."""
+    placed: list[tuple[int, int, Image.Image, int, int]] = []
+    left = right = up = down = 0
+    for r, row in enumerate(frames):
+        for c, frame in enumerate(row):
+            fx, fy = foot_of_image(frame)
+            w, h = frame.size
+            left = max(left, fx)
+            right = max(right, w - 1 - fx)
+            up = max(up, fy)
+            down = max(down, h - 1 - fy)
+            placed.append((r, c, frame, fx, fy))
+    cell_w = left + right + 1
+    cell_h = up + down + 1
+    cols = max(len(row) for row in frames)
+    sheet = Image.new("RGBA", (cell_w * cols, cell_h * len(frames)), (0, 0, 0, 0))
+    for r, c, frame, fx, fy in placed:
+        sheet.paste(frame, (c * cell_w + left - fx, r * cell_h + up - fy), frame)
+    path = os.path.join(OUT, name + ".webp")
+    sheet.save(path, "WEBP", quality=90, method=6)
+    print(f"  {name} {sheet.size} cell {cell_w}x{cell_h} {os.path.getsize(path)//1024}KB")
 
 
 def pack(frames: list[list[Image.Image]], name: str) -> None:
@@ -180,13 +229,17 @@ def slice_barb(path: str, tier: str, modes: dict[str, tuple[int, int, list[tuple
             runs = frames_in(px, row_y0, row_y1, width)
             if len(runs) < 2:
                 raise SystemExit(f"{tier} {mode} row {row_y0} has {len(runs)} frames")
+            choose = leading if mode == "run" else pick
             row_frames = []
-            for index in pick(len(runs), want):
+            for index in choose(len(runs), want):
                 row_frames.append(keyed(im, cell_box(runs, index, row_y0, row_y1)))
             widths.append(row_frames[0].width)
             grid.append(row_frames)
-        print(f"    frames/row {len(frames_in(px, chosen[0][0], chosen[0][1], width))} content-w {widths}")
-        pack(grid, f"barb-{tier}-{mode}")
+        print(f"    frames/row {len(frames_in(px, chosen[0][0], chosen[0][1], width))} kept {len(grid[0])} content-w {widths}")
+        if mode == "run":
+            pack_feet(grid, f"barb-{tier}-{mode}")
+        else:
+            pack(grid, f"barb-{tier}-{mode}")
         if tier == "light" and mode in ("walk", "idle", "attack"):
             print(f"    sample {mode}")
             ascii_frame(grid[0][0])
@@ -295,17 +348,17 @@ WIDE = [(40, 100), (180, 260), (400, 480), (700, 780), (1100, 1180)]
 LIGHT = {
     "idle": (1855, 3500, NARROW, 1),
     "walk": (12, 1838, NARROW, 4),
-    "run": (3512, 5260, WIDE, 4),
+    "run": (3512, 5260, WIDE, 12),
     "attack": (5275, 7362, WIDE, 4),
 }
 MEDIUM = {
     "walk": (12, 1948, NARROW, 4),
-    "run": (1960, 3830, WIDE, 4),
+    "run": (1960, 3830, WIDE, 12),
     "attack": (3848, 6160, WIDE, 4),
 }
 HEAVY = {
     "walk": (12, 1836, NARROW, 4),
-    "run": (1855, 3670, WIDE, 4),
+    "run": (1855, 3670, WIDE, 12),
     "attack": (3690, 5955, WIDE, 4),
 }
 

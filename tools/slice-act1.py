@@ -259,7 +259,7 @@ def repack_barbs() -> None:
         "medium": ["idle", "walk", "run", "attack"],
         "heavy": ["idle", "walk", "run", "attack"],
     }
-    cols = {"idle": 1, "walk": 4, "run": 4, "attack": 4}
+    cols = {"idle": 1, "walk": 4, "run": 12, "attack": 4}
     for tier, modes in tiers.items():
         frames: list[tuple[str, int, int, np.ndarray]] = []
         for mode in modes:
