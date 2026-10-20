@@ -30,7 +30,12 @@ interface Glyph {
   sy: number;
   sw: number;
   sh: number;
+  /** Opaque foot inside the cell, in source pixels. */
+  foot?: { x: number; y: number };
 }
+
+/** One direction of the Spriters run cycle. The source row continues past this into the next weapon. */
+const RUN_FRAMES = 12;
 
 function loadImage(src: string): HTMLImageElement {
   const img = new Image();
@@ -61,6 +66,7 @@ export class Renderer {
   private gait = new Map<number, { x: number; y: number; d: number }>();
   private facingRow = new Map<number, number>();
   private aim = new Map<number, number>();
+  private feet = new WeakMap<HTMLImageElement, Map<string, { x: number; y: number }>>();
   private frameDt = 0;
   private floor: HTMLCanvasElement | null = null;
   private readonly cutouts = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
@@ -445,18 +451,18 @@ export class Renderer {
       const pack = this.d2[tier];
       // One armor tier, one sheet per state. Feet share a cell anchor, and the
       // column advances with distance so a run does not skip ahead of the feet.
-      if (!unit.alive || unit.castT > 0) return this.atlas(pack.idle, 1, 0, row);
-      if (unit.whirlT > 0) return this.atlas(pack.run, 4, Math.floor(phase / 10) % 4, row);
+      if (!unit.alive || unit.castT > 0) return this.atlas(pack.idle, 1, 0, row, true);
+      if (unit.whirlT > 0) return this.atlas(pack.run, RUN_FRAMES, Math.floor(phase / 10) % RUN_FRAMES, row, true);
       if (unit.leap || unit.swing > 0) {
         const col = unit.leap ? 2 : Math.min(3, Math.floor((1 - Math.max(0, unit.swing)) * 4));
-        return this.atlas(pack.attack, 4, col, row);
+        return this.atlas(pack.attack, 4, col, row, true);
       }
       if (moving) {
-        // One run sheet, one column per 16 world pixels, in order.
-        const col = Math.floor(phase / 16) % 4;
-        return this.atlas(pack.run, 4, col, row);
+        // Distance only. A facing change does not send the cycle back to frame 0.
+        const col = Math.floor(phase / 16) % RUN_FRAMES;
+        return this.atlas(pack.run, RUN_FRAMES, col, row, true);
       }
-      return this.atlas(pack.idle, 1, 0, row);
+      return this.atlas(pack.idle, 1, 0, row, true);
     }
     if (unit.defId === 'rogue' || unit.defId === 'rogue-archer') {
       return this.atlas(this.rogueSheet, 2, moving ? 1 : 0, row);
@@ -549,11 +555,58 @@ export class Renderer {
     return { img, flip, sx: 0, sy: 0, sw: iw, sh: ih };
   }
 
-  private atlas(img: HTMLImageElement, cols: number, col: number, row: number): Glyph | null {
+  private atlas(img: HTMLImageElement, cols: number, col: number, row: number, anchor = false): Glyph | null {
     if (!img.complete || !img.naturalWidth || !img.naturalHeight) return null;
     const sw = img.naturalWidth / cols;
     const sh = img.naturalHeight / 8;
-    return { img, flip: false, sx: col * sw, sy: row * sh, sw, sh };
+    const glyph: Glyph = { img, flip: false, sx: col * sw, sy: row * sh, sw, sh };
+    if (anchor) {
+      const foot = this.footOf(img, glyph.sx, glyph.sy, sw, sh);
+      if (foot) glyph.foot = foot;
+    }
+    return glyph;
+  }
+
+  /** Median of the lowest opaque row, so the foot — not the cell box — sits on the ground. */
+  private footOf(img: HTMLImageElement, sx: number, sy: number, sw: number, sh: number): { x: number; y: number } | null {
+    if (!img.complete || img.naturalWidth === 0) return null;
+    let table = this.feet.get(img);
+    if (!table) {
+      table = new Map();
+      this.feet.set(img, table);
+    }
+    const key = `${sx}:${sy}:${sw}:${sh}`;
+    const cached = table.get(key);
+    if (cached) return cached;
+    const w = Math.max(1, Math.round(sw));
+    const h = Math.max(1, Math.round(sh));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    const rows: number[][] = Array.from({ length: h }, () => []);
+    let bottom = -1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (data[(y * w + x) * 4 + 3] > 24) {
+          rows[y].push(x);
+          bottom = y;
+        }
+      }
+    }
+    let foot = { x: w / 2, y: h - 1 };
+    if (bottom >= 0) {
+      let y = bottom;
+      const limit = Math.max(0, bottom - 40);
+      while (y > limit && rows[y].length < 4) y -= 1;
+      const cols = rows[y].length ? rows[y] : rows[bottom];
+      foot = { x: cols[cols.length >> 1], y };
+    }
+    table.set(key, foot);
+    return foot;
   }
 
 
@@ -693,8 +746,10 @@ export class Renderer {
     ctx.imageSmoothingEnabled = false;
     ctx.translate(Math.round(x), Math.round(y));
     if (flip) ctx.scale(-1, 1);
-    const dx = -Math.round(dw / 2);
-    const dy = -dh;
+    const footX = src?.foot ? (src.foot.x / src.sw) * dw : dw / 2;
+    const footY = src?.foot ? (src.foot.y / src.sh) * dh : dh;
+    const dx = -Math.round(footX);
+    const dy = -Math.round(footY);
     const paint = (ox: number, oy: number) => {
       if (src) ctx.drawImage(sheet, src.sx, src.sy, src.sw, src.sh, dx + ox, dy + oy, dw, dh);
       else ctx.drawImage(sheet, dx + ox, dy + oy, dw, dh);
@@ -828,8 +883,8 @@ const FLOOR_SEAT: readonly (readonly number[])[] = [
 ];
 
 function floorCol(kind: GroundKind, i: number, j: number): number {
+  if (kind === 'path' || kind === 'town' || kind === 'pale') return 0;
   const cols =
-    kind === 'path' ? [0, 3] :
     kind === 'bank' || kind === 'edge' ? [0, 2] :
     kind === 'river' || kind === 'dark' ? [0, 1] :
     [0, 1, 2, 3];
