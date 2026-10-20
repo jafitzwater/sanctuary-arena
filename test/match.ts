@@ -5,7 +5,7 @@ import { act1 } from '../src/game/data/acts/act1';
 import { getAct } from '../src/game/data/acts';
 import { barbarian } from '../src/game/data/classes/barbarian';
 import { getClass } from '../src/game/data/classes';
-import { grantXp, MAX_LEVEL, tryAssignBelt, trySpendAttribute, tryUpgrade, damageUnit } from '../src/game/combat';
+import { grantXp, MAX_LEVEL, tryAssignBelt, tryBuy, trySpendAttribute, tryUpgrade, damageUnit } from '../src/game/combat';
 import { SKILLS } from '../src/game/skills';
 import { findBase, player } from '../src/game/query';
 import { createMatch, spawnMinion, updateSim } from '../src/game/sim';
@@ -39,7 +39,8 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   const sim = createMatch(act1, barbarian, 1);
   assert.equal(sim.level, 1);
   assert.equal(sim.skillRanks.bash, 1);
-  assert.equal(sim.skillRanks.leap, 0);
+  assert.equal(sim.skillRanks.shout, 0);
+  assert.deepEqual(sim.belt, ['bash', '', '', '']);
   assert.equal(sim.phase, 'playing');
   for (const tower of sim.units.filter((unit) => unit.kind === 'tower')) {
     const gap = distToPolyline(tower, sim.map.lane);
@@ -90,16 +91,16 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   input.aimY = foe.y;
   updateSim(sim, input, 0.05);
   assert.ok(foe.hp < hp, 'Bash should damage a Fallen in reach');
-  assert.ok(foe.stun > 0, 'Bash should stun');
+  assert.equal(foe.stun, 0, 'Bash is a heavier hit and does not stun');
 }
 
 {
   const sim = createMatch(act1, barbarian, 1);
-  sim.skillRanks.leap = 1;
+  sim.skillRanks['leap-attack'] = 1;
   const hero = player(sim);
   const x0 = hero.x;
   const input = emptyInput();
-  input.cast = 'leap';
+  input.cast = 'leap-attack';
   input.aimX = hero.x + 240;
   input.aimY = hero.y;
   step(sim, input, 0.7);
@@ -129,10 +130,10 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   input.buy = 'health-potion';
   updateSim(sim, input, 0);
   assert.equal(sim.potions.health, 1);
-  input.buy = 'hax';
+  input.buy = 'clb';
   updateSim(sim, input, 0);
-  assert.equal(sim.loadout.weapon, 'hax');
-  assert.ok(hero.ad >= barbarian.stats.ad + 16);
+  assert.equal(sim.loadout.weapon, 'clb');
+  assert.ok(hero.ad >= barbarian.stats.ad + 14);
   input.buy = null;
   input.potion = 'health';
   updateSim(sim, input, 0);
@@ -155,11 +156,11 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
 
 {
   const sim = createMatch(act1, barbarian, 1);
-  assert.equal(tryUpgrade(sim, 'leap'), false);
+  assert.equal(tryUpgrade(sim, 'shout'), false);
   sim.skillPoints = 1;
   sim.level = 2;
-  assert.equal(tryUpgrade(sim, 'leap'), true);
-  assert.equal(sim.skillRanks.leap, 1);
+  assert.equal(tryUpgrade(sim, 'shout'), true);
+  assert.equal(sim.skillRanks.shout, 1);
   grantXp(sim, 100000);
   assert.equal(sim.level, MAX_LEVEL);
 }
@@ -167,19 +168,27 @@ function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
 {
   const sim = createMatch(act1, barbarian, 1);
   assert.deepEqual(sim.belt, ['bash', '', '', '']);
-  tryAssignBelt(sim, 'leap', 1);
-  assert.equal(sim.belt[1], '');
-  sim.skillPoints = 1;
-  sim.level = 2;
-  assert.equal(tryUpgrade(sim, 'leap'), true);
-  tryAssignBelt(sim, 'leap', 1);
-  assert.equal(sim.belt[0], 'bash');
-  assert.equal(sim.belt[1], 'leap');
+  grantXp(sim, 60);
+  assert.equal(sim.level, 2);
+  assert.equal(sim.belt[1], 'shout', 'Shout should fill the first empty slot');
+  tryAssignBelt(sim, 'shout', 0);
+  assert.equal(sim.belt[0], 'shout');
+  assert.equal(sim.belt[1], 'bash');
   sim.statPoints = 1;
   const str = sim.attributes.str;
   trySpendAttribute(sim, 'str');
   assert.equal(sim.attributes.str, str + 1);
   assert.equal(sim.statPoints, 0);
+  sim.gold = 400;
+  const hero = player(sim);
+  hero.x = sim.map.playerBase.x;
+  hero.y = sim.map.playerBase.y;
+  for (let i = 0; i < 4; i++) tryBuy(sim, 'health-potion');
+  assert.equal(sim.potions.health, 3);
+  tryBuy(sim, 'lbl');
+  assert.equal(sim.loadout.belt, 'lbl');
+  tryBuy(sim, 'health-potion');
+  assert.equal(sim.potions.health, 4);
 }
 
 {

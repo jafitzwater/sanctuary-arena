@@ -561,7 +561,27 @@ body.touch #stick { display: block; }
 #belt-pick button { min-height: 40px; }
 #belt-pick button.on { border-color: #e6c864; box-shadow: 0 0 0 1px #e6c864; }
 #tree-btn.has-points { color: #1a120c; background: #e6c864; border-color: #f3ead8; }
-#tree-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+#tree-cols { display: flex; flex-direction: column; gap: 6px; }
+#equip-hint { margin: 0 0 8px; color: #d9c7a2; }
+.tree-node.picked { border-color: #e6c864; box-shadow: 0 0 0 1px #e6c864; }
+.skill.arming,
+#belt-pick button.arming { box-shadow: 0 0 0 2px #e6c864; }
+#drag-ghost {
+  position: fixed;
+  z-index: 40;
+  margin-left: 12px;
+  margin-top: 12px;
+  padding: 6px 10px;
+  border: 1px solid #e6c864;
+  border-radius: 8px;
+  background: #2a2118;
+  color: var(--gold);
+  pointer-events: none;
+}
+.tree-node { touch-action: none; }
+#tree { z-index: 4; align-items: flex-start; padding-top: 52px; }
+#tree .sheet { max-height: calc(100vh - 180px); }
+#belt { z-index: 5; }
 .tree-col h3 { margin: 0 0 6px; font-weight: normal; color: var(--gold); font-size: 14px; }
 .tree-node {
   position: relative;
@@ -642,7 +662,6 @@ body.touch #stick { display: block; }
 }
 
 @media (max-width: 720px) {
-  #tree-cols { grid-template-columns: 1fr; }
   #shop-grid { grid-template-columns: 1fr; }
 }
 
@@ -734,7 +753,7 @@ body.touch #belt {
   height: calc(var(--atk) / 2 + var(--arc) + var(--sk) / 2 + var(--pot) + 22px);
   max-width: none;
   display: block;
-  z-index: 4;
+  z-index: 6;
 }
 body.touch #skills {
   display: block;
@@ -753,7 +772,8 @@ body.touch .skill {
 }
 body.touch .skill .key { font-size: 9px; }
 body.touch .skill .sname { font-size: 9px; line-height: 1.05; }
-body.touch .skill .rank { display: none; }
+body.touch .skill.locked .sname { font-size: 18px; color: var(--gold); }
+body.touch .skill .rank { font-size: 9px; }
 body.touch .skill .plus { width: 16px; height: 16px; font-size: 12px; top: -2px; right: -2px; }
 /* Quarter arc around the attack button. Angles run from just left of Attack up to straight above it. */
 body.touch .skill:nth-child(1) {
@@ -797,6 +817,12 @@ body.touch #potion-mp {
   border-radius: 50%;
   padding: 0;
   font-size: 11px;
+}
+body.touch #tree .sheet {
+  width: min(460px, calc(100vw - 210px));
+  margin-left: max(8px, env(safe-area-inset-left));
+  margin-right: auto;
+  max-height: calc(100vh - 36px);
 }
 body.touch #skill-hint {
   left: auto;

@@ -1,5 +1,5 @@
 import portraitUrl from '../assets/art/barbarian/idle.png';
-import { ITEMS, type ItemDef } from './data/items';
+import { ITEMS, potionCap, type ItemDef } from './data/items';
 import { inShopRange, manaCost, MAX_LEVEL, xpToNext } from './combat';
 import { player } from './query';
 import type { Sim } from './types';
@@ -16,7 +16,7 @@ export class Hud {
   onToggleMute: (() => void) | null = null;
   onToggleTree: (() => void) | null = null;
   onOpenTree: ((slot: number) => void) | null = null;
-  onAssign: ((id: string) => void) | null = null;
+  onAssign: ((id: string, slot: number) => void) | null = null;
   onAttribute: ((key: 'str' | 'dex' | 'vit' | 'energy') => void) | null = null;
   onPlay: (() => void) | null = null;
   onAgain: (() => void) | null = null;
@@ -25,7 +25,10 @@ export class Hud {
   helpOpen = false;
   treeOpen = false;
   beltSlot = 0;
+  pendingSkill: string | null = null;
   private built = false;
+  private drag: { id: string; pointer: number; x: number; y: number; moved: boolean } | null = null;
+  private ghost: HTMLElement | null = null;
 
   constructor(private root: HTMLElement) {}
 
@@ -69,11 +72,31 @@ export class Hud {
       event.preventDefault();
       const slot = Number(skill.dataset.slot ?? 0);
       this.beltSlot = slot;
+      if (this.pendingSkill) {
+        this.onAssign?.(this.pendingSkill, slot);
+        this.pendingSkill = null;
+        return;
+      }
       if (skill.dataset.cast) this.onCast?.(skill.dataset.cast);
       else this.onOpenTree?.(slot);
     });
+    this.ghost = document.createElement('div');
+    this.ghost.id = 'drag-ghost';
+    this.ghost.hidden = true;
+    document.body.appendChild(this.ghost);
+    window.addEventListener('pointermove', (event) => this.moveDrag(event));
+    window.addEventListener('pointerup', (event) => this.endDrag(event));
+    window.addEventListener('pointercancel', (event) => this.endDrag(event));
     this.root.querySelector('#tree')?.addEventListener('pointerdown', (event) => {
+      const pointer = event as PointerEvent;
       const target = event.target as HTMLElement;
+      const plus = target.closest<HTMLElement>('[data-upgrade]');
+      if (plus?.dataset.upgrade) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.onUpgrade?.(plus.dataset.upgrade);
+        return;
+      }
       const attr = target.closest<HTMLElement>('[data-attr]');
       if (attr?.dataset.attr === 'str' || attr?.dataset.attr === 'dex' || attr?.dataset.attr === 'vit' || attr?.dataset.attr === 'energy') {
         event.preventDefault();
@@ -83,21 +106,22 @@ export class Hud {
       const slot = target.closest<HTMLElement>('[data-slot-pick]');
       if (slot?.dataset.slotPick) {
         event.preventDefault();
-        this.beltSlot = Number(slot.dataset.slotPick);
+        const index = Number(slot.dataset.slotPick);
+        if (this.pendingSkill) {
+          this.onAssign?.(this.pendingSkill, index);
+          this.pendingSkill = null;
+        }
         return;
       }
-      const plus = target.closest<HTMLElement>('[data-upgrade]');
-      if (plus?.dataset.upgrade) {
-        event.preventDefault();
-        event.stopPropagation();
-        this.onUpgrade?.(plus.dataset.upgrade);
+      const row = target.closest<HTMLElement>('[data-skill]');
+      if (!row?.dataset.skill) return;
+      if (row.classList.contains('locked')) {
+        this.onUpgrade?.(row.dataset.skill);
         return;
       }
-      const node = target.closest<HTMLElement>('[data-assign]');
-      if (node?.dataset.assign) {
-        event.preventDefault();
-        this.onAssign?.(node.dataset.assign);
-      }
+      pointer.preventDefault();
+      row.setPointerCapture(pointer.pointerId);
+      this.drag = { id: row.dataset.skill, pointer: pointer.pointerId, x: pointer.clientX, y: pointer.clientY, moved: false };
     });
     this.root.querySelector('#shop-grid')?.addEventListener('pointerdown', (event) => {
       const button = (event.target as HTMLElement).closest<HTMLElement>('[data-buy]');
@@ -109,7 +133,9 @@ export class Hud {
 
   setMuteLabel(muted: boolean): void {
     const button = this.root.querySelector<HTMLButtonElement>('#mute-btn');
-    if (button) button.textContent = muted ? 'Sound off' : 'Sound on';
+    if (!button) return;
+    const touch = document.body.classList.contains('touch');
+    button.textContent = muted ? (touch ? 'Muted' : 'Sound off') : touch ? 'Sound' : 'Sound on';
   }
 
   sync(sim: Sim, mode: Mode, focusId: number | null = null): void {
@@ -174,7 +200,7 @@ export class Hud {
     shop.hidden = !this.shopOpen;
     shop.classList.toggle('far', !near);
     const note = this.q('#shop-note');
-    const stats = `Str ${sim.attributes.str} · Dex ${sim.attributes.dex}.`;
+    const stats = `Str ${sim.attributes.str} · Dex ${sim.attributes.dex}. Potions ${potionCap(sim.loadout.belt)} each.`;
     note.textContent = near
       ? hero.alive
         ? `Akara will trade while you stand in the Encampment. ${stats}`
@@ -196,9 +222,12 @@ export class Hud {
     tree.hidden = !this.treeOpen;
     const treeBtn = this.root.querySelector<HTMLButtonElement>('#tree-btn');
     if (treeBtn) {
-      treeBtn.textContent = 'Tree';
-      treeBtn.classList.toggle('has-points', sim.skillPoints > 0 || sim.statPoints > 0);
+      const pts = sim.skillPoints + sim.statPoints;
+      const touch = document.body.classList.contains('touch');
+      treeBtn.textContent = pts > 0 ? `+${pts}` : touch ? 'Pts' : 'Points';
+      treeBtn.classList.toggle('has-points', pts > 0);
     }
+    if (!this.treeOpen) this.pendingSkill = null;
     this.syncTree(sim);
   }
 
@@ -211,7 +240,7 @@ export class Hud {
       '#title-skills',
       keyed.length
         ? keyed.map((skill) => `${skill.key} ${skill.name}`).join('   ')
-        : 'Bash starts on Q. Press T for the skill tree and put four skills on the belt.',
+        : 'Bash starts on Q. Press T to spend points. Drag a skill onto the belt, or tap a skill and then a slot.',
     );
   }
 
@@ -266,8 +295,8 @@ export class Hud {
       const skill = sim.classDef.skills.find((entry) => entry.id === id);
       button.dataset.cast = id;
       const name = button.querySelector('[data-sname]');
-      if (name) name.textContent = skill ? skill.name : 'Empty';
-      button.title = skill?.description ?? 'Empty belt slot';
+      if (name) name.textContent = skill ? skill.short || skill.name : '+';
+      button.title = skill?.description ?? 'Empty belt slot.';
       const rank = skill ? (sim.skillRanks[skill.id] ?? 0) : 0;
       const cd = skill ? (sim.cooldowns[skill.id] ?? 0) : 0;
       const cost = skill && rank > 0 ? manaCost(skill, rank) : 0;
@@ -275,6 +304,7 @@ export class Hud {
       button.classList.toggle('locked', !skill || rank <= 0);
       button.classList.toggle('nomana', dry);
       button.classList.toggle('ready', !!skill && rank > 0 && cd <= 0.05 && !dry);
+      button.classList.toggle('arming', this.pendingSkill != null);
       const rankEl = button.querySelector<HTMLElement>('[data-rank]');
       if (rankEl) rankEl.textContent = skill && rank > 0 ? String(rank) : '';
       const cdEl = button.querySelector<HTMLElement>('[data-cd]');
@@ -345,25 +375,34 @@ export class Hud {
       const button = this.root.querySelector<HTMLButtonElement>(`[data-buy="${item.id}"]`);
       if (!button) continue;
       const owned = this.owned(sim, item);
-      const broke = sim.gold < item.cost;
+      const equippedId =
+        item.slot === 'weapon' || item.slot === 'armor' || item.slot === 'helm' || item.slot === 'belt'
+          ? sim.loadout[item.slot]
+          : null;
+      const previous = equippedId ? ITEMS.find((entry) => entry.id === equippedId) : undefined;
+      const refund = previous && previous.id !== item.id ? Math.floor(previous.cost * 0.5) : 0;
+      const price = Math.max(0, item.cost - refund);
+      const broke = sim.gold < price;
       const needStr = (item.reqStr ?? 0) > sim.attributes.str;
       const needDex = (item.reqDex ?? 0) > sim.attributes.dex;
-      button.disabled = !near || owned || broke || needStr || needDex;
+      const locked = (item.unlockLevel ?? 1) > sim.level;
+      button.disabled = !near || owned || broke || needStr || needDex || locked;
       button.classList.toggle('owned', owned);
       const cost = button.querySelector('.item-cost');
       if (cost) {
         if (owned) cost.textContent = 'Owned';
+        else if (locked) cost.textContent = `Lv ${item.unlockLevel}`;
         else if (needStr) cost.textContent = `Str ${item.reqStr}`;
         else if (needDex) cost.textContent = `Dex ${item.reqDex}`;
-        else cost.textContent = `${item.cost}g`;
+        else cost.textContent = refund > 0 ? `${price}g` : `${item.cost}g`;
       }
     }
   }
 
   private owned(sim: Sim, item: ItemDef): boolean {
-    if (item.slot === 'weapon') return !!item.twoHanded && !item.oneOrTwo && sim.loadout.weapon === item.id;
-    if (item.slot === 'shield') return sim.loadout.offhand === item.id;
-    if (item.slot === 'armor' || item.slot === 'helm' || item.slot === 'belt') return sim.loadout[item.slot] === item.id;
+    if (item.slot === 'weapon' || item.slot === 'armor' || item.slot === 'helm' || item.slot === 'belt') {
+      return sim.loadout[item.slot] === item.id;
+    }
     return false;
   }
 
@@ -380,59 +419,94 @@ export class Hud {
     picks.innerHTML = ['Q', 'W', 'E', 'R']
       .map((key, index) => `<button type="button" data-slot-pick="${index}">${key} <span data-pick-name="${index}"></span></button>`)
       .join('');
-    const tabs = [1, 2, 3];
-    cols.innerHTML = tabs
-      .map((tab) => {
-        const skills = sim.classDef.skills
-          .filter((skill) => skill.tab === tab)
-          .sort((a, b) => a.row - b.row || a.col - b.col);
-        const title = skills[0]?.tabName ?? 'Skills';
-        const nodes = skills
-          .map(
-            (skill) => `
-          <button type="button" class="tree-node" data-assign="${skill.id}" title="${skill.description.replace(/"/g, '&quot;')}">
-            <span class="tn-name">${skill.name}</span>
-            <span class="tn-meta" data-node-meta="${skill.id}"></span>
-            <span class="plus" data-upgrade="${skill.id}" hidden>+</span>
-          </button>`,
-          )
-          .join('');
-        return `<div class="tree-col"><h3>${title}</h3>${nodes}</div>`;
-      })
+    cols.innerHTML = sim.classDef.skills
+      .map(
+        (skill) => `
+        <button type="button" class="tree-node" data-skill="${skill.id}" title="${skill.description.replace(/"/g, '&quot;')}">
+          <span class="tn-name">${skill.name}</span>
+          <span class="tn-meta" data-node-meta="${skill.id}"></span>
+          <span class="plus" data-upgrade="${skill.id}" hidden>+</span>
+        </button>`,
+      )
       .join('');
   }
 
   private syncTree(sim: Sim): void {
     this.text(
       '#tree-points',
-      `${sim.skillPoints} skill point${sim.skillPoints === 1 ? '' : 's'} · ${sim.statPoints} stat point${sim.statPoints === 1 ? '' : 's'}`,
+      `${sim.skillPoints} skill point${sim.skillPoints === 1 ? '' : 's'} · ${sim.statPoints} stat point${sim.statPoints === 1 ? '' : 's'} · potions ${potionCap(sim.loadout.belt)}`,
+    );
+    const pending = sim.classDef.skills.find((skill) => skill.id === this.pendingSkill);
+    this.text(
+      '#equip-hint',
+      pending
+        ? `${pending.name} selected. Tap Q W E R, or drag it onto a slot.`
+        : 'Drag a skill onto a slot, or tap a skill and then a slot. New skills fill an empty slot.',
     );
     for (const key of ['str', 'dex', 'vit', 'energy'] as const) {
       const node = this.root.querySelector(`[data-attr-val="${key}"]`);
       const label = key === 'str' ? 'Str' : key === 'dex' ? 'Dex' : key === 'vit' ? 'Vit' : 'Energy';
       if (node) node.textContent = `${label} ${sim.attributes[key]}${sim.statPoints > 0 ? ' +' : ''}`;
     }
+    const keys = ['Q', 'W', 'E', 'R'];
     sim.belt.forEach((id, slot) => {
       const name = this.root.querySelector(`[data-pick-name="${slot}"]`);
       const skill = sim.classDef.skills.find((entry) => entry.id === id);
-      if (name) name.textContent = skill?.name ?? 'empty';
+      if (name) name.textContent = skill?.short ?? 'empty';
       const button = this.root.querySelector<HTMLButtonElement>(`[data-slot-pick="${slot}"]`);
-      button?.classList.toggle('on', slot === this.beltSlot);
+      button?.classList.toggle('arming', this.pendingSkill != null);
+      button?.classList.toggle('on', !!skill && skill.id === this.pendingSkill);
+      if (button) button.setAttribute('aria-label', `${keys[slot]} ${skill?.name ?? 'empty'}`);
     });
     for (const skill of sim.classDef.skills) {
       const rank = sim.skillRanks[skill.id] ?? 0;
+      const unlocked = sim.level >= skill.unlockLevel;
       const meta = this.root.querySelector(`[data-node-meta="${skill.id}"]`);
-      const ready = sim.level >= skill.unlockLevel && skill.prereqs.every((req) => (sim.skillRanks[req] ?? 0) >= 1);
+      const where = sim.belt.indexOf(skill.id);
       if (meta) {
-        const mana = skill.passive ? 'passive' : `${skill.mana} mana`;
-        meta.textContent = `${rank}/${skill.maxRank} · lv ${skill.unlockLevel} · ${mana}${ready ? '' : ' · locked'}`;
+        const place = where >= 0 ? ` · on ${keys[where]}` : '';
+        meta.textContent = unlocked
+          ? `${rank}/${skill.maxRank} · ${skill.mana} mana${place}`
+          : `Locked until level ${skill.unlockLevel}`;
       }
-      const node = this.root.querySelector<HTMLButtonElement>(`[data-assign="${skill.id}"]`);
-      node?.classList.toggle('locked', !ready && rank <= 0);
-      node?.classList.toggle('on-belt', sim.belt.includes(skill.id));
+      const node = this.root.querySelector<HTMLButtonElement>(`[data-skill="${skill.id}"]`);
+      node?.classList.toggle('locked', !unlocked);
+      node?.classList.toggle('on-belt', where >= 0);
+      node?.classList.toggle('picked', this.pendingSkill === skill.id);
       const plus = node?.querySelector<HTMLElement>('[data-upgrade]');
-      if (plus) plus.hidden = !(sim.skillPoints > 0 && ready && rank < skill.maxRank);
+      if (plus) plus.hidden = !(sim.skillPoints > 0 && unlocked && rank < skill.maxRank);
     }
+  }
+
+  private moveDrag(event: PointerEvent): void {
+    if (!this.drag || event.pointerId !== this.drag.pointer || !this.ghost) return;
+    const dx = event.clientX - this.drag.x;
+    const dy = event.clientY - this.drag.y;
+    if (dx * dx + dy * dy > 64) this.drag.moved = true;
+    if (!this.drag.moved) return;
+    const skill = this.drag.id;
+    const name = this.root.querySelector(`[data-skill="${skill}"] .tn-name`)?.textContent ?? skill;
+    this.ghost.hidden = false;
+    this.ghost.textContent = name;
+    this.ghost.style.left = `${event.clientX}px`;
+    this.ghost.style.top = `${event.clientY}px`;
+  }
+
+  private endDrag(event: PointerEvent): void {
+    if (!this.drag || event.pointerId !== this.drag.pointer) return;
+    const drag = this.drag;
+    this.drag = null;
+    if (this.ghost) this.ghost.hidden = true;
+    if (!drag.moved) {
+      this.pendingSkill = this.pendingSkill === drag.id ? null : drag.id;
+      return;
+    }
+    const hit = document.elementFromPoint(event.clientX, event.clientY);
+    const slotEl = hit?.closest<HTMLElement>('[data-slot], [data-slot-pick]');
+    const raw = slotEl?.dataset.slot ?? slotEl?.dataset.slotPick;
+    if (raw == null) return;
+    this.onAssign?.(drag.id, Number(raw));
+    this.pendingSkill = null;
   }
 
   private q(sel: string): HTMLElement {

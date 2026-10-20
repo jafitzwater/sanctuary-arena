@@ -1,4 +1,4 @@
-import { itemById, potionItem, POTION_CAP, type ItemDef, type PotionKind } from './data/items';
+import { itemById, potionCap, potionItem, type ItemDef, type PotionKind } from './data/items';
 import type { SkillDef } from './data/classes/types';
 import { dist } from './math';
 import { player } from './query';
@@ -56,11 +56,23 @@ export function grantXp(sim: Sim, amount: number): void {
   }
   if (sim.level >= MAX_LEVEL) sim.xp = 0;
   if (gained) {
+    fillEmptyBelt(sim);
     recomputeHero(sim);
     const hero = player(sim);
     hero.hp = Math.min(hero.maxHp, hero.hp + hero.maxHp * 0.08);
     banner(sim, `Level ${sim.level} — skill and stat points were gained`);
     sfx(sim, 'level');
+  }
+}
+
+/** Put a newly unlocked skill into the first empty Q W E R slot. */
+export function fillEmptyBelt(sim: Sim): void {
+  for (const skill of sim.classDef.skills) {
+    if (sim.level < skill.unlockLevel) continue;
+    if (sim.belt.includes(skill.id)) continue;
+    const slot = sim.belt.findIndex((entry) => !entry);
+    if (slot < 0) return;
+    sim.belt[slot] = skill.id;
   }
 }
 
@@ -141,30 +153,6 @@ function award(sim: Sim, unit: Unit): void {
   sfx(sim, 'coin');
 }
 
-const MASTERY: Record<string, string> = {
-  swor: 'sword-mastery',
-  axe: 'axe-mastery',
-  taxe: 'axe-mastery',
-  mace: 'mace-mastery',
-  club: 'mace-mastery',
-  hamm: 'mace-mastery',
-  pole: 'pole-arm-mastery',
-  spea: 'spear-mastery',
-  tkni: 'throwing-mastery',
-  jave: 'throwing-mastery',
-};
-
-function masteryMul(sim: Sim, type: string): number {
-  const ids = [MASTERY[type]];
-  if (type === 'taxe' || type === 'tkni' || type === 'jave') ids.push('throwing-mastery');
-  let best = 0;
-  for (const id of ids) {
-    if (!id) continue;
-    best = Math.max(best, sim.skillRanks[id] ?? 0);
-  }
-  return 1 + best * 0.06;
-}
-
 function swingTime(wsm: number): number {
   return Math.min(1.2, Math.max(0.45, 0.78 * (1 + wsm / 100)));
 }
@@ -195,21 +183,12 @@ export function heroNumbers(sim: Sim, timers: { bo: boolean; berserk: boolean })
   let wclass = 'HTH';
 
   const main = sim.loadout.weapon ? itemById(sim.loadout.weapon) : undefined;
-  const off = sim.loadout.offhand ? itemById(sim.loadout.offhand) : undefined;
-  const wieldTwo = !!main?.twoHanded && (!main.oneOrTwo || !off);
+  const wieldTwo = !!main?.twoHanded;
   if (main) {
-    const weaponAd = wieldTwo ? (main.ad ?? 0) : (main.adOne || main.ad || 0);
-    ad += weaponAd * masteryMul(sim, main.weaponType ?? '');
+    ad += main.ad ?? main.adOne ?? 0;
     wclass = (wieldTwo ? main.wclass2 || main.wclass : main.wclass) || '1HS';
     interval = swingTime(main.speed ?? 0);
-    if (wieldTwo && (wclass === 'STF' || wclass === '2HT')) range = 96;
-  }
-  if (off?.slot === 'weapon') {
-    const offAd = off.adOff || Math.round((off.adOne || off.ad || 0) * 0.5);
-    ad += offAd * masteryMul(sim, off.weaponType ?? '');
-    interval = Math.max(interval, swingTime(off.speed ?? 0));
-  } else if (off?.slot === 'shield') {
-    armor += off.armor ?? 0;
+    if (wieldTwo && (wclass === 'STF' || wclass === '2HT' || wclass === '2HS')) range = 96;
   }
   for (const id of [sim.loadout.armor, sim.loadout.helm, sim.loadout.belt]) {
     if (!id) continue;
@@ -220,18 +199,11 @@ export function heroNumbers(sim: Sim, timers: { bo: boolean; berserk: boolean })
     mana += piece.mana ?? 0;
   }
 
-  const speedRank = sim.skillRanks['increased-speed'] ?? 0;
-  move *= 1 + speedRank * 0.035;
-  interval *= 1 - Math.min(0.2, speedRank * 0.02);
   interval *= 1 - Math.min(0.15, Math.max(0, extraDex) * 0.004);
-  armor += (sim.skillRanks['iron-skin'] ?? 0) * 3;
-  armor += sim.skillRanks['natural-resistance'] ?? 0;
 
   if (timers.bo) {
     const rank = Math.max(1, sim.skillRanks['battle-orders'] ?? 1);
-    const mul = 1.12 + rank * 0.03;
-    hp *= mul;
-    mana *= mul;
+    hp *= 1 + 0.06 * rank;
   }
   if (timers.berserk) armor *= 0.25;
 
@@ -284,50 +256,7 @@ function meetsReq(sim: Sim, item: ItemDef): boolean {
   return true;
 }
 
-function equipWeapon(sim: Sim, item: ItemDef): boolean {
-  const main = sim.loadout.weapon ? itemById(sim.loadout.weapon) : undefined;
-  const off = sim.loadout.offhand ? itemById(sim.loadout.offhand) : undefined;
-  const exclusive = !!item.twoHanded && !item.oneOrTwo;
-  if (exclusive) {
-    if (sim.loadout.weapon === item.id && !off) {
-      banner(sim, 'Already equipped.');
-      return false;
-    }
-    sim.loadout.weapon = item.id;
-    sim.loadout.offhand = null;
-    return true;
-  }
-  if (!main) {
-    sim.loadout.weapon = item.id;
-    return true;
-  }
-  const mainLocks = !!main.twoHanded && !main.oneOrTwo;
-  if (mainLocks) {
-    sim.loadout.weapon = item.id;
-    sim.loadout.offhand = null;
-    return true;
-  }
-  if (!off) {
-    sim.loadout.offhand = item.id;
-    return true;
-  }
-  sim.loadout.weapon = item.id;
-  return true;
-}
-
-function equipShield(sim: Sim, item: ItemDef): boolean {
-  const main = sim.loadout.weapon ? itemById(sim.loadout.weapon) : undefined;
-  if (main?.twoHanded && !main.oneOrTwo) {
-    banner(sim, 'A two-handed weapon leaves no hand free.');
-    return false;
-  }
-  if (sim.loadout.offhand === item.id) {
-    banner(sim, 'Already equipped.');
-    return false;
-  }
-  sim.loadout.offhand = item.id;
-  return true;
-}
+const GEAR_SLOTS = ['weapon', 'armor', 'helm', 'belt'] as const;
 
 export function tryBuy(sim: Sim, id: string): void {
   const item = itemById(id);
@@ -337,13 +266,13 @@ export function tryBuy(sim: Sim, id: string): void {
     banner(sim, 'Akara trades only inside the Rogue Encampment.');
     return;
   }
-  if (sim.gold < item.cost) {
-    banner(sim, 'Not enough gold.');
-    return;
-  }
   if (item.consumable) {
+    if (sim.gold < item.cost) {
+      banner(sim, 'Not enough gold.');
+      return;
+    }
     const kind = item.consumable;
-    if (sim.potions[kind] >= POTION_CAP) {
+    if (sim.potions[kind] >= potionCap(sim.loadout.belt)) {
       banner(sim, 'You cannot carry any more of those.');
       return;
     }
@@ -353,23 +282,29 @@ export function tryBuy(sim: Sim, id: string): void {
     banner(sim, `Bought ${item.name}.`);
     return;
   }
-  if (!meetsReq(sim, item)) return;
-  let equipped = false;
-  if (item.slot === 'weapon') equipped = equipWeapon(sim, item);
-  else if (item.slot === 'shield') equipped = equipShield(sim, item);
-  else if (item.slot === 'armor' || item.slot === 'helm' || item.slot === 'belt') {
-    if (sim.loadout[item.slot] === item.id) {
-      banner(sim, 'Already equipped.');
-      return;
-    }
-    sim.loadout[item.slot] = item.id;
-    equipped = true;
+  if (!GEAR_SLOTS.includes(item.slot as (typeof GEAR_SLOTS)[number])) return;
+  const slot = item.slot as (typeof GEAR_SLOTS)[number];
+  if ((item.unlockLevel ?? 1) > sim.level) {
+    banner(sim, `${item.name} unlocks at level ${item.unlockLevel}.`);
+    return;
   }
-  if (!equipped) return;
-  sim.gold -= item.cost;
+  if (sim.loadout[slot] === item.id) {
+    banner(sim, 'Already equipped.');
+    return;
+  }
+  if (!meetsReq(sim, item)) return;
+  const old = sim.loadout[slot] ? itemById(sim.loadout[slot] as string) : undefined;
+  const refund = old ? Math.floor(old.cost * 0.5) : 0;
+  const price = Math.max(0, item.cost - refund);
+  if (sim.gold < price) {
+    banner(sim, 'Not enough gold.');
+    return;
+  }
+  sim.gold -= price;
+  sim.loadout[slot] = item.id;
   recomputeHero(sim);
   sfx(sim, 'coin');
-  banner(sim, `Bought ${item.name}.`);
+  banner(sim, refund > 0 ? `Bought ${item.name}. Akara returned ${refund} gold.` : `Bought ${item.name}.`);
 }
 
 export function tryPotion(sim: Sim, kind: PotionKind): void {
@@ -443,16 +378,19 @@ const BELT_KEYS = ['Q', 'W', 'E', 'R'];
 export function tryAssignBelt(sim: Sim, id: string, slot: number): void {
   const def = sim.classDef.skills.find((skill) => skill.id === id);
   if (!def || slot < 0 || slot > 3) return;
-  if (def.passive) {
-    banner(sim, `${def.name} is passive.`);
+  if (sim.level < def.unlockLevel) {
+    banner(sim, `${def.name} unlocks at level ${def.unlockLevel}.`);
     return;
   }
-  if ((sim.skillRanks[id] ?? 0) <= 0) {
-    banner(sim, `Learn ${def.name} before belting it.`);
-    return;
+  const from = sim.belt.indexOf(id);
+  if (from === slot) return;
+  if (from >= 0) {
+    const displaced = sim.belt[slot] ?? '';
+    sim.belt[slot] = id;
+    sim.belt[from] = displaced;
+  } else {
+    sim.belt[slot] = id;
   }
-  sim.belt = sim.belt.map((entry) => (entry === id ? '' : entry));
-  sim.belt[slot] = id;
   banner(sim, `${def.name} is on ${BELT_KEYS[slot]}.`);
 }
 
