@@ -338,6 +338,9 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
   if (sim.tipT <= 0) sim.tip = '';
   sim.shake = Math.max(0, sim.shake - step * 14);
 
+  const started = new Map<number, { x: number; y: number }>();
+  for (const unit of sim.units) started.set(unit.id, { x: unit.x, y: unit.y });
+
   for (const unit of sim.units) tickStatus(sim, unit, step);
   for (const unit of sim.units) {
     if (unit.leap) advanceLeap(sim, unit, step);
@@ -364,7 +367,7 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
     else updateMinion(sim, unit, step);
   }
 
-  resolveBodies(sim);
+  resolveBodies(sim, started);
   strikes(sim, input);
   updateProjectiles(sim, step);
   regen(sim, step);
@@ -710,15 +713,17 @@ function enemyMinionInTower(sim: Sim, raven: Unit): boolean {
   });
 }
 
-function resolveBodies(sim: Sim): void {
+function resolveBodies(sim: Sim, started: Map<number, { x: number; y: number }>): void {
   const movers = sim.units.filter((unit) => unit.alive && !unit.leap && !isStructure(unit.kind));
   for (const unit of movers) {
-    const spot = clampToPlayable(sim.map, unit.x, unit.y);
+    const from = started.get(unit.id);
+    const spot = clampToPlayable(sim.map, unit.x, unit.y, from);
     unit.x = spot.x;
     unit.y = spot.y;
   }
   const solids = sim.units.filter((unit) => unit.alive && isStructure(unit.kind));
   for (const unit of movers) {
+    const from = { x: unit.x, y: unit.y };
     for (const solid of solids) {
       const dx = unit.x - solid.x;
       const dy = unit.y - solid.y;
@@ -729,7 +734,7 @@ function resolveBodies(sim: Sim): void {
         unit.y += (dy / d) * (min - d);
       }
     }
-    const spot = clampToPlayable(sim.map, unit.x, unit.y);
+    const spot = clampToPlayable(sim.map, unit.x, unit.y, from);
     unit.x = spot.x;
     unit.y = spot.y;
   }

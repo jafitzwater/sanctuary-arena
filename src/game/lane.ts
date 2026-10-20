@@ -3,8 +3,8 @@ import { clamp, nearestOnPolyline, type Vec } from './math';
 import { resolveSanctuary } from './terrain';
 
 /** Keep a point on the road, a clearing, or inside a base plaza. */
-export function clampToPlayable(map: ActDef, x: number, y: number): Vec {
-  if (map.paths?.length) return resolveSanctuary(map, x, y);
+export function clampToPlayable(map: ActDef, x: number, y: number, from?: Vec): Vec {
+  if (map.paths?.length) return resolveSanctuary(map, x, y, from);
   let px = clamp(x, 28, map.width - 28);
   let py = clamp(y, 28, map.height - 28);
   if (map.roam) return { x: px, y: py };

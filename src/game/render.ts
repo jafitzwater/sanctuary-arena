@@ -1,5 +1,5 @@
 import { actProps, d2Atlas, monsterSheets } from './art/sheets';
-import { locomotionColumn, RUN_FRAMES } from './gait';
+import { animFrame, RUN_FRAME_MS, RUN_FRAMES, WALK_FRAME_MS, WALK_FRAMES } from './gait';
 import type { ActDef } from './data/acts/types';
 import { projectIso, unprojectIso } from './iso';
 import type { Prop } from './landscape';
@@ -48,6 +48,10 @@ function crisp(ctx: CanvasRenderingContext2D): void {
 }
 
 /** #FF00FF and the near-magenta NPC matte, plus a despill of pixels that touch it. */
+/** Frame index while moving. Off unless the page is opened with ?animlog=1. */
+const ANIM_LOG =
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('animlog') === '1';
+
 function nearMagenta(r: number, g: number, b: number, a: number): boolean {
   if (a < 16) return true;
   if (g > 110) return false;
@@ -116,7 +120,7 @@ export class Renderer {
   private ox = 0;
   private oy = 0;
   private reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  private gait = new Map<number, { x: number; y: number; d: number }>();
+  private gait = new Map<number, { x: number; y: number; d: number; elapsed: number }>();
   private facingRow = new Map<number, number>();
   private aim = new Map<number, number>();
   private feet = new WeakMap<HTMLImageElement, Map<string, { x: number; y: number }>>();
@@ -285,7 +289,7 @@ export class Renderer {
       layers.push({
         depth: unit.x + unit.y,
         front: 1,
-        paint: () => this.drawUnit(ctx, unit, opts, u, this.armorTier(sim)),
+        paint: () => this.drawUnit(ctx, unit, opts, u, this.armorTier(sim), sim.playerId),
       });
     }
     layers.sort((a, b) => a.depth - b.depth || a.front - b.front);
@@ -411,7 +415,7 @@ export class Renderer {
     if (sheet.complete && sheet.naturalWidth > 0) this.blit(ctx, sheet, p.x, p.y, height * u, prop.flip);
   }
 
-  private drawUnit(ctx: CanvasRenderingContext2D, unit: Unit, opts: DrawOpts, u: number, tier: ArmorTier): void {
+  private drawUnit(ctx: CanvasRenderingContext2D, unit: Unit, opts: DrawOpts, u: number, tier: ArmorTier, playerId = -1): void {
     const p = this.project(unit.x, unit.y);
     if (p.x < -160 || p.y < -200 || p.x > this.camera.cssW + 160 || p.y > this.camera.cssH + 60) return;
     const gait = this.gaitOf(unit);
@@ -436,7 +440,7 @@ export class Renderer {
       ctx.scale(1, 0.5);
       ctx.translate(-footX, -y);
     }
-    const glyph = this.sheetFor(unit, gait.moving, gait.d, gait.walking, tier);
+    const glyph = this.sheetFor(unit, gait.moving, gait.d, gait.elapsed, gait.walking, tier, unit.id === playerId);
     const outlined = unit.kind === 'minion' || unit.kind === 'champion';
     if (glyph) this.blit(ctx, glyph.img, footX, y, height, glyph.flip, glyph, outlined);
     if (unit.whirlT > 0) {
@@ -505,7 +509,15 @@ export class Renderer {
     }
   }
 
-  private sheetFor(unit: Unit, moving: boolean, phase: number, walking: boolean, tier: ArmorTier): Glyph | null {
+  private sheetFor(
+    unit: Unit,
+    moving: boolean,
+    phase: number,
+    elapsed: number,
+    walking: boolean,
+    tier: ArmorTier,
+    logFrames = false,
+  ): Glyph | null {
     const delta = this.screenDelta(unit.facing);
     const row = unit.whirlT > 0 ? this.rowOf(delta) : this.heldRow(unit.id, this.smoothAim(unit.id, delta));
     if (unit.kind === 'seal') return this.full(this.props.rock[0], false);
@@ -522,9 +534,11 @@ export class Renderer {
         return this.atlas(pack.attack, 4, col, row, true);
       }
       if (moving) {
-        // Same 0–1 cycle for walk and run, so a speed change does not hitch.
-        const frames = walking ? 4 : RUN_FRAMES;
-        const col = locomotionColumn(phase, frames);
+        // Run sheet is 12 columns (109 / 113 / 110). Walk sheet is 4. Time does not reset.
+        const frames = walking ? WALK_FRAMES : RUN_FRAMES;
+        const frameMs = walking ? WALK_FRAME_MS : RUN_FRAME_MS;
+        const col = animFrame(elapsed, frameMs, frames);
+        if (ANIM_LOG && logFrames) console.log(walking ? `anim walk ${col}` : `anim ${col}`);
         return this.atlas(walking ? pack.walk : pack.run, frames, col, row, true);
       }
       return this.atlas(pack.idle, 1, 0, row, true);
@@ -676,20 +690,24 @@ export class Renderer {
   }
 
 
-  private gaitOf(unit: Unit): { moving: boolean; d: number; walking: boolean } {
+  private gaitOf(unit: Unit): { moving: boolean; d: number; elapsed: number; walking: boolean } {
     const prev = this.gait.get(unit.id);
     let d = prev?.d ?? 0;
+    let elapsed = prev?.elapsed ?? 0;
     let moving = false;
     let step = 0;
     if (prev) {
       step = Math.hypot(unit.x - prev.x, unit.y - prev.y);
       moving = step > 0.4;
-      if (moving) d += step;
+      if (moving) {
+        d += step;
+        elapsed += this.frameDt * 1000;
+      }
     }
-    this.gait.set(unit.id, { x: unit.x, y: unit.y, d });
-    // Town pace is 144 and the open run is 216. The midpoint keeps the cycle fraction.
+    this.gait.set(unit.id, { x: unit.x, y: unit.y, d, elapsed });
+    // Town pace is 144 and the open run is 216. The clock itself does not reset.
     const speed = this.frameDt > 0 ? step / this.frameDt : 0;
-    return { moving, d, walking: moving && speed < 180 };
+    return { moving, d, elapsed, walking: moving && speed < 180 };
   }
 
   /** Column of the grass-to-dirt row whose grass faces away from the lane. */

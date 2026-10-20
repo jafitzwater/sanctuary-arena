@@ -1,18 +1,13 @@
 import type { ActDef } from './data/acts/types';
-import { sceneryFor } from './landscape';
+import { FLOOR_STEP, inGateSlot, LANE_CLEAR_HALF, sceneryFor } from './landscape';
 import { clamp, distToPolyline, nearestOnPolyline, type Vec } from './math';
 
 /** Outer cliff. Inside this margin the ground is open only on roads and clearings. */
 const EDGE = 48;
 /** Half-width of the impassable channel. Fords are where a road crosses it. */
 const RIVER = 62;
-/** Walkable shoulder past the cobbles, tighter than the old open wilderness. */
-const SHOULDER = 40;
 const OPENING = 150;
 const CORRIDOR = 64;
-/** World size of one baked floor diamond. The entrance is four of these across. */
-const FLOOR_STEP = 80 / 0.85;
-const ENTRANCE_HALF = FLOOR_STEP * 2;
 /** Obstacles collide on the bottom of the sprite, not the full visual box. */
 const FOOTPRINT = 0.3;
 
@@ -26,10 +21,6 @@ function nearestRoad(map: ActDef, x: number, y: number): number {
   let best = Infinity;
   for (const lane of lanes(map)) best = Math.min(best, distToPolyline({ x, y }, lane));
   return best;
-}
-
-function roadLimit(map: ActDef): number {
-  return map.laneWidth / 2 + SHOULDER;
 }
 
 function inPlaza(map: ActDef, x: number, y: number): boolean {
@@ -72,25 +63,8 @@ function inOpening(map: ActDef, x: number, y: number): boolean {
   return false;
 }
 
-function distToSegment(x: number, y: number, a: Vec, b: Vec): number {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len2 = dx * dx + dy * dy;
-  const t = len2 < 1 ? 0 : Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / len2));
-  return Math.hypot(x - (a.x + dx * t), y - (a.y + dy * t));
-}
-
-/** Corridor from each banner to each of its lane mouths. Props do not block it. */
-function inEntrance(map: ActDef, x: number, y: number): boolean {
-  for (const lane of lanes(map)) {
-    if (distToSegment(x, y, map.playerBase, lane[0]) <= ENTRANCE_HALF) return true;
-    if (distToSegment(x, y, map.enemyBase, lane[lane.length - 1]) <= ENTRANCE_HALF) return true;
-  }
-  return false;
-}
-
-function onRoad(map: ActDef, x: number, y: number): boolean {
-  return nearestRoad(map, x, y) <= roadLimit(map);
+function inCorridor(map: ActDef, x: number, y: number): boolean {
+  return nearestRoad(map, x, y) <= LANE_CLEAR_HALF;
 }
 
 function hitProp(map: ActDef, x: number, y: number): boolean {
@@ -106,14 +80,13 @@ function hitProp(map: ActDef, x: number, y: number): boolean {
 export function walkable(map: ActDef, x: number, y: number): boolean {
   if (!map.paths) return true;
   if (x < EDGE || y < EDGE || x > map.width - EDGE || y > map.height - EDGE) return false;
-  if (onRoad(map, x, y) || inEntrance(map, x, y)) return true;
+  if (inCorridor(map, x, y) || inGateSlot(map, x, y)) return true;
   if (hitProp(map, x, y)) return false;
   if (inOpening(map, x, y)) return true;
   const road = nearestRoad(map, x, y);
-  const limit = roadLimit(map);
-  if (map.river && map.river.length > 1 && distToPolyline({ x, y }, map.river) < RIVER && road > limit) return false;
+  if (map.river && map.river.length > 1 && distToPolyline({ x, y }, map.river) < RIVER && road > LANE_CLEAR_HALF) return false;
   if (inPlaza(map, x, y)) return true;
-  return road <= limit;
+  return road <= LANE_CLEAR_HALF;
 }
 
 function anchor(map: ActDef, x: number, y: number): Vec {
@@ -137,11 +110,57 @@ function anchor(map: ActDef, x: number, y: number): Vec {
   return { x: map.playerBase.x + 150, y: map.playerBase.y };
 }
 
+/** Last walkable point from `from` toward `to`. `from` itself must be walkable. */
+function creep(map: ActDef, from: Vec, to: Vec): Vec {
+  if (!walkable(map, from.x, from.y)) return from;
+  if (walkable(map, to.x, to.y)) return to;
+  let lo = from;
+  let hi = to;
+  for (let i = 0; i < 10; i++) {
+    const mid = { x: (lo.x + hi.x) / 2, y: (lo.y + hi.y) / 2 };
+    if (walkable(map, mid.x, mid.y)) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/**
+ * Diagonal contact keeps the open world axis. A blocked corner slides along
+ * x or y instead of retracting toward the nearest road.
+ */
+export function slide(map: ActDef, from: Vec, to: Vec): Vec {
+  if (walkable(map, to.x, to.y)) return { x: to.x, y: to.y };
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const axes = [
+    { x: to.x, y: from.y, mag: Math.abs(dx) },
+    { x: from.x, y: to.y, mag: Math.abs(dy) },
+  ].sort((a, b) => b.mag - a.mag);
+  let best = from;
+  let bestMag = 0;
+  for (const axis of axes) {
+    const moved = creep(map, from, axis);
+    const gain = Math.hypot(moved.x - from.x, moved.y - from.y);
+    if (gain > bestMag) {
+      best = moved;
+      bestMag = gain;
+    }
+  }
+  if (bestMag > 0.01) return best;
+  if (walkable(map, from.x, from.y)) return { x: from.x, y: from.y };
+  return settle(map, to.x, to.y);
+}
+
 /** Push a point out of cliffs, the river, and solid props. */
-export function resolveSanctuary(map: ActDef, x: number, y: number): Vec {
+export function resolveSanctuary(map: ActDef, x: number, y: number, from?: Vec): Vec {
+  if (from && map.paths) return slide(map, from, { x, y });
+  return settle(map, x, y);
+}
+
+function settle(map: ActDef, x: number, y: number): Vec {
   let px = clamp(x, EDGE, map.width - EDGE);
   let py = clamp(y, EDGE, map.height - EDGE);
-  if (map.paths && !onRoad(map, px, py) && !inEntrance(map, px, py)) {
+  if (map.paths && !inCorridor(map, px, py) && !inGateSlot(map, px, py)) {
     for (const prop of sceneryFor(map)) {
       if (prop.block <= 0) continue;
       const foot = prop.block * FOOTPRINT;
