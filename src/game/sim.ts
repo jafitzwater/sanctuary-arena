@@ -1,7 +1,16 @@
 import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
 import { dealTeams } from './teams';
-import { barbarian } from './data/classes/barbarian';
+import { barbarian, STICK_IDLE_TILT } from './data/classes/barbarian';
+import {
+  AttackPhase,
+  attackProfile,
+  cancelAttackForMove,
+  createAttackState,
+  stepAttack,
+  type AttackEvent,
+  type AttackProfile,
+} from './combat/attackCycle';
 import type { ClassDef } from './data/classes/types';
 import { unitDef } from './data/units';
 import { Rng } from './math';
@@ -28,6 +37,10 @@ import { SKILLS } from './skills';
 import type { FrameInput, Sim, Team, Unit } from './types';
 
 const PASSIVE_GOLD = 1.4;
+/** Champions that issued a move this tick. A move does not start a new windup. */
+let championsMoved = new Set<number>();
+/** The sim currently inside updateSim, so movement can cancel a backswing. */
+let activeSim: Sim | null = null;
 
 export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
   const sim: Sim = {
@@ -94,7 +107,57 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
   }
   for (const seal of map.seals ?? []) spawnSeal(sim, seal);
   if (map.paths?.length) spawnRoster(sim, seed);
+  spawnAttackDummy(sim);
   return sim;
+}
+
+function attackLogOn(): boolean {
+  return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('attacklog') === '1';
+}
+
+/** Stationary target for the attack-cycle browser check. Absent unless ?attacklog=1. */
+function spawnAttackDummy(sim: Sim): void {
+  if (!attackLogOn()) return;
+  const hero = player(sim);
+  const dummy = blankUnit(sim, {
+    defId: 'quillrat',
+    kind: 'minion',
+    team: 'enemy',
+    name: 'Practice Dummy',
+    x: hero.x + 50,
+    y: hero.y,
+    radius: 16,
+    hp: 1_000_000,
+    maxHp: 1_000_000,
+    ad: 0,
+    armor: 0,
+    moveSpeed: 0,
+    attackRange: 0,
+    attackInterval: 999,
+    attackCd: 999,
+    aggro: 0,
+    ranged: false,
+    color: '#8a7048',
+    accent: '#e6d3a1',
+  });
+  dummy.waypoint = 0;
+}
+
+function pushAttackLog(sim: Sim, event: string, extra: Record<string, unknown> = {}): void {
+  if (!attackLogOn()) return;
+  const hero = player(sim);
+  const trace = globalThis as { __attackLog?: Record<string, unknown>[] };
+  if (!trace.__attackLog) trace.__attackLog = [];
+  trace.__attackLog.push({
+    t: Number(sim.time.toFixed(4)),
+    event,
+    x: Number(hero.x.toFixed(2)),
+    y: Number(hero.y.toFixed(2)),
+    phase: hero.attackCycle.phase,
+    cooldownMs: Number(hero.attackCycle.cooldownRemainingMs.toFixed(2)),
+    ...extra,
+  });
+  if (trace.__attackLog.length > 600) trace.__attackLog.shift();
 }
 
 function blankUnit(sim: Sim, partial: Pick<Unit, 'defId' | 'kind' | 'team' | 'name'> & Partial<Unit>): Unit {
@@ -117,6 +180,8 @@ function blankUnit(sim: Sim, partial: Pick<Unit, 'defId' | 'kind' | 'team' | 'na
     attackRange: partial.attackRange ?? 0,
     attackInterval: partial.attackInterval ?? 1,
     attackCd: partial.attackCd ?? 0,
+    attackCycle: partial.attackCycle ?? createAttackState(),
+    attackPaceMs: partial.attackPaceMs ?? 0,
     aggro: partial.aggro ?? 0,
     gold: partial.gold ?? 0,
     xp: partial.xp ?? 0,
@@ -328,6 +393,8 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
   if (sim.phase !== 'playing') return;
   const step = Math.max(0, Math.min(dt, 0.05));
   sim.time += step;
+  championsMoved = new Set();
+  activeSim = sim;
 
   for (const id of Object.keys(sim.cooldowns)) {
     sim.cooldowns[id] = Math.max(0, sim.cooldowns[id] - step);
@@ -370,7 +437,7 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
   }
 
   resolveBodies(sim, started);
-  strikes(sim, input);
+  strikes(sim, input, step);
   updateProjectiles(sim, step);
   regen(sim, step);
   sim.gold += PASSIVE_GOLD * step;
@@ -396,6 +463,7 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
   sim.fx = sim.fx.filter((fx) => fx.t < fx.life);
   sim.units = sim.units.filter((unit) => unit.kind !== 'minion' || unit.alive || unit.corpse > 0);
   sim.projectiles = sim.projectiles.filter((shot) => shot.life > 0);
+  activeSim = null;
 }
 
 function tickStatus(sim: Sim, unit: Unit, dt: number): void {
@@ -483,7 +551,27 @@ function moveSpeed(unit: Unit): number {
   return unit.moveSpeed * slow * haste;
 }
 
+function windupLocks(unit: Unit): boolean {
+  return unit.kind === 'champion' && unit.attackCycle.phase === AttackPhase.Windup;
+}
+
+function interruptChampion(sim: Sim, unit: Unit, commanded: boolean): void {
+  if (!commanded || unit.kind !== 'champion') return;
+  const next = cancelAttackForMove(unit.attackCycle);
+  if (!next.events.length) return;
+  unit.attackCycle = next.state;
+  if (next.events.some((event) => event.type === 'BackswingCanceled')) unit.swing = 0;
+  if (unit.id === sim.playerId) {
+    for (const event of next.events) pushAttackLog(sim, event.type, { reason: 'reason' in event ? event.reason : '' });
+  }
+}
+
 function moveToward(unit: Unit, x: number, y: number, dt: number, scale = 1): void {
+  if (windupLocks(unit)) return;
+  if (activeSim && unit.kind === 'champion' && unit.attackCycle.phase === AttackPhase.Backswing) {
+    interruptChampion(activeSim, unit, true);
+  }
+  if (unit.kind === 'champion') championsMoved.add(unit.id);
   const dx = x - unit.x;
   const dy = y - unit.y;
   const d = Math.hypot(dx, dy);
@@ -531,6 +619,11 @@ function updatePlayer(sim: Sim, hero: Unit, input: FrameInput, dt: number): void
     return;
   }
   if (hero.stun > 0 || hero.leap) return;
+  const commanded =
+    Math.hypot(input.moveX, input.moveY) >= STICK_IDLE_TILT || (input.destX != null && input.destY != null);
+  interruptChampion(sim, hero, commanded);
+  if (windupLocks(hero)) return;
+  if (commanded) championsMoved.add(hero.id);
   const direct = Math.hypot(input.moveX, input.moveY) > 0.15;
   const lock = byId(sim, input.targetId);
   const target = lock && lock.alive && lock.team !== hero.team ? lock : null;
@@ -541,10 +634,16 @@ function updatePlayer(sim: Sim, hero: Unit, input: FrameInput, dt: number): void
     hero.x += (input.moveX / mag) * speed * dt;
     hero.y += (input.moveY / mag) * speed * dt;
     if (!target) hero.facing = Math.atan2(input.moveY, input.moveX);
+    pushAttackLog(sim, 'moved');
     return;
   }
   if (target && !inRange(hero, target)) {
     moveToward(hero, target.x, target.y, dt, pace);
+    return;
+  }
+  const queued = byId(sim, hero.attackCycle.queuedTargetId);
+  if ((input.attack || input.targetId != null) && queued && queued.alive && queued.team !== hero.team && !inRange(hero, queued)) {
+    moveToward(hero, queued.x, queued.y, dt, pace);
     return;
   }
   if (!target && input.attack) {
@@ -772,20 +871,51 @@ function resolveBodies(sim: Sim, started: Map<number, { x: number; y: number }>)
   }
 }
 
-function strikes(sim: Sim, input: FrameInput): void {
-  const hero = player(sim);
-  if (hero.alive && hero.stun <= 0 && hero.whirlT <= 0 && !hero.leap) {
-    const lock = byId(sim, input.targetId);
-    let focus: Unit | null = null;
-    if (lock && lock.alive && lock.team !== hero.team && inRange(hero, lock)) focus = lock;
-    else if (input.attack) focus = nearestEnemy(sim, hero, hero.attackRange);
-    if (focus) {
-      hero.targetId = focus.id;
-      tryStrike(sim, hero);
+function strikes(sim: Sim, input: FrameInput, dt: number): void {
+  const fired: { attacker: Unit; targetId: number }[] = [];
+  const champions = sim.units.filter((unit) => unit.kind === 'champion').sort((a, b) => a.id - b.id);
+  for (const unit of champions) {
+    if (!unit.alive) {
+      clearDeadChampion(sim, unit);
+      continue;
+    }
+    if (unit.stun > 0) continue;
+    if (unit.whirlT > 0 || unit.leap) {
+      if (unit.attackCycle.phase === AttackPhase.Windup) unit.attackCycle = createAttackState();
+      continue;
+    }
+    const orderId = unit.id === sim.playerId ? heroAttackOrder(sim, unit, input) : unit.targetId;
+    const viewId = unit.attackCycle.phase === AttackPhase.Windup ? unit.attackCycle.targetId : orderId;
+    const viewed = byId(sim, viewId);
+    const moving = championsMoved.has(unit.id);
+    const profile = championProfile(unit);
+    const scale = unit.attackPaceMs > 0 ? profile.attackIntervalMs / unit.attackPaceMs : 1;
+    unit.attackPaceMs = profile.attackIntervalMs;
+    const stepped = stepAttack(unit.attackCycle, profile, {
+      dtMs: dt * 1000,
+      move: false,
+      orderTargetId: orderId,
+      orderPersists: orderId != null,
+      target: viewed ? { id: viewed.id, alive: viewed.alive, inRange: inRange(unit, viewed) } : null,
+      attackerAlive: true,
+      intervalScale: scale,
+      allowStart: !moving,
+    });
+    unit.attackCycle = stepped.state;
+    for (const event of stepped.events) noteChampionEvent(sim, unit, event, fired);
+  }
+  fired.sort((a, b) => a.attacker.id - b.attacker.id);
+  for (const shot of fired) {
+    const target = byId(sim, shot.targetId);
+    if (!target) continue;
+    deliverAttack(sim, shot.attacker, target);
+    if (shot.attacker.id === sim.playerId) {
+      pushAttackLog(sim, 'AttackFired', { targetId: target.id, targetHp: target.hp, melee: !shot.attacker.ranged });
     }
   }
+
   for (const unit of sim.units) {
-    if (unit.id === hero.id || !unit.alive || unit.stun > 0) continue;
+    if (unit.kind === 'champion' || !unit.alive || unit.stun > 0) continue;
     if (unit.kind === 'tower' || unit.kind === 'base') {
       const pool = enemiesIn(sim, unit, unit.attackRange).filter((other) => other.kind !== 'base');
       const minions = pool.filter((other) => other.kind === 'minion');
@@ -793,6 +923,60 @@ function strikes(sim: Sim, input: FrameInput): void {
       unit.targetId = choice ? choice.id : null;
     }
     tryStrike(sim, unit);
+  }
+}
+
+function heroAttackOrder(sim: Sim, hero: Unit, input: FrameInput): number | null {
+  const lock = byId(sim, input.targetId);
+  if (lock && lock.alive && lock.team !== hero.team) return lock.id;
+  if (input.attack && hero.attackCycle.phase === AttackPhase.Windup && hero.attackCycle.targetId != null) {
+    const swinging = byId(sim, hero.attackCycle.targetId);
+    if (swinging?.alive && swinging.team !== hero.team) return swinging.id;
+  }
+  if (!input.attack) return null;
+  const near = nearestEnemy(sim, hero, hero.attackRange);
+  if (near) return near.id;
+  const chase = nearestEnemy(sim, hero, 380, (unit) => unit.kind !== 'base' || distTo(hero, unit) < 280);
+  return chase ? chase.id : null;
+}
+
+function championProfile(unit: Unit): AttackProfile {
+  const haste = unit.frenzyT > 0 ? 0.75 : 1;
+  return attackProfile(unit.attackInterval * haste, unit.attackRange, unit.ranged ? unit.projectileSpeed : undefined);
+}
+
+function clearDeadChampion(sim: Sim, unit: Unit): void {
+  if (unit.attackCycle.phase === AttackPhase.Idle && unit.attackCycle.cooldownRemainingMs <= 0) return;
+  const stepped = stepAttack(unit.attackCycle, championProfile(unit), {
+    dtMs: 0,
+    move: false,
+    orderTargetId: null,
+    orderPersists: false,
+    target: null,
+    attackerAlive: false,
+    intervalScale: 1,
+    allowStart: false,
+  });
+  unit.attackCycle = stepped.state;
+  if (unit.id === sim.playerId) {
+    for (const event of stepped.events) pushAttackLog(sim, event.type, { reason: 'reason' in event ? event.reason : '' });
+  }
+}
+
+function noteChampionEvent(
+  sim: Sim,
+  unit: Unit,
+  event: AttackEvent,
+  fired: { attacker: Unit; targetId: number }[],
+): void {
+  if (event.type === 'AttackStarted') {
+    const target = byId(sim, event.targetId);
+    if (target) unit.facing = Math.atan2(target.y - unit.y, target.x - unit.x);
+    unit.targetId = event.targetId;
+  }
+  if (event.type === 'AttackFired') fired.push({ attacker: unit, targetId: event.targetId });
+  if (unit.id === sim.playerId && event.type !== 'AttackFired') {
+    pushAttackLog(sim, event.type, { reason: 'reason' in event ? event.reason : '', targetId: event.targetId });
   }
 }
 
@@ -823,33 +1007,39 @@ function tryStrike(sim: Sim, unit: Unit): void {
   }
   unit.facing = Math.atan2(target.y - unit.y, target.x - unit.x);
   if (!inRange(unit, target) || unit.attackCd > 0) return;
+  deliverAttack(sim, unit, target);
+  const haste = unit.frenzyT > 0 ? 0.75 : 1;
+  unit.attackCd = unit.attackInterval * haste;
+}
+
+function deliverAttack(sim: Sim, unit: Unit, target: Unit): void {
+  unit.facing = Math.atan2(target.y - unit.y, target.x - unit.x);
   const buff = (unit.buffT > 0 ? 1 + unit.buffDmg : 1) * (unit.mightT > 0 ? 1.15 : 1);
   let raw = unit.ad * buff;
   if (unit.affix === 'Spectral Hit') raw *= 1.3;
   if (unit.ranged) {
     shoot(sim, unit, target, raw);
-  } else {
-    if (unit.bashT > 0) {
-      raw = raw * 1.55 + 8;
-      target.stun = Math.max(target.stun, 0.5);
-      unit.bashT = 0;
-      sfx(sim, 'bash');
-    }
-    if (unit.concentrateT > 0) {
-      raw *= 1.35;
-      unit.concentrateT = 0;
-    }
-    damageUnit(sim, target, raw, unit);
-    if (unit.affix === 'Cursed') {
-      target.slow = Math.max(target.slow, 1.2);
-      target.slowPct = Math.max(target.slowPct, 0.25);
-    }
-    if (unit.affix === 'Mana Burn') target.mana = Math.max(0, target.mana - 12);
     unit.swing = 1;
-    ring(sim, target.x, target.y, 18, unit.accent);
+    return;
   }
-  const haste = unit.frenzyT > 0 ? 0.75 : 1;
-  unit.attackCd = unit.attackInterval * haste;
+  if (unit.bashT > 0) {
+    raw = raw * 1.55 + 8;
+    target.stun = Math.max(target.stun, 0.5);
+    unit.bashT = 0;
+    sfx(sim, 'bash');
+  }
+  if (unit.concentrateT > 0) {
+    raw *= 1.35;
+    unit.concentrateT = 0;
+  }
+  damageUnit(sim, target, raw, unit);
+  if (unit.affix === 'Cursed') {
+    target.slow = Math.max(target.slow, 1.2);
+    target.slowPct = Math.max(target.slowPct, 0.25);
+  }
+  if (unit.affix === 'Mana Burn') target.mana = Math.max(0, target.mana - 12);
+  unit.swing = 1;
+  ring(sim, target.x, target.y, 18, unit.accent);
 }
 
 function shoot(sim: Sim, attacker: Unit, target: Unit, damage: number): void {
@@ -870,9 +1060,11 @@ function shoot(sim: Sim, attacker: Unit, target: Unit, damage: number): void {
 }
 
 function updateProjectiles(sim: Sim, dt: number): void {
+  const aliveAtStart = new Set(sim.units.filter((unit) => unit.alive).map((unit) => unit.id));
+  const impacts: { shot: Sim['projectiles'][number]; target: Unit }[] = [];
   for (const shot of sim.projectiles) {
     const target = byId(sim, shot.targetId);
-    if (!target || !target.alive) {
+    if (!target || !aliveAtStart.has(target.id)) {
       shot.life = 0;
       continue;
     }
@@ -880,13 +1072,17 @@ function updateProjectiles(sim: Sim, dt: number): void {
     const dy = target.y - shot.y;
     const d = Math.hypot(dx, dy);
     if (d <= target.radius + shot.radius + 4) {
-      damageUnit(sim, target, shot.damage, byId(sim, shot.attackerId) ?? null);
-      shot.life = 0;
+      impacts.push({ shot, target });
       continue;
     }
     shot.x += (dx / d) * shot.speed * dt;
     shot.y += (dy / d) * shot.speed * dt;
     shot.life -= dt;
+  }
+  impacts.sort((a, b) => a.shot.attackerId - b.shot.attackerId);
+  for (const impact of impacts) {
+    damageUnit(sim, impact.target, impact.shot.damage, byId(sim, impact.shot.attackerId) ?? null);
+    impact.shot.life = 0;
   }
 }
 
@@ -942,6 +1138,8 @@ function reviveChampion(sim: Sim, unit: Unit): void {
   unit.targetId = null;
   unit.respawn = 0;
   unit.invuln = unit.id === sim.playerId ? 1.5 : 0.4;
+  unit.attackCycle = createAttackState();
+  unit.attackPaceMs = 0;
   unit.waypoint = unit.team === 'ally' ? 1 : laneAt(sim, unit.path).length - 2;
   if (unit.id === sim.playerId) banner(sim, 'You return to the Encampment.');
 }

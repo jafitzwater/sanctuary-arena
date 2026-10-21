@@ -188,11 +188,14 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   const foe = spawnMinion(sim, 'fallen', 'enemy', hero.x + 36, hero.y);
   foe.hp = 8;
   foe.armor = 0;
+  for (const unit of sim.units) {
+    if (unit.kind === 'tower' || unit.kind === 'base') unit.attackCd = 5;
+  }
   const gold = sim.gold;
   const input = emptyInput();
   input.attack = true;
   input.targetId = foe.id;
-  updateSim(sim, input, 0.05);
+  step(sim, input, 0.35);
   assert.equal(foe.alive, false, 'melee last hit should kill a wounded Fallen');
   assert.ok(sim.gold > gold);
   assert.equal(sim.cs, 1);

@@ -1,3 +1,4 @@
+import type { AttackState } from './combat/attackCycle';
 import type { ActDef } from './data/acts/types';
 import type { ClassDef } from './data/classes/types';
 
@@ -35,6 +36,10 @@ export interface Unit {
   attackRange: number;
   attackInterval: number;
   attackCd: number;
+  /** Champion auto-attack cycle. Minions and towers leave this idle. */
+  attackCycle: AttackState;
+  /** Effective interval, in ms, the cycle was last scaled to. */
+  attackPaceMs: number;
   aggro: number;
   gold: number;
   xp: number;

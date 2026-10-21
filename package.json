@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
-    "test": "tsx test/match.ts"
+    "test": "tsx test/match.ts && tsx test/attack-cycle.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
