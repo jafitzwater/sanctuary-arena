@@ -4,6 +4,25 @@ import type { Sim } from './types';
  * Original cues and a slow ambient bed, synthesized in the browser.
  * Nothing is fetched from the network and nothing is sampled from Diablo II.
  */
+let boundBus: AudioBus | null = null;
+
+/** First gesture resumes the context. Each listener is once; a later touch can retry if the click could not start audio. */
+export function armGestureAudio(): void {
+  const go = () => {
+    try {
+      boundBus?.unlock();
+    } catch {
+      /* no audio device */
+    }
+  };
+  window.addEventListener('pointerdown', go, { once: true, capture: true });
+  window.addEventListener('touchstart', go, { once: true, capture: true });
+}
+
+export function registerAudioBus(bus: AudioBus): void {
+  boundBus = bus;
+}
+
 export class AudioBus {
   private ctx: AudioContext | null = null;
   muted = false;
@@ -23,12 +42,35 @@ export class AudioBus {
   }
 
   unlock(): void {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return;
-    if (!this.ctx) this.ctx = new Ctx();
-    void this.ctx.resume();
-    this.ensureMusic();
-    this.applyMute();
+    try {
+      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) return;
+      if (!this.ctx) this.ctx = new Ctx();
+      const ctx = this.ctx;
+      const done = () => {
+        try {
+          if (ctx.state === 'running') this.ensureMusic();
+          this.applyMute();
+        } catch {
+          /* oscillator start can fail when the device has no audio */
+        }
+        (globalThis as { __audioState?: string }).__audioState = ctx.state;
+      };
+      let pending: Promise<void> | undefined;
+      try {
+        pending = ctx.resume();
+      } catch {
+        done();
+        return;
+      }
+      if (pending && typeof pending.then === 'function') {
+        void pending.then(done, () => {
+          (globalThis as { __audioState?: string }).__audioState = ctx.state;
+        });
+      } else done();
+    } catch {
+      /* AudioContext construction failed */
+    }
   }
 
   toggleMute(): boolean {
@@ -43,17 +85,31 @@ export class AudioBus {
   }
 
   consume(sim: Sim): void {
+    for (const name of sim.sfx) this.haptic(name);
     if (!this.ctx || this.ctx.state !== 'running') {
       sim.sfx.length = 0;
       return;
     }
-    this.pumpMusic();
+    try {
+      this.pumpMusic();
+    } catch {
+      /* music voice failed */
+    }
     if (this.muted) {
       sim.sfx.length = 0;
       return;
     }
     for (const name of sim.sfx) this.play(name);
     sim.sfx.length = 0;
+  }
+
+  private haptic(name: string): void {
+    if (name !== 'heavy' && name !== 'whirl') return;
+    try {
+      if ('vibrate' in navigator) navigator.vibrate(25);
+    } catch {
+      /* iOS Safari ignores vibrate */
+    }
   }
 
   private applyMute(): void {
@@ -64,8 +120,17 @@ export class AudioBus {
 
   private ensureMusic(): void {
     const ctx = this.ctx;
-    if (!ctx || this.started) return;
-    this.started = true;
+    if (!ctx || this.started || ctx.state !== 'running') return;
+    try {
+      this.startBed(ctx);
+      this.started = true;
+    } catch {
+      this.started = false;
+      this.musicGain = null;
+    }
+  }
+
+  private startBed(ctx: AudioContext): void {
     const master = ctx.createGain();
     master.gain.value = 0;
     master.connect(ctx.destination);
@@ -164,6 +229,14 @@ export class AudioBus {
   private play(name: string): void {
     const ctx = this.ctx;
     if (!ctx) return;
+    try {
+      this.voice(name, ctx);
+    } catch {
+      /* a voice failed to start */
+    }
+  }
+
+  private voice(name: string, ctx: AudioContext): void {
     const now = ctx.currentTime;
     const tone = (freq: number, dur: number, type: OscillatorType, gain: number, delay = 0) => {
       const osc = ctx.createOscillator();

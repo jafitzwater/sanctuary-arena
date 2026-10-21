@@ -38,6 +38,7 @@ import type { Camera, Sim, Unit } from './types';
 export interface DrawOpts {
   mode: 'title' | 'play' | 'end';
   targetId: number | null;
+  autoTargetId: number | null;
   attack: boolean;
   time: number;
 }
@@ -82,12 +83,12 @@ function crisp(ctx: CanvasRenderingContext2D): void {
   ctx.imageSmoothingEnabled = false;
 }
 
-/** Backing store is CSS pixels times devicePixelRatio, capped at 3. CSS size stays put. */
+/** Backing store is CSS pixels times devicePixelRatio, capped at 2. CSS size stays put. */
 export function applyCanvasBacking(canvas: HTMLCanvasElement): { cssW: number; cssH: number; dpr: number } {
   const rect = canvas.getBoundingClientRect();
   const cssW = Math.max(1, rect.width);
   const cssH = Math.max(1, rect.height);
-  const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+  const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
   canvas.style.imageRendering = 'pixelated';
   const width = Math.max(1, Math.round(cssW * dpr));
   const height = Math.max(1, Math.round(cssH * dpr));
@@ -518,6 +519,15 @@ export class Renderer {
       ctx.beginPath();
       ctx.ellipse(footX, footY, height * 0.34, height * 0.14, 0, 0, Math.PI * 2);
       ctx.stroke();
+    }
+    if (unit.alive && opts.autoTargetId != null && unit.id === opts.autoTargetId) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(230, 211, 161, 0.72)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(footX, footY + 2, Math.max(14, height * 0.22), Math.max(6, height * 0.08), 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
     if (unit.alive && (boss || unit.kind !== 'minion' || unit.hp < unit.maxHp)) {
       this.drawBar(unit, footX, footY, height, opts.targetId);

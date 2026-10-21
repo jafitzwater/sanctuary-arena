@@ -19,6 +19,17 @@ function nearestInReach(ctx: CastContext, reach: number): Unit | null {
   return best;
 }
 
+function foeFor(ctx: CastContext, reach: number): Unit | null {
+  if (ctx.focusId != null) {
+    const focus = ctx.sim.units.find((unit) => unit.id === ctx.focusId);
+    if (focus && focus.alive && focus.team !== ctx.hero.team) {
+      const gap = Math.hypot(focus.x - ctx.hero.x, focus.y - ctx.hero.y) - focus.radius;
+      if (gap <= reach) return focus;
+    }
+  }
+  return nearestInReach(ctx, reach);
+}
+
 function smack(ctx: CastContext, foe: Unit, damage: number, stun = 0): void {
   const { hero } = ctx;
   hero.facing = Math.atan2(foe.y - hero.y, foe.x - hero.x);
@@ -28,7 +39,7 @@ function smack(ctx: CastContext, foe: Unit, damage: number, stun = 0): void {
 }
 
 export const bash: SkillHandler = (ctx) => {
-  const foe = nearestInReach(ctx, ctx.hero.attackRange + 18);
+  const foe = foeFor(ctx, ctx.hero.attackRange + 18);
   if (!foe) {
     banner(ctx.sim, 'Nobody in reach.');
     return false;
@@ -57,7 +68,7 @@ export const shout: SkillHandler = (ctx) => {
 };
 
 export const stun: SkillHandler = (ctx) => {
-  const foe = nearestInReach(ctx, ctx.hero.attackRange + 16);
+  const foe = foeFor(ctx, ctx.hero.attackRange + 16);
   if (!foe) {
     banner(ctx.sim, 'Nobody in reach to stun.');
     return false;

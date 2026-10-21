@@ -11,13 +11,16 @@
 
 html,
 body {
+  position: fixed;
+  inset: 0;
   margin: 0;
+  width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #120e0b;
+  background: #0b0e07;
   color: var(--ink);
   font-family: Georgia, "Palatino Linotype", Palatino, serif;
-  touch-action: manipulation;
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -175,6 +178,18 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
 
 #hud { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 
+.mobile-hud-overlay {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding:
+    env(safe-area-inset-top)
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  pointer-events: none;
+}
+
 #topbar {
   display: flex;
   align-items: center;
@@ -248,16 +263,34 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
   letter-spacing: 0.06em;
 }
 
-#minimap {
+#minimap-toggle {
   position: absolute;
-  top: max(4px, env(safe-area-inset-top));
-  right: max(8px, env(safe-area-inset-right));
+  top: 4px;
+  right: 8px;
   width: min(160px, 22vw);
   height: 72px;
+  padding: 0;
   border: 1px solid var(--line);
   background: #120e0b;
   z-index: 4;
+  pointer-events: auto;
+  overflow: hidden;
+  border-radius: 8px;
 }
+#minimap-toggle canvas,
+#minimap {
+  position: static;
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+  background: #120e0b;
+  pointer-events: none;
+}
+#minimap-toggle .map-label { display: none; font-size: 12px; letter-spacing: 0.06em; }
+#minimap-toggle.off { width: 52px; height: 28px; }
+#minimap-toggle.off canvas { display: none; }
+#minimap-toggle.off .map-label { display: block; }
 
 #banner,
 #tip,
@@ -354,20 +387,20 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
 
 #stick {
   display: none;
-  position: absolute;
-  left: max(14px, env(safe-area-inset-left));
-  bottom: calc(124px + env(safe-area-inset-bottom));
-  width: clamp(100px, 26vmin, 132px);
-  height: clamp(100px, 26vmin, 132px);
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 90px;
+  height: 90px;
+  margin: 0;
   border-radius: 50%;
   border: 2px solid var(--line);
   background: rgba(18, 12, 9, 0.28);
   touch-action: none;
-  pointer-events: auto;
-  z-index: 4;
+  pointer-events: none;
+  z-index: 7;
 }
-
-body.touch #stick { display: block; }
+#stick.on { display: block; }
 
 #stick-knob {
   position: absolute;
@@ -819,10 +852,9 @@ body.touch #stick { display: block; }
 @media (max-width: 900px) {
   .stat.slim:last-of-type { display: none; }
   .top-actions button { padding: 4px 8px; min-width: 52px; }
-  #minimap { width: min(140px, 24vw); height: 56px; }
+  #minimap-toggle { width: min(140px, 24vw); height: 56px; }
   #orb-hp, #orb-mp { width: 78px; height: 78px; }
-  #stick { bottom: calc(88px + env(safe-area-inset-bottom)); }
-  #belt { max-width: calc(100% - 170px); gap: 4px; }
+  body:not(.touch) #belt { max-width: calc(100% - 170px); gap: 4px; }
   .skill { width: 48px; height: 48px; }
   .skill .sname { font-size: 9px; }
   #attack-btn { width: 60px; height: 52px; font-size: 12px; }
@@ -833,15 +865,9 @@ body.touch #stick { display: block; }
 @media (max-height: 520px) {
   #orb-hp, #orb-mp { width: 64px; height: 64px; }
   .orb em { font-size: 9px; bottom: 16%; }
-  #stick {
-    width: 88px;
-    height: 88px;
-    bottom: calc(70px + env(safe-area-inset-bottom));
-  }
-  .skill { width: 44px; height: 44px; }
-  #attack-btn { width: 54px; height: 48px; }
-  #belt { bottom: max(6px, env(safe-area-inset-bottom)); }
-  #minimap { height: 40px; }
+  body:not(.touch) .skill { width: 44px; height: 44px; }
+  body:not(.touch) #attack-btn { width: 54px; height: 48px; }
+  body:not(.touch) #belt { bottom: max(6px, env(safe-area-inset-bottom)); }
   #banner { top: 48px; }
   #tip { display: none; }
 }
@@ -850,25 +876,24 @@ body.touch #stick { display: block; }
   #shop-grid { grid-template-columns: 1fr; }
 }
 
-/* Phone landscape: Diablo Immortal thumb layout. Desktop keeps the bottom belt. */
-body.touch {
-  --atk: clamp(88px, 23vmin, 108px);
-  --sk: clamp(54px, 14vmin, 68px);
-  --pot: clamp(40px, 10vmin, 50px);
-  /* Quarter-arc radius. On 844×390 this leaves ~8px between skill circles and ~49px to Attack. */
-  --arc: clamp(118px, 31vmin, 150px);
-}
-
+/* Phone landscape: 72px attack with four 48px petals in the bottom-right. */
 body.touch #topbar {
   width: auto;
   max-width: none;
-  height: 44px;
+  height: 40px;
   z-index: 5;
-  padding-left: max(4px, env(safe-area-inset-left));
-  padding-right: calc(min(112px, 16vw) + 52px);
+  padding: 0 8px 0 4px;
+  padding-right: calc(min(112px, 16vw) + 8px);
   background: linear-gradient(to bottom, rgba(10, 8, 6, 0.82), rgba(10, 8, 6, 0));
 }
 body.touch .hero-plate { display: flex; align-items: center; gap: 6px; }
+body.touch .portrait { width: 32px; height: 32px; }
+body.touch #vitals { width: 128px; gap: 3px; }
+body.touch #vitals .bar {
+  height: 6px;
+  border-radius: 999px;
+}
+body.touch #vitals .bar em { line-height: 6px; font-size: 7px; }
 body.touch .xp-wrap { width: 36px; }
 body.touch #orb-hp,
 body.touch #orb-mp {
@@ -885,9 +910,9 @@ body.touch #orb-mp {
 }
 body.touch .orb em { font-size: 8px; bottom: 18%; }
 
-body.touch #minimap {
-  top: 2px;
-  right: max(4px, env(safe-area-inset-right));
+body.touch #minimap-toggle {
+  top: 0;
+  right: 0;
   width: min(112px, 16vw);
   height: 40px;
 }
@@ -914,24 +939,23 @@ body.touch #targetbar {
 body.touch #banner { top: 68px; font-size: 13px; }
 
 body.touch #stick {
-  width: clamp(140px, 36vmin, 176px);
-  height: clamp(140px, 36vmin, 176px);
-  left: max(8px, env(safe-area-inset-left));
-  bottom: max(8px, env(safe-area-inset-bottom));
+  width: 90px;
+  height: 90px;
 }
 
 body.touch #belt {
   left: auto;
-  right: max(8px, env(safe-area-inset-right));
-  bottom: max(8px, env(safe-area-inset-bottom));
+  right: 8px;
+  bottom: 8px;
   transform: none;
-  width: calc(var(--atk) / 2 + var(--arc) + var(--sk) / 2 + 12px);
-  height: calc(var(--atk) / 2 + var(--arc) + var(--sk) / 2 + var(--pot) + 18px);
+  width: 190px;
+  height: 186px;
   max-width: none;
   display: block;
   z-index: 6;
   padding: 0;
   background: none;
+  pointer-events: none;
 }
 body.touch #skills {
   display: block;
@@ -939,83 +963,80 @@ body.touch #skills {
   width: 0;
   height: 0;
   overflow: visible;
+  pointer-events: none;
 }
 body.touch .skill {
   position: absolute;
-  width: var(--sk);
-  height: var(--sk);
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  padding: 2px;
+  padding: 0;
   pointer-events: auto;
-}
-/* The round border clips the painted face, not the hit target. A ring past the
-   circle catches taps in the square corner that would otherwise hit the map. */
-body.touch .skill::after,
-body.touch #attack-btn::after,
-body.touch #potion-hp::after,
-body.touch #potion-mp::after {
-  content: '';
-  position: absolute;
-  inset: -16px;
-  border-radius: 50%;
 }
 body.touch .skill .key { font-size: 9px; }
 body.touch .skill .sname { font-size: 9px; line-height: 1.05; }
-body.touch .skill.locked .sname { font-size: 18px; color: var(--gold); }
+body.touch .skill.locked .sname { font-size: 16px; color: var(--gold); }
 body.touch .skill .rank { font-size: 9px; }
-/* Quarter arc at 10°, 36°, 63°, 90° so the buttons sit on one circle around Attack. */
-body.touch .skill:nth-child(1) {
-  right: calc(var(--atk) / 2 + var(--arc) * 0.985 - var(--sk) / 2);
-  bottom: calc(var(--atk) / 2 + var(--arc) * 0.174 - var(--sk) / 2);
-}
-body.touch .skill:nth-child(2) {
-  right: calc(var(--atk) / 2 + var(--arc) * 0.809 - var(--sk) / 2);
-  bottom: calc(var(--atk) / 2 + var(--arc) * 0.588 - var(--sk) / 2);
-}
-body.touch .skill:nth-child(3) {
-  right: calc(var(--atk) / 2 + var(--arc) * 0.454 - var(--sk) / 2);
-  bottom: calc(var(--atk) / 2 + var(--arc) * 0.891 - var(--sk) / 2);
-}
-body.touch .skill:nth-child(4) {
-  right: calc(var(--atk) / 2 - var(--sk) / 2);
-  bottom: calc(var(--atk) / 2 + var(--arc) - var(--sk) / 2);
-}
+/* Petals around the 72px attack. Offsets are nudged from 86/8, 78/64, 44/94, -6/86 so the circles clear each other and the screen edge. */
+body.touch .skill:nth-child(1) { right: 86px; bottom: 8px; }
+body.touch .skill:nth-child(2) { right: 78px; bottom: 64px; }
+body.touch .skill:nth-child(3) { right: 40px; bottom: 130px; }
+body.touch .skill:nth-child(4) { right: 8px; bottom: 78px; }
 body.touch #attack-btn {
   position: absolute;
   right: 0;
   bottom: 0;
-  width: var(--atk);
-  height: var(--atk);
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
-  font-size: 13px;
+  font-size: 12px;
+  padding: 0;
   z-index: 2;
+  pointer-events: auto;
 }
-body.touch .side-col {
+body.touch #potions {
   position: absolute;
-  right: 0;
-  bottom: calc(var(--atk) / 2 + var(--arc) + var(--sk) / 2 + 8px);
-  flex-direction: row;
+  right: 154px;
+  bottom: 8px;
+  flex-direction: column;
   gap: 6px;
+  z-index: 6;
+  pointer-events: auto;
 }
 body.touch #potion-hp,
 body.touch #potion-mp {
   position: relative;
   z-index: 3;
-  width: var(--pot);
-  height: var(--pot);
+  width: 44px;
+  height: 44px;
   min-height: 0;
   border-radius: 50%;
   padding: 0;
   font-size: 11px;
 }
 body.touch #quick-buy {
-  left: calc(max(8px, env(safe-area-inset-left)) + 156px);
+  left: 8px;
   right: auto;
-  top: auto;
-  bottom: max(10px, env(safe-area-inset-bottom));
+  top: 48px;
+  bottom: auto;
   width: 56px;
   min-height: 48px;
 }
+#aim-cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 2px solid rgba(230, 211, 161, 0.9);
+  background: rgba(230, 211, 161, 0.16);
+  transform: rotate(45deg) scale(1.35, 0.62);
+  pointer-events: none;
+  z-index: 8;
+  display: none;
+}
+#aim-cursor.on { display: block; }
 body.touch .skill .plus { width: 32px; height: 32px; font-size: 22px; top: -6px; right: -6px; }
 body.touch .shop-icon { width: 84px; height: 84px; }
 body.touch .shop-icon img { width: 56px; height: 52px; }

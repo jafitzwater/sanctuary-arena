@@ -25,9 +25,14 @@ export function sfx(sim: Sim, name: string): void {
   if (sim.sfx.length > 24) sim.sfx.shift();
 }
 
+function fxCap(): number {
+  return typeof window !== 'undefined' && 'ontouchstart' in window ? 120 : 80;
+}
+
 export function pushFx(sim: Sim, fx: Fx): void {
   sim.fx.push(fx);
-  if (sim.fx.length > 80) sim.fx.splice(0, sim.fx.length - 80);
+  const cap = fxCap();
+  if (sim.fx.length > cap) sim.fx.splice(0, sim.fx.length - cap);
 }
 
 export function floater(sim: Sim, x: number, y: number, text: string, color: string): void {
@@ -91,7 +96,10 @@ export function damageUnit(sim: Sim, target: Unit, amount: number, attacker: Uni
   target.combat = 4;
   if (attacker) attacker.combat = 4;
   floater(sim, target.x, target.y - target.radius - 8, String(Math.round(dealt)), '#f4efe4');
-  if (target.id === sim.playerId) sfx(sim, 'hurt');
+  if (target.id === sim.playerId) {
+    sfx(sim, 'hurt');
+    if (dealt >= target.maxHp * 0.15) sfx(sim, 'heavy');
+  }
   else if (attacker?.id === sim.playerId && attacker.whirlT <= 0) sfx(sim, 'swing');
   if (target.hp <= 0) kill(sim, target, attacker);
 }

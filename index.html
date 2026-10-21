@@ -39,7 +39,7 @@
           <div class="help-grid">
             <div>
               <h3>Touch</h3>
-              <p>The large stick on the left is the only way to move. Attack sits in the bottom-right corner with four skill slots. A gold + on a skill spends a point. Only a learned skill (rank 1 or higher) can be placed on a slot. Shop uses category tabs and an icon grid. The chip by the HUD is a one-tap buy for the next recommended item.</p>
+              <p>Touch the left half of the screen to drop a stick under your thumb, and let go to hide it. Attack is the large button in the bottom-right, with four skill petals around it. Tap a skill to cast at your target, or drag off it to aim. A gold + spends a point. Only a learned skill can sit on a slot. The map card in the top-right toggles. Shop uses category tabs and an icon grid.</p>
             </div>
             <div>
               <h3>Mouse and keys</h3>
@@ -50,6 +50,7 @@
       </section>
 
       <div id="hud" hidden>
+        <div class="mobile-hud-overlay">
         <header id="topbar">
           <div class="hero-plate">
             <div class="portrait"><img id="portrait-img" alt="" /></div>
@@ -72,7 +73,10 @@
           </div>
         </header>
 
-        <canvas id="minimap" width="180" height="64" aria-hidden="true"></canvas>
+        <button id="minimap-toggle" type="button" aria-label="Toggle map">
+          <canvas id="minimap" width="180" height="64"></canvas>
+          <span class="map-label">Map</span>
+        </button>
         <div id="targetbar" hidden>
           <b id="target-name"></b>
           <div class="bar target-hp"><span id="target-fill"></span></div>
@@ -104,7 +108,7 @@
         <div id="belt">
           <div id="skills"></div>
           <button id="attack-btn" type="button">Attack</button>
-          <div class="side-col">
+          <div id="potions" class="side-col">
             <button id="potion-hp" type="button" aria-label="Drink health potion">
               <span>HP</span><b id="potion-hp-count">0</b><small>5</small>
             </button>
@@ -114,6 +118,8 @@
           </div>
         </div>
         <p id="skill-hint"></p>
+        <div id="aim-cursor" aria-hidden="true"></div>
+        </div>
 
         <section id="tree" hidden role="dialog" aria-modal="true" aria-labelledby="tree-heading">
           <div class="sheet stats-sheet">
@@ -167,7 +173,7 @@
             <div class="help-grid">
               <div>
                 <h3>Touch</h3>
-                <p>Move only with the large stick on the left. Tapping the ground does not walk you. Attack is the big button in the bottom-right corner, with four skills around it. A gold + on a skill spends a point. A skill stays off the belt until it is rank 1. Points opens stats and the loadout. Shop is a category list and an icon grid; tap an icon, then Buy. The recommended item beside the HUD buys in one tap inside camp. Tap the dimmed area or × to close. The fight pauses while a panel is open.</p>
+                <p>Touch the left half to anchor a stick under your thumb. Releasing it hides the stick. Tapping the ground does not walk you. Attack is the big button in the bottom-right, with four skills arcing around it. Tap a skill to cast, or drag off the button to aim and drag back onto it to cancel. Potions sit just left of that fan. A gold + spends a point. The map card in the top-right toggles. Points opens stats and the loadout. Shop is a category list and an icon grid. The fight pauses while a panel is open.</p>
               </div>
               <div>
                 <h3>Mouse and keyboard</h3>

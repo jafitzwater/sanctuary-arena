@@ -1,7 +1,8 @@
 import { sanctuary } from './data/acts/sanctuary';
 import { getClass } from './data/classes';
 import { playableIds } from './data/classes/roster';
-import { AudioBus } from './audio';
+import { AudioBus, registerAudioBus } from './audio';
+import { player } from './query';
 import { Hud } from './hud';
 import { InputController } from './input';
 import { Renderer } from './render';
@@ -27,6 +28,7 @@ export class Game {
   private audio = new AudioBus();
 
   constructor(canvas: HTMLCanvasElement, root: HTMLElement) {
+    registerAudioBus(this.audio);
     this.sim = createMatch(sanctuary, getClass(this.classId));
     this.renderer = new Renderer(canvas);
     this.hud = new Hud(root);
@@ -119,6 +121,7 @@ export class Game {
     this.hud.bind();
     this.hud.setMuteLabel(this.audio.muted);
     this.input.attach();
+    this.publishAimHook();
     this.syncTouchClass();
     window.addEventListener('resize', () => this.syncTouchClass());
     window.matchMedia('(pointer: coarse)').addEventListener('change', () => this.syncTouchClass());
@@ -167,6 +170,7 @@ export class Game {
     this.renderer.draw(this.sim, {
       mode: this.mode,
       targetId: this.input.targetId,
+      autoTargetId: this.input.autoTargetId,
       attack: this.input.attack,
       time: this.time,
     });
@@ -186,6 +190,23 @@ export class Game {
       window.innerWidth > window.innerHeight;
     document.body.classList.toggle('touch', coarse || phoneLandscape);
     this.hud.setMuteLabel(this.audio.muted);
+  }
+
+  private publishAimHook(): void {
+    if (typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('aimlog') !== '1') return;
+    const game = this;
+    (globalThis as { __aimSim?: unknown }).__aimSim = {
+      setBelt(slot: number, id: string) {
+        if (slot < 0 || slot > 3) return;
+        game.sim.belt[slot] = id;
+        game.sim.skillRanks[id] = Math.max(1, game.sim.skillRanks[id] ?? 0);
+      },
+      leap() {
+        const hero = player(game.sim);
+        return hero.leap ? { x0: hero.leap.x0, y0: hero.leap.y0, x1: hero.leap.x1, y1: hero.leap.y1 } : null;
+      },
+    };
   }
 }
 

@@ -6,6 +6,8 @@ export interface CastContext {
   rank: number;
   aimX: number;
   aimY: number;
+  /** Preferred unit for bash and stun. Ignored when it is out of reach. */
+  focusId?: number | null;
 }
 
 export type SkillHandler = (ctx: CastContext) => boolean;
