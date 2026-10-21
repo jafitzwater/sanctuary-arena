@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { projectIso, screenVectorToWorld, unprojectIso } from '../src/game/iso';
 import { distToPolyline } from '../src/game/math';
 import { act1 } from '../src/game/data/acts/act1';
@@ -18,7 +20,8 @@ import { FUTURE_ITEMS, isShopItem, ITEMS } from '../src/game/data/items';
 import { UNIT_DEFS } from '../src/game/data/units';
 import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
 import { campGates, DECOR_MARGIN, FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, sceneryFor } from '../src/game/landscape';
-import { GROUND_BASE, groundAt, slide, walkable } from '../src/game/terrain';
+import { advanceHeroPhase, heroCycleHz, heroDrawHeight, smoothFacing } from '../src/game/art/figures';
+import { FOOTPRINT, GROUND_BASE, groundAt, slide, tilePaint, walkable } from '../src/game/terrain';
 import {
   animFrame,
   HERO_COMBAT_BANDS,
@@ -884,125 +887,64 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
 }
 
 {
-  const sheets = readFileSync(new URL('../src/game/art/sheets.ts', import.meta.url), 'utf8');
-  const render = readFileSync(new URL('../src/game/render.ts', import.meta.url), 'utf8');
-  const height = Number(sheets.match(/export const HERO_HEIGHT = (\d+)/)?.[1]);
-  const block = sheets.match(/export const HERO_NATIVE_PX = \{([^}]+)\}/)?.[1] ?? '';
-  const native: Record<string, number> = {};
-  for (const match of block.matchAll(/(light|medium|heavy):\s*(\d+)/g)) native[match[1]] = Number(match[2]);
-  assert.equal(height, 108);
-  assert.ok(sheets.includes('return (HERO_HEIGHT * zoom) / HERO_NATIVE_PX[tier]'));
-  assert.ok(sheets.includes('drawX: x - frameWidth / 2'));
-  assert.ok(sheets.includes('drawY: y - frameHeight'));
-  assert.equal(render.match(/heroDrawBox\(/g)?.length, 1);
-  assert.equal(render.includes('glyph.sh / glyph.cellH'), false);
-  const cols: Record<string, number> = { idle: 1, walk: 8, run: 12 };
-  const torso = 78;
-  for (const tier of ['light', 'medium', 'heavy']) {
-    const cells: Record<string, number> = {};
-    for (const mode of ['idle', 'walk', 'run']) {
-      const file = new URL(`../src/assets/art/d2/barb-${tier}-${mode}.webp`, import.meta.url);
-      const buf = readFileSync(file);
-      assert.equal(buf.toString('ascii', 12, 16), 'VP8X');
-      const sheetH = 1 + buf.readUIntLE(27, 3);
-      cells[mode] = sheetH / 8;
-      assert.equal(sheetH % 8, 0, `${tier} ${mode} row count`);
-      assert.equal((1 + buf.readUIntLE(24, 3)) % cols[mode], 0, `${tier} ${mode} columns`);
+  const srcRoot = fileURLToPath(new URL('../src/', import.meta.url));
+  const sources: string[] = [];
+  const walk = (dir: string): void => {
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name);
+      if (statSync(path).isDirectory()) walk(path);
+      else if (name.endsWith('.ts')) sources.push(path);
     }
-    assert.equal(native[tier], cells.walk, `${tier} scale reference is the walk cell`);
-    assert.notEqual(cells.run, cells.walk, `${tier} run cell is a different size`);
-    const drawScale: number = height / native[tier];
-    const oldWalk: number = torso * (height / cells.walk);
-    const oldRun: number = torso * (height / cells.run);
-    assert.ok(Math.abs(oldWalk - oldRun) > 1, `${tier} per-cell scale separated walk and run`);
-    for (const mode of ['idle', 'walk', 'run']) {
-      const drawn: number = torso * drawScale;
-      const sameBody: number = torso * (height / native[tier]);
-      assert.ok(Math.abs(drawn - sameBody) < 1, `${tier} ${mode} torso scale drifted`);
-      assert.equal(drawScale, height / cells.walk, `${tier} ${mode} uses the walk magnification`);
-    }
-    const frameW: number = 44 * drawScale;
-    const frameH: number = torso * drawScale;
-    const anchor = { drawX: 120 - frameW / 2, drawY: 90 - frameH };
-    assert.ok(Math.abs(anchor.drawX - (120 - frameW / 2)) < 1);
-    assert.ok(Math.abs(anchor.drawY - (90 - frameH)) < 1);
-    assert.equal(frameW / 44, frameH / torso);
-  }
-}
-
-{
-  const sheets = readFileSync(new URL('../src/game/art/sheets.ts', import.meta.url), 'utf8');
-  const render = readFileSync(new URL('../src/game/render.ts', import.meta.url), 'utf8');
-  const height = Number(sheets.match(/export const HERO_HEIGHT = (\d+)/)?.[1]);
-  const block = sheets.match(/export const HERO_NATIVE_PX = \{([^}]+)\}/)?.[1] ?? '';
-  const native: Record<string, number> = {};
-  for (const match of block.matchAll(/(light|medium|heavy):\s*(\d+)/g)) native[match[1]] = Number(match[2]);
-  const parseRun = (name: string): number[][][] => {
-    const start = sheets.indexOf(`export const ${name}`);
-    const end = sheets.indexOf('};', start);
-    const rows = [...sheets.slice(start, end).matchAll(/\[(\d+(?:,\d+)*)\]/g)].map((m) => m[1].split(',').map(Number));
-    assert.equal(rows.length, 24, name);
-    return [rows.slice(0, 8), rows.slice(8, 16), rows.slice(16, 24)];
   };
-  const tops = parseRun('HERO_RUN_TOP');
-  const bottoms = parseRun('HERO_RUN_BOTTOM');
-  assert.ok(sheets.includes('const lift = baseline - bottom'));
-  assert.ok(sheets.includes('drawY: y - frameHeight - lift * scale'));
-  assert.ok(sheets.includes('drawX: x - frameWidth / 2'));
-  assert.equal(render.match(/heroRunDraw\(/g)?.length, 1);
-  assert.equal(render.match(/heroDrawBox\(/g)?.length, 1);
-  assert.ok(render.includes('y - run.lift * run.scale'));
-  assert.ok(render.includes('!walking'));
-  const tiers = ['light', 'medium', 'heavy'];
-  let footTravel = false;
-  for (let tier = 0; tier < tiers.length; tier++) {
-    const drawScale: number = height / native[tiers[tier]];
-    for (let row = 0; row < 8; row++) {
-      const top = tops[tier][row];
-      const bottom = bottoms[tier][row];
-      assert.equal(top.length, 12);
-      assert.equal(bottom.length, 12);
-      let baseline = bottom[0];
-      for (const edge of bottom) if (edge > baseline) baseline = edge;
-      const ground: number[] = [];
-      const head: number[] = [];
-      const snapped: number[] = [];
-      for (let frame = 0; frame < 12; frame++) {
-        const nativeH: number = bottom[frame] - top[frame] + 1;
-        const lift: number = baseline - bottom[frame];
-        assert.ok(lift >= 0);
-        const frameHeight: number = nativeH * drawScale;
-        const drawY: number = 200 - frameHeight - lift * drawScale;
-        ground.push(drawY + frameHeight + lift * drawScale);
-        head.push(200 - drawY);
-        snapped.push(nativeH * drawScale);
-      }
-      const span = (values: number[]): number => Math.max(...values) - Math.min(...values);
-      const natural: number = (Math.max(...top) - Math.min(...top)) * drawScale;
-      const drawnSpan: number = span(head);
-      const snapSpan: number = span(snapped);
-      for (const line of ground) {
-        assert.ok(Math.abs(line - 200) < 1e-6, `${tiers[tier]} row ${row} baseline moved`);
-      }
-      assert.ok(bottom.some((edge) => edge === baseline), `${tiers[tier]} row ${row} never plants`);
-      assert.ok(Math.abs(drawnSpan - natural) < 1, `${tiers[tier]} row ${row} head span ${drawnSpan} vs source ${natural}`);
-      if (snapSpan - natural > 1) {
-        footTravel = true;
-        assert.ok(snapSpan - drawnSpan > 1, `${tiers[tier]} row ${row} still includes the snap delta`);
-      }
-    }
+  walk(srcRoot);
+  const imageImport = /from\s+['"][^'"]+\.(png|webp|gif)['"]/g;
+  const bundled: string[] = [];
+  for (const path of sources) {
+    const text = readFileSync(path, 'utf8');
+    for (const match of text.matchAll(imageImport)) bundled.push(`${path}: ${match[0]}`);
   }
-  assert.ok(footTravel, 'expected a run row whose snapped head travel exceeds the source');
-  const camera = bottoms[0][0];
-  const northwest = bottoms[0][4];
-  const camSpan: number = Math.max(...camera) - Math.min(...camera);
-  const nwSpan: number = Math.max(...northwest) - Math.min(...northwest);
-  assert.equal(Math.min(...camera), 103);
-  assert.equal(Math.max(...camera), 104);
-  assert.equal(camSpan, 1);
-  assert.equal(Math.min(...northwest), 90);
-  assert.equal(Math.max(...northwest), 109);
-  assert.equal(nwSpan, 19);
+  const allowed = bundled.filter((line) => line.includes(`${join('game', 'hud.ts')}:`) || line.includes(`${join('game', 'art', 'icons.ts')}:`));
+  assert.equal(bundled.length, allowed.length, `runtime image import outside the HUD: ${bundled.filter((line) => !allowed.includes(line)).join('; ')}`);
+  assert.ok(bundled.some((line) => line.includes('portrait.webp')), 'HUD portrait import was removed');
+  assert.ok(bundled.some((line) => line.includes('icons.ts') && line.endsWith(".png'")), 'HUD icon imports were removed');
+  assert.equal(existsSync(fileURLToPath(new URL('../src/game/art/sheets.ts', import.meta.url))), false);
+  const gameRoot = fileURLToPath(new URL('../src/game/', import.meta.url));
+  const forbidden = ['isSheetMatte', 'isObeliskBackground', 'keyObelisk', 'stripMatte', 'nearMagenta', 'heroRunDraw', 'heroDrawBox'];
+  for (const path of sources.filter((file) => file.startsWith(gameRoot))) {
+    const text = readFileSync(path, 'utf8');
+    for (const name of forbidden) assert.equal(text.includes(name), false, `${path} still mentions ${name}`);
+  }
+  const render = readFileSync(new URL('../src/game/render.ts', import.meta.url), 'utf8');
+  assert.ok(render.includes('function drawBarbarian'));
+  assert.ok(render.includes('function drawToken'));
+  assert.ok(render.includes('function drawBoss'));
+  assert.ok(render.includes('function drawSpire'));
+  assert.ok(render.includes('function drawStronghold'));
+  assert.ok(render.includes('paintTile'));
+  assert.equal(render.includes('.webp'), false);
+  assert.equal(render.includes('.png'), false);
+  for (const pose of ['idle', 'walk', 'run'] as const) assert.equal(heroDrawHeight(pose), 108);
+  assert.equal(heroCycleHz('idle'), 1);
+  assert.equal(heroCycleHz('walk'), 4);
+  assert.equal(heroCycleHz('run'), 6.25);
+  const walked = advanceHeroPhase(0.4, 'walk', 0.05);
+  assert.equal(walked, 0.4 + 4 * 0.05);
+  const ran = advanceHeroPhase(walked, 'run', 0.05);
+  assert.equal(ran, walked + 6.25 * 0.05);
+  const target = Math.PI / 2;
+  const eased = smoothFacing(0, target, 0.016);
+  assert.ok(eased > 0 && eased < target, `facing snapped to ${eased}`);
+  assert.equal(FOOTPRINT, 0.3);
+  for (const kind of ['grass', 'path', 'town', 'pale'] as const) {
+    const paint = tilePaint(kind);
+    assert.match(paint.fill, /^#[0-9a-f]{6}$/);
+    assert.match(paint.joint, /^#[0-9a-f]{6}$/);
+    assert.match(paint.fleck, /^#[0-9a-f]{6}$/);
+  }
+  assert.equal(tilePaint('path').fill, '#3c4450');
+  assert.equal(tilePaint('town').fill, '#c9b89a');
+  assert.equal(tilePaint('pale').fill, '#2c2636');
+  assert.equal(tilePaint('grass').fill, '#1c2814');
 }
 
 {
@@ -1049,12 +991,6 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.ok(turned > 0);
   assert.ok(frames[turned].frame !== 0 || frames[turned - 1].frame !== 0, 'a turn reset the run clock');
 
-  const sheets = readFileSync(new URL('../src/game/art/sheets.ts', import.meta.url), 'utf8');
-  const render = readFileSync(new URL('../src/game/render.ts', import.meta.url), 'utf8');
-  assert.ok(sheets.includes('ally: { pose: \'idle\', col: 0 }'));
-  assert.ok(sheets.includes('enemy: { pose: \'walk\', col: 0 }'));
-  assert.equal(render.includes('obeliskGlyph'), true);
-  assert.ok(render.includes('paintDiamond(ctx, rows, GROUND_BASE'));
   assert.equal(GROUND_BASE, 'grass');
   const lightRun = HERO_RUN_RECTS.light[0][0];
   const lightWalk = HERO_WALK_RECTS.light[0][0];

@@ -13,8 +13,36 @@ export const FOOTPRINT = 0.3;
 
 export type GroundKind = 'grass' | 'edge' | 'path' | 'town' | 'pale' | 'river' | 'bank' | 'dark' | 'blend';
 
-/** Every floor diamond is this tile first. Roads and alpha edges paint over it. */
+/** Every floor diamond is this tile first. Roads and camps paint over it. */
 export const GROUND_BASE: GroundKind = 'grass';
+
+export interface TilePaint {
+  fill: string;
+  joint: string;
+  fleck: string;
+}
+
+/** Opaque isometric fill. Grass is the forest floor; the others are camps and the slate lane. */
+export function tilePaint(kind: GroundKind): TilePaint {
+  switch (kind) {
+    case 'path':
+      return { fill: '#3c4450', joint: '#232830', fleck: '#5c6674' };
+    case 'town':
+      return { fill: '#c9b89a', joint: '#8d7d62', fleck: '#efe2c8' };
+    case 'pale':
+      return { fill: '#2c2636', joint: '#141018', fleck: '#7a4ea8' };
+    case 'river':
+    case 'dark':
+      return { fill: '#1a262c', joint: '#10181c', fleck: '#2c4550' };
+    case 'edge':
+    case 'bank':
+    case 'blend':
+      return { fill: '#24321c', joint: '#182214', fleck: '#3e5230' };
+    case 'grass':
+    default:
+      return { fill: '#1c2814', joint: '#121c0e', fleck: '#345028' };
+  }
+}
 
 function lanes(map: ActDef): Vec[][] {
   return map.paths?.length ? map.paths.map((path) => path.lane) : [map.lane];
