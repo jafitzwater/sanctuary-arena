@@ -5,7 +5,7 @@ import { distToPolyline } from '../src/game/math';
 import { act1 } from '../src/game/data/acts/act1';
 import { sanctuary } from '../src/game/data/acts/sanctuary';
 import { getAct } from '../src/game/data/acts';
-import { barbarian } from '../src/game/data/classes/barbarian';
+import { barbarian, STICK_GAIT_HOLD_MS, STICK_IDLE_TILT, STICK_RUN_TILT } from '../src/game/data/classes/barbarian';
 import { getClass } from '../src/game/data/classes';
 import { grantXp, MAX_LEVEL, recomputeHero, tryAssignBelt, tryBuy, trySpendAttribute, tryUpgrade, damageUnit } from '../src/game/combat';
 import { SKILLS } from '../src/game/skills';
@@ -27,9 +27,12 @@ import {
   HERO_WALK_RECTS,
   heroCompass,
   heroDrawOrigin,
+  commitStickGait,
   heroGaitStep,
   heroHoldCompass,
   heroMoveScale,
+  stepStickGait,
+  type StickGaitMemory,
   heroRectOverlapsCombat,
   heroSheetRow,
   heroSourceRect,
@@ -1056,6 +1059,82 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   const lightRun = HERO_RUN_RECTS.light[0][0];
   const lightWalk = HERO_WALK_RECTS.light[0][0];
   assert.ok(lightRun[3] - lightRun[1] > lightWalk[3] - lightWalk[1], 'run cell is not the walk strip');
+}
+
+function campSpeed(gait: 'idle' | 'walk' | 'run'): number {
+  commitStickGait(gait, gait !== 'idle');
+  const sim = createMatch(sanctuary, barbarian, 1);
+  const hero = player(sim);
+  const input = emptyInput();
+  if (gait !== 'idle') {
+    input.moveX = 1;
+    input.moveY = 0;
+  }
+  const x = hero.x;
+  const y = hero.y;
+  updateSim(sim, input, 0.05);
+  return Math.hypot(hero.x - x, hero.y - y) / 0.05;
+}
+
+{
+  assert.equal(STICK_IDLE_TILT, 0.15);
+  assert.equal(STICK_RUN_TILT, 0.6);
+  assert.equal(STICK_GAIT_HOLD_MS, 150);
+  assert.equal(barbarian.stats.walkSpeed, 144);
+  assert.equal(barbarian.stats.runSpeed, 216);
+
+  const idle = stepStickGait({ gait: 'idle', hold: null, holdMs: 0 }, 0.1, 16);
+  assert.equal(idle.gait, 'idle');
+  const walk = stepStickGait({ gait: 'idle', hold: null, holdMs: 0 }, 0.4, 16);
+  assert.equal(walk.gait, 'walk');
+  const run = stepStickGait({ gait: 'idle', hold: null, holdMs: 0 }, 0.9, 16);
+  assert.equal(run.gait, 'run');
+  assert.equal(stepStickGait({ gait: 'idle', hold: null, holdMs: 0 }, 0.15, 16).gait, 'walk');
+  assert.equal(stepStickGait({ gait: 'idle', hold: null, holdMs: 0 }, 0.6, 16).gait, 'walk');
+
+  const idleSpeed = campSpeed('idle');
+  const walkSpeedInCamp = campSpeed('walk');
+  assert.equal(heroMoveScale(true, true, 144, 216), 144 / 216);
+  const runSpeedInCamp = campSpeed('run');
+  assert.equal(heroMoveScale(true, true, 144, 216), 1);
+  assert.ok(idleSpeed < 1, `idle tilt moved at ${idleSpeed.toFixed(1)}`);
+  assert.ok(Math.abs(walkSpeedInCamp - 144) < 1, `walk tilt in camp was ${walkSpeedInCamp.toFixed(1)}`);
+  assert.ok(Math.abs(runSpeedInCamp - 216) < 1, `run tilt in camp was ${runSpeedInCamp.toFixed(1)}`);
+
+  let held: StickGaitMemory = { gait: 'walk', hold: null, holdMs: 0 };
+  held = stepStickGait(held, 0.9, 149);
+  assert.equal(held.gait, 'walk');
+  held = stepStickGait(held, 0.9, 1);
+  assert.equal(held.gait, 'run');
+
+  let flicker: StickGaitMemory = { gait: 'walk', hold: null, holdMs: 0 };
+  const gaits = new Set<string>();
+  for (let i = 0; i < 20; i++) {
+    flicker = stepStickGait(flicker, i % 2 === 0 ? 0.58 : 0.62, 16);
+    gaits.add(flicker.gait);
+  }
+  assert.deepEqual([...gaits], ['walk']);
+  flicker = { gait: 'run', hold: null, holdMs: 0 };
+  gaits.clear();
+  for (let i = 0; i < 20; i++) {
+    flicker = stepStickGait(flicker, i % 2 === 0 ? 0.58 : 0.62, 16);
+    gaits.add(flicker.gait);
+  }
+  assert.deepEqual([...gaits], ['run']);
+
+  const inputSrc = readFileSync(new URL('../src/game/input.ts', import.meta.url), 'utf8');
+  assert.ok(inputSrc.includes("addEventListener('touchstart'"));
+  assert.ok(inputSrc.includes('{ passive: false, capture: true }'));
+  assert.ok(inputSrc.includes('event.preventDefault()'));
+  assert.ok(inputSrc.includes('stickPointerId'));
+  const mainSrc = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+  assert.ok(mainSrc.includes('watchCanvasBacking'));
+  const renderSrc = readFileSync(new URL('../src/game/render.ts', import.meta.url), 'utf8');
+  assert.ok(renderSrc.includes('Math.min(3, Math.max(1, window.devicePixelRatio || 1))'));
+  assert.ok(renderSrc.includes('imageRendering = \'pixelated\''));
+  assert.ok(renderSrc.includes('orientationchange'));
+  assert.ok(renderSrc.includes('visualViewport'));
+  commitStickGait('idle', false);
 }
 
 console.log('match tests passed');

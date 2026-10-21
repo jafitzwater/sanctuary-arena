@@ -4,6 +4,7 @@ import {
   heroGaitStep,
   heroHoldCompass,
   heroSheetRow,
+  readStickMotion,
   RUN_FRAME_MS,
   RUN_FRAMES,
   WALK_FRAME_MS,
@@ -59,6 +60,36 @@ const BLEND_GRASS: readonly Vec[] = [
 
 function crisp(ctx: CanvasRenderingContext2D): void {
   ctx.imageSmoothingEnabled = false;
+}
+
+const STICK_LOG =
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('sticklog') === '1';
+
+/** Backing store is CSS pixels times devicePixelRatio, capped at 3. CSS size stays put. */
+export function applyCanvasBacking(canvas: HTMLCanvasElement): { cssW: number; cssH: number; dpr: number } {
+  const rect = canvas.getBoundingClientRect();
+  const cssW = Math.max(1, rect.width);
+  const cssH = Math.max(1, rect.height);
+  const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+  canvas.style.imageRendering = 'pixelated';
+  const width = Math.max(1, Math.round(cssW * dpr));
+  const height = Math.max(1, Math.round(cssH * dpr));
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  return { cssW, cssH, dpr };
+}
+
+export function watchCanvasBacking(canvas: HTMLCanvasElement): void {
+  const apply = () => applyCanvasBacking(canvas);
+  apply();
+  window.addEventListener('resize', apply);
+  window.addEventListener('orientationchange', apply);
+  const view = window.visualViewport;
+  if (!view) return;
+  view.addEventListener('resize', apply);
+  view.addEventListener('scroll', apply);
 }
 
 /** #FF00FF and the near-magenta NPC matte, plus a despill of pixels that touch it. */
@@ -215,17 +246,9 @@ export class Renderer {
   }
 
   resize(): void {
-    const rect = this.canvas.getBoundingClientRect();
-    const cssW = Math.max(1, rect.width);
-    const cssH = Math.max(1, rect.height);
-    const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
-    this.canvas.style.imageRendering = 'pixelated';
-    const width = Math.round(cssW * dpr);
-    const height = Math.round(cssH * dpr);
-    if (this.canvas.width !== width || this.canvas.height !== height) {
-      this.canvas.width = width;
-      this.canvas.height = height;
-    }
+    const { cssW, cssH, dpr } = applyCanvasBacking(this.canvas);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    crisp(this.ctx);
     this.camera.cssW = cssW;
     this.camera.cssH = cssH;
     this.camera.dpr = dpr;
@@ -436,9 +459,9 @@ export class Renderer {
   }
 
   private drawUnit(ctx: CanvasRenderingContext2D, unit: Unit, opts: DrawOpts, u: number, tier: ArmorTier, playerId = -1): void {
+    const gait = this.gaitOf(unit, playerId);
     const p = this.project(unit.x, unit.y);
     if (p.x < -160 || p.y < -200 || p.x > this.camera.cssW + 160 || p.y > this.camera.cssH + 60) return;
-    const gait = this.gaitOf(unit);
     let y = p.y;
     if (unit.leap) {
       const t = Math.min(1, unit.leap.t / unit.leap.dur);
@@ -838,13 +861,36 @@ export class Renderer {
   }
 
 
-  private gaitOf(unit: Unit): { moving: boolean; d: number; elapsed: number; walking: boolean } {
+  private gaitOf(unit: Unit, playerId: number): { moving: boolean; d: number; elapsed: number; walking: boolean } {
     const prev = this.gait.get(unit.id);
     const step = prev ? Math.hypot(unit.x - prev.x, unit.y - prev.y) : 0;
-    const stepped = heroGaitStep(prev?.elapsed ?? 0, step, this.frameDt);
-    const d = (prev?.d ?? 0) + (stepped.moving ? step : 0);
-    this.gait.set(unit.id, { x: unit.x, y: unit.y, d, elapsed: stepped.elapsed });
-    return { moving: stepped.moving, d, elapsed: stepped.elapsed, walking: stepped.moving && !stepped.running };
+    const motion = unit.id === playerId ? readStickMotion() : null;
+    const directed = motion?.directing === true;
+    let moving: boolean;
+    let walking: boolean;
+    let elapsed: number;
+    if (directed && motion) {
+      moving = motion.gait !== 'idle';
+      walking = motion.gait === 'walk';
+      elapsed = (prev?.elapsed ?? 0) + (moving && this.frameDt > 0 ? this.frameDt * 1000 : 0);
+    } else {
+      const stepped = heroGaitStep(prev?.elapsed ?? 0, step, this.frameDt);
+      moving = stepped.moving;
+      walking = stepped.moving && !stepped.running;
+      elapsed = stepped.elapsed;
+    }
+    const d = (prev?.d ?? 0) + (moving && step > 0 ? step : 0);
+    this.gait.set(unit.id, { x: unit.x, y: unit.y, d, elapsed });
+    if (STICK_LOG && unit.id === playerId) {
+      const state = !moving ? 'IDLE' : walking ? 'WALK' : 'RUN';
+      const frame = moving ? animFrame(elapsed, walking ? WALK_FRAME_MS : RUN_FRAME_MS, walking ? WALK_FRAMES : RUN_FRAMES) : 0;
+      const speed = this.frameDt > 0 ? step / this.frameDt : 0;
+      const trace = globalThis as { __locoLog?: { state: string; frame: number; speed: number; x: number; y: number; dt: number }[] };
+      if (!trace.__locoLog) trace.__locoLog = [];
+      trace.__locoLog.push({ state, frame, speed, x: unit.x, y: unit.y, dt: this.frameDt });
+      if (trace.__locoLog.length > 180) trace.__locoLog.shift();
+    }
+    return { moving, d, elapsed, walking };
   }
 
   /** One extra pixel on every side so integer diamonds meet with no seam. */

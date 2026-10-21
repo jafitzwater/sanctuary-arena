@@ -114,6 +114,16 @@ const skillList: SkillDef[] = [
 export const HERO_FACING_DEADBAND = (15 * Math.PI) / 180;
 
 /**
+ * Screen-space stick magnitude, 0 at rest and 1 at the edge of the well.
+ * Below idle the hero stands. Through the run tilt the hero walks.
+ * Above it the hero runs, after the gait hold.
+ */
+export const STICK_IDLE_TILT = 0.15;
+export const STICK_RUN_TILT = 0.6;
+/** Walk and run trade places only after the tilt stays across the run line this long. */
+export const STICK_GAIT_HOLD_MS = 150;
+
+/**
  * Stats and the 30-skill tree are the 1.13c CharStats / Skills rows, scaled
  * in tools/import-d2.mjs. Q W E R are belt slots, not fixed skills.
  */

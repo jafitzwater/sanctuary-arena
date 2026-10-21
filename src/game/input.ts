@@ -1,7 +1,13 @@
+import { commitStickGait, stepStickGait, type StickGaitMemory } from './gait';
 import { screenVectorToWorld } from './iso';
 import { byId, inRange, player } from './query';
 import type { FrameInput, Sim } from './types';
 import type { Vec } from './math';
+
+const STICK_LOG =
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('sticklog') === '1';
+/** Delayed iOS mouse events arrive after touchend. Ignore them for this long. */
+const SYNTHETIC_CLICK_MS = 700;
 
 interface InputHooks {
   getSim: () => Sim | null;
@@ -42,7 +48,13 @@ export class InputController {
   private pointerX = 0;
   private pointerY = 0;
   private pointerSeen = false;
-  private stickId: number | null = null;
+  private stickPointerId: number | null = null;
+  private stickTouchId: number | null = null;
+  private stickEngaged = false;
+  private stickReleasedAt = 0;
+  private ignoredMoves = 0;
+  private lastSnap = 0;
+  private stickMemory: StickGaitMemory = { gait: 'idle', hold: null, holdMs: 0 };
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -70,26 +82,41 @@ export class InputController {
 
     this.canvas.addEventListener('contextmenu', (event) => event.preventDefault());
     this.canvas.addEventListener('pointerdown', (event) => this.onCanvasDown(event));
+    this.canvas.addEventListener(
+      'click',
+      (event) => {
+        if (!this.syntheticMouse(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+      },
+      true,
+    );
     installZoomLock();
+    this.installStickTouch();
 
     stick.addEventListener('pointerdown', (event) => {
       if (!this.hooks.isPlaying()) return;
-      this.stickId = event.pointerId;
+      this.stickPointerId = event.pointerId;
+      this.stickEngaged = true;
+      this.dest = null;
+      if (event.pointerType === 'touch') {
+        if (this.stickTouchId == null) this.placeStick(event.clientX, event.clientY, stick, knob);
+        event.preventDefault();
+        return;
+      }
       stick.setPointerCapture(event.pointerId);
-      this.moveStick(stick, knob, event);
+      this.placeStick(event.clientX, event.clientY, stick, knob);
       event.preventDefault();
     });
     stick.addEventListener('pointermove', (event) => {
-      if (event.pointerId !== this.stickId) return;
-      this.moveStick(stick, knob, event);
+      if (event.pointerId !== this.stickPointerId) return;
+      if (event.pointerType === 'touch' && this.stickTouchId != null) return;
+      this.placeStick(event.clientX, event.clientY, stick, knob);
     });
     const endStick = (event: PointerEvent) => {
-      if (event.pointerId !== this.stickId) return;
-      this.stickId = null;
-      this.joyActive = false;
-      this.joyX = 0;
-      this.joyY = 0;
-      knob.style.transform = 'translate(0px, 0px)';
+      if (event.pointerId !== this.stickPointerId) return;
+      if (event.pointerType === 'touch' && this.stickTouchId != null) return;
+      this.releaseStick(knob);
     };
     stick.addEventListener('pointerup', endStick);
     stick.addEventListener('pointercancel', endStick);
@@ -130,15 +157,24 @@ export class InputController {
     if (this.keys.has('ArrowRight')) sx += 1;
     if (this.keys.has('ArrowUp')) sy -= 1;
     if (this.keys.has('ArrowDown')) sy += 1;
-    const worldDir = screenVectorToWorld(sx, sy);
-    let x = worldDir.x;
-    let y = worldDir.y;
-    const mag = Math.hypot(x, y);
-    if (mag > 1) {
-      x /= mag;
-      y /= mag;
+    const now = performance.now();
+    const dtMs = this.lastSnap === 0 ? 0 : Math.min(250, now - this.lastSnap);
+    this.lastSnap = now;
+    const tilt = Math.hypot(sx, sy);
+    this.stickMemory = stepStickGait(this.stickMemory, tilt, dtMs);
+    const directing = this.stickMemory.gait !== 'idle';
+    commitStickGait(this.stickMemory.gait, directing);
+    let x = 0;
+    let y = 0;
+    if (directing && (sx !== 0 || sy !== 0)) {
+      const worldDir = screenVectorToWorld(sx, sy);
+      const mag = Math.hypot(worldDir.x, worldDir.y);
+      if (mag > 1e-6) {
+        x = worldDir.x / mag;
+        y = worldDir.y / mag;
+      }
     }
-    const direct = mag > 0.15;
+    const direct = x !== 0 || y !== 0;
     this.attack = this.attackPointer || this.keys.has('Space');
 
     const rect = this.canvas.getBoundingClientRect();
@@ -152,6 +188,7 @@ export class InputController {
         if (!target || !target.alive || target.team === 'ally') this.targetId = null;
       }
       const hero = player(sim);
+      if (this.stickEngaged) this.dest = null;
       if (direct) {
         this.dest = null;
         if (this.targetId != null && !this.attack) {
@@ -165,6 +202,16 @@ export class InputController {
         this.aimX = hero.x + Math.cos(hero.facing) * 200;
         this.aimY = hero.y + Math.sin(hero.facing) * 200;
       }
+    }
+
+    if (STICK_LOG) {
+      (globalThis as { __inputTrace?: unknown }).__inputTrace = {
+        tilt,
+        gait: this.stickMemory.gait,
+        dest: this.dest != null,
+        engaged: this.stickEngaged,
+        ignoredMoves: this.ignoredMoves,
+      };
     }
 
     return {
@@ -250,6 +297,12 @@ export class InputController {
 
   private onCanvasDown(event: PointerEvent): void {
     if (!this.hooks.isPlaying()) return;
+    if (this.blocksMove(event)) {
+      this.dest = null;
+      this.ignoredMoves += 1;
+      event.preventDefault();
+      return;
+    }
     if (event.button !== 0 && event.button !== 2) return;
     const rect = this.canvas.getBoundingClientRect();
     this.pointerX = event.clientX;
@@ -276,12 +329,12 @@ export class InputController {
     }
   }
 
-  private moveStick(stick: HTMLElement, knob: HTMLElement, event: PointerEvent): void {
+  private placeStick(clientX: number, clientY: number, stick: HTMLElement, knob: HTMLElement): void {
     const rect = stick.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
-    let dx = event.clientX - cx;
-    let dy = event.clientY - cy;
+    let dx = clientX - cx;
+    let dy = clientY - cy;
     const max = rect.width * 0.34;
     const mag = Math.hypot(dx, dy) || 1;
     const scale = mag > max ? max / mag : 1;
@@ -291,17 +344,93 @@ export class InputController {
     this.joyX = dx / max;
     this.joyY = dy / max;
     this.joyActive = true;
+    this.stickEngaged = true;
+    this.dest = null;
   }
+
+  private releaseStick(knob: HTMLElement): void {
+    const was = this.stickEngaged || this.joyActive;
+    this.stickEngaged = false;
+    this.joyActive = false;
+    this.joyX = 0;
+    this.joyY = 0;
+    this.stickTouchId = null;
+    this.stickPointerId = null;
+    knob.style.transform = 'translate(0px, 0px)';
+    if (was) this.stickReleasedAt = performance.now();
+  }
+
+  private blocksMove(event: PointerEvent): boolean {
+    if (this.stickEngaged) return true;
+    if (this.stickPointerId != null && event.pointerId === this.stickPointerId) return true;
+    return this.syntheticMouse(event);
+  }
+
+  private syntheticMouse(event: Event): boolean {
+    if (this.stickEngaged) return true;
+    const pointer = event instanceof PointerEvent ? event.pointerType : 'mouse';
+    if (pointer === 'touch') return false;
+    return performance.now() - this.stickReleasedAt < SYNTHETIC_CLICK_MS;
+  }
+
+  /** Touch listeners cancel the mouse compatibility events iOS fires under the thumb. */
+  private installStickTouch(): void {
+    document.addEventListener('touchstart', this.onStickTouchStart, { passive: false, capture: true });
+    document.addEventListener('touchmove', this.onStickTouchMove, { passive: false, capture: true });
+    document.addEventListener('touchend', this.onStickTouchEnd, { passive: false, capture: true });
+    document.addEventListener('touchcancel', this.onStickTouchEnd, { passive: false, capture: true });
+  }
+
+  private onStickTouchStart = (event: TouchEvent): void => {
+    if (this.stickTouchId != null || !this.hooks.isPlaying()) return;
+    const nodes = stickNodes();
+    if (!nodes) return;
+    for (const touch of event.changedTouches) {
+      const target = touch.target instanceof Element ? touch.target : null;
+      if (!target?.closest('#stick')) continue;
+      this.stickTouchId = touch.identifier;
+      this.stickEngaged = true;
+      this.dest = null;
+      this.placeStick(touch.clientX, touch.clientY, nodes.stick, nodes.knob);
+      event.preventDefault();
+      return;
+    }
+  };
+
+  private onStickTouchMove = (event: TouchEvent): void => {
+    if (this.stickTouchId == null) return;
+    const nodes = stickNodes();
+    for (const touch of event.changedTouches) {
+      if (touch.identifier !== this.stickTouchId) continue;
+      event.preventDefault();
+      if (nodes) this.placeStick(touch.clientX, touch.clientY, nodes.stick, nodes.knob);
+      return;
+    }
+  };
+
+  private onStickTouchEnd = (event: TouchEvent): void => {
+    if (this.stickTouchId == null) return;
+    for (const touch of event.changedTouches) {
+      if (touch.identifier !== this.stickTouchId) continue;
+      event.preventDefault();
+      const knob = document.querySelector<HTMLElement>('#stick-knob');
+      if (knob) this.releaseStick(knob);
+      return;
+    }
+  };
 
   private releaseAll(knob: HTMLElement): void {
     this.keys.clear();
     this.attackPointer = false;
-    this.joyActive = false;
-    this.joyX = 0;
-    this.joyY = 0;
-    this.stickId = null;
-    knob.style.transform = 'translate(0px, 0px)';
+    this.releaseStick(knob);
   }
+}
+
+function stickNodes(): { stick: HTMLElement; knob: HTMLElement } | null {
+  const stick = document.querySelector<HTMLElement>('#stick');
+  const knob = document.querySelector<HTMLElement>('#stick-knob');
+  if (!stick || !knob) return null;
+  return { stick, knob };
 }
 
 /**

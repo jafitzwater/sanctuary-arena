@@ -1,4 +1,6 @@
-import { HERO_FACING_DEADBAND } from './data/classes/barbarian';
+import { HERO_FACING_DEADBAND, STICK_GAIT_HOLD_MS, STICK_IDLE_TILT, STICK_RUN_TILT } from './data/classes/barbarian';
+
+export { STICK_GAIT_HOLD_MS, STICK_IDLE_TILT, STICK_RUN_TILT };
 
 /** One direction of the run cycle. The source row continues past this into the next action. */
 export const RUN_FRAMES = 12;
@@ -48,12 +50,56 @@ export function heroGaitStep(elapsed: number, step: number, dt: number): HeroGai
 }
 
 /**
- * Joystick and keyboard ignore the town walk scale, so a full stick is 216.
+ * Joystick and keyboard ignore the town walk scale.
+ * A directing stick walks at 144 or runs at 216 from its own tilt, including inside camp.
  * Click-to-move inside the shop radius stays at walkSpeed / runSpeed.
  */
 export function heroMoveScale(inTown: boolean, direct: boolean, walkSpeed: number, runSpeed: number): number {
-  if (direct || !inTown || runSpeed <= 0) return 1;
+  if (direct) {
+    if (stickDirecting && runSpeed > 0) {
+      if (commandedGait === 'walk') return walkSpeed / runSpeed;
+      if (commandedGait === 'idle') return 0;
+    }
+    return 1;
+  }
+  if (!inTown || runSpeed <= 0) return 1;
   return walkSpeed / runSpeed;
+}
+
+export type StickGait = 'idle' | 'walk' | 'run';
+
+export interface StickGaitMemory {
+  gait: StickGait;
+  hold: 'walk' | 'run' | null;
+  holdMs: number;
+}
+
+/** Last stick command. Direct input that never committed a tilt stays a full run. */
+let commandedGait: StickGait = 'idle';
+let stickDirecting = false;
+
+export function readStickMotion(): { gait: StickGait; directing: boolean } {
+  return { gait: commandedGait, directing: stickDirecting };
+}
+
+export function commitStickGait(gait: StickGait, directing: boolean): void {
+  commandedGait = gait;
+  stickDirecting = directing;
+}
+
+/**
+ * Tilt below 0.15 is idle immediately. Leaving idle is immediate.
+ * Walk and run change only after the tilt stays on the other side of 0.60 for 150ms.
+ */
+export function stepStickGait(memory: StickGaitMemory, tilt: number, dtMs: number): StickGaitMemory {
+  const raw: StickGait = tilt < STICK_IDLE_TILT ? 'idle' : tilt <= STICK_RUN_TILT ? 'walk' : 'run';
+  if (raw === 'idle' || memory.gait === 'idle' || raw === memory.gait) {
+    const gait = raw === 'idle' || memory.gait === 'idle' ? raw : memory.gait;
+    return { gait, hold: null, holdMs: 0 };
+  }
+  const held = (memory.hold === raw ? memory.holdMs : 0) + Math.max(0, dtMs);
+  if (held >= STICK_GAIT_HOLD_MS) return { gait: raw, hold: null, holdMs: 0 };
+  return { gait: memory.gait, hold: raw, holdMs: held };
 }
 
 /** currentFrame = floor(elapsedAnimTime / frameDuration) % totalFrames. Never past the last frame. */
