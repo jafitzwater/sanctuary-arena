@@ -70,7 +70,7 @@ export class Hud {
     this.arm('#again-btn', () => this.onAgain?.());
     this.arm('#shop-btn', () => this.onToggleShop?.());
     this.arm('#recall-btn', () => this.onRecall?.());
-    this.arm('#help-btn', () => this.onToggleHelp?.());
+    this.arm('#settings-btn', () => this.onToggleHelp?.());
     this.arm('#mute-btn', () => this.onToggleMute?.());
     this.arm('#tree-btn', () => this.onToggleTree?.());
     this.arm('#tree-close', () => {
@@ -224,7 +224,8 @@ export class Hud {
     this.text('#gold', String(Math.floor(sim.gold)));
     this.text('#cs', `${sim.cs} cs`);
     this.text('#kd', `${sim.kills} / ${sim.deaths}`);
-    this.text('#clock', formatTime(sim.time));
+    this.text('#score', structureScore(sim));
+    this.text('#clock', formatClock(sim.time));
     const names = [sim.loadout.weapon, sim.loadout.offhand, sim.loadout.armor, sim.loadout.helm, sim.loadout.belt].filter(Boolean);
     this.text('#loadout', names.length ? names.map(labelOf).join(' · ') : 'Unarmed');
 
@@ -873,6 +874,25 @@ function formatTime(seconds: number): string {
   const m = Math.floor(whole / 60);
   const s = whole % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function formatClock(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(whole / 60);
+  const s = whole % 60;
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+/** Towers and Worldstones down. There is no stored team-kill counter. */
+function structureScore(sim: Sim): string {
+  let ally = 0;
+  let enemy = 0;
+  for (const unit of sim.units) {
+    if (unit.alive || (unit.kind !== 'tower' && unit.kind !== 'base')) continue;
+    if (unit.team === 'enemy') ally += 1;
+    else if (unit.team === 'ally') enemy += 1;
+  }
+  return `${ally}–${enemy}`;
 }
 
 function labelOf(id: string | null): string {

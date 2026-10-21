@@ -14,7 +14,7 @@ const { webkit, chromium, devices } = require('playwright');
 const base = process.env.ATMOS_URL ?? 'http://127.0.0.1:5181/sanctuary-arena/?atmoslog=1&sticklog=1';
 
 const WEBKIT_RECTS = {
-  'minimap-toggle': [820, 0, 932, 40, 112, 40],
+  'minimap-toggle': [0, 0, 112, 40, 112, 40],
   '0': [790, 366, 838, 414, 48, 48],
   '1': [798, 310, 846, 358, 48, 48],
   '2': [836, 244, 884, 292, 48, 48],
@@ -25,7 +25,7 @@ const WEBKIT_RECTS = {
 };
 
 const PIXEL_RECTS = {
-  'minimap-toggle': [727, 0, 839, 40, 112, 40],
+  'minimap-toggle': [0, 0, 112, 40, 112, 40],
   '0': [697, 348, 745, 396, 48, 48],
   '1': [705, 292, 753, 340, 48, 48],
   '2': [743, 226, 791, 274, 48, 48],

@@ -12,7 +12,7 @@ const AIM_LOG = params?.get('aimlog') === '1';
 /** Delayed iOS mouse events arrive after touchend. Ignore them for this long. */
 const SYNTHETIC_CLICK_MS = 700;
 const STICK_BLOCK =
-  'button, a, input, textarea, select, #topbar, #minimap, #minimap-toggle, #belt, #potions, #shop, #tree, #help, #title, #end, #quick-buy';
+  'button, a, input, textarea, select, #topbar, #minimap, #minimap-toggle, #gold-badge, #belt, #potions, #shop, #tree, #help, #title, #end, #quick-buy';
 
 interface InputHooks {
   getSim: () => Sim | null;
@@ -388,7 +388,7 @@ export class InputController {
 
   private onCanvasDown(event: PointerEvent): void {
     if (!this.hooks.isPlaying()) return;
-    if (event.pointerType === 'touch' && !this.mobile.engaged && this.canFloatStick(event.clientX, event.target)) {
+    if (event.pointerType === 'touch' && !this.mobile.engaged && this.canFloatStick(event.clientX, event.clientY, event.target)) {
       const stick = document.querySelector<HTMLElement>('#stick');
       const knob = document.querySelector<HTMLElement>('#stick-knob');
       if (stick && knob) this.anchorStick(event.clientX, event.clientY, { pointer: event.pointerId }, stick, knob);
@@ -429,11 +429,21 @@ export class InputController {
     }
   }
 
-  private canFloatStick(x: number, target: EventTarget | null): boolean {
+  private canFloatStick(x: number, y: number, target: EventTarget | null): boolean {
     if (x >= window.innerWidth / 2) return false;
     const el = target instanceof Element ? target : null;
     if (el?.closest(STICK_BLOCK)) return false;
+    if (this.covers(x, y, '#minimap-toggle') || this.covers(x, y, '#gold-badge')) return false;
     return true;
+  }
+
+  /** The map and gold badge sit on the left. A stick must not anchor underneath them. */
+  private covers(x: number, y: number, selector: string): boolean {
+    const node = document.querySelector(selector);
+    if (!(node instanceof HTMLElement) || node.hidden) return false;
+    const rect = node.getBoundingClientRect();
+    if (rect.width < 2 || rect.height < 2) return false;
+    return x >= rect.left - 4 && x <= rect.right + 4 && y >= rect.top - 4 && y <= rect.bottom + 4;
   }
 
   private anchorStick(
@@ -581,7 +591,7 @@ export class InputController {
     if (!this.hooks.isPlaying()) return;
     for (const touch of event.changedTouches) {
       const target = touch.target instanceof Element ? touch.target : null;
-      if (!this.canFloatStick(touch.clientX, target)) continue;
+      if (!this.canFloatStick(touch.clientX, touch.clientY, target)) continue;
       const started = this.mobile.beginStick(touch.clientX, touch.clientY, { touch: touch.identifier });
       if (!started && !this.mobile.ownsTouch(touch.identifier)) continue;
       this.stickEngaged = this.mobile.engaged;
