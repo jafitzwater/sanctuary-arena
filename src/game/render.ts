@@ -26,10 +26,13 @@ import {
   type HeroPose,
 } from './art/figures';
 import { AttackPhase } from './combat/attackCycle';
+import { stampBloodPool } from './decals';
 import { heroGaitStep, heroHoldCompass, readStickMotion } from './gait';
 import type { ActDef } from './data/acts/types';
 import { projectIso, unprojectIso } from './iso';
+import { drawItemBeam, drawItemNameplate, ITEM_LABEL_CLASS, type GroundDrop } from './itemBeam';
 import { FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, propForm, sceneryFor, type Prop } from './landscape';
+import { AMBIENT_ALPHA, DarkGothicLighting, type LightSource } from './lighting';
 import type { Vec } from './math';
 import { player } from './query';
 import { GROUND_BASE, groundAt, tilePaint, walkable, type GroundKind } from './terrain';
@@ -69,6 +72,16 @@ const STICK_LOG =
   typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('sticklog') === '1';
 const LOOK_LOG =
   typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('looklog') === '1';
+const ATMOS_LOG =
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('atmoslog') === '1';
+
+export interface AtmosphereProbe {
+  lightAlloc: number;
+  ambientAlpha: number;
+  blood: number;
+  drops: number;
+  hero: { x: number; y: number; h: number } | null;
+}
 
 interface LookLive {
   recall: boolean;
@@ -162,6 +175,19 @@ export class Renderer {
   private seen = { slash: 0, spark: 0, flinch: 0, portal: 0, heroSlash: 0 };
   private shadeCanvas: HTMLCanvasElement | null = null;
   private shadeKey = '';
+  private mapCtx: CanvasRenderingContext2D | null = null;
+  private readonly lighting = new DarkGothicLighting();
+  private readonly lights: LightSource[] = [];
+  private readonly hudPaint: (() => void)[] = [];
+  private mistCanvas: HTMLCanvasElement | null = null;
+  private mistOffset = 0;
+  private flashCanvas: HTMLCanvasElement | null = null;
+  private readonly aliveWas = new Set<number>();
+  private bloodReady = false;
+  private bloodStamps = 0;
+  private heroScreen: { x: number; y: number; h: number } | null = null;
+  /** Empty until a future drop system fills it. Rendering only. */
+  private readonly groundDrops: GroundDrop[] = [];
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -236,6 +262,7 @@ export class Renderer {
     crisp(ctx);
     ctx.fillStyle = '#1c2410';
     ctx.fillRect(0, 0, cssW, cssH);
+    this.observeBlood(sim);
     if (this.mapCanvas) {
       const srcX = Math.round(this.camBakeX);
       const srcY = Math.round(this.camBakeY);
@@ -243,10 +270,14 @@ export class Renderer {
       const srcH = Math.max(1, Math.round(cssH / this.scale));
       ctx.drawImage(this.mapCanvas, srcX, srcY, srcW, srcH, 0, 0, cssW, cssH);
     }
+    this.drawMist(sim, cssW, cssH);
 
     this.tickFx();
     this.syncRecall(sim);
     this.look = { recall: false, recallSec: 0, recallFill: 0, slash: false, spark: false, flinch: false };
+    this.lights.length = 0;
+    this.hudPaint.length = 0;
+    this.heroScreen = null;
     const u = this.spriteScale();
     const layers: { depth: number; paint: () => void }[] = [];
     const units = sim.units.filter((unit) => unit.alive || unit.corpse > 0 || unit.kind !== 'minion');
@@ -263,21 +294,63 @@ export class Renderer {
       const p = this.project(shot.x, shot.y);
       const owner = sim.units.find((unit) => unit.id === shot.attackerId);
       drawBolt(ctx, p.x, p.y, shot.color, owner?.defId === 'blood-raven');
+      this.lights.push({ screenX: p.x, screenY: p.y, radius: 40, intensity: 0.85, color: shot.color });
     }
-    for (const fx of sim.fx) this.drawFx(ctx, fx);
+    for (const fx of sim.fx) {
+      if (fx.kind === 'text') continue;
+      this.drawFx(ctx, fx);
+      if (fx.kind === 'ring') {
+        const p = this.project(fx.x, fx.y);
+        this.lights.push({
+          screenX: p.x,
+          screenY: p.y,
+          radius: Math.max(28, Math.min(72, fx.r * this.camera.zoom)),
+          intensity: 0.7,
+          color: fx.color,
+        });
+      }
+    }
     for (const fire of this.fires) {
       const p = this.project(fire.x, fire.y);
       if (p.x < -40 || p.y < -40 || p.x > cssW + 40 || p.y > cssH + 40) continue;
       drawFire(ctx, p.x, p.y, opts.time, fire.hell);
+      this.lights.push({
+        screenX: p.x,
+        screenY: p.y - 10,
+        radius: fire.hell ? 90 : 100,
+        intensity: fire.hell ? 0.75 : 0.9,
+        color: fire.hell ? 'rgb(210, 36, 28)' : 'rgb(255, 148, 48)',
+        flicker: !this.reduceMotion,
+      });
     }
     for (const flash of this.portals) {
       const p = this.project(flash.x, flash.y);
       drawPortal(ctx, p.x, p.y, 1 - flash.t / 0.45);
+      this.lights.push({ screenX: p.x, screenY: p.y, radius: 80, intensity: 0.8, color: 'rgb(90, 160, 255)' });
+    }
+    for (const drop of this.groundDrops) {
+      const p = this.project(drop.x, drop.y);
+      drawItemBeam(ctx, p.x, p.y, drop.tier, opts.time);
+      if (drop.tier === 'rare' || drop.tier === 'unique' || drop.tier === 'set') {
+        this.lights.push({ screenX: p.x, screenY: p.y, radius: 54, intensity: 0.65, color: 'rgb(255, 214, 96)' });
+      }
     }
 
     const shade = this.shadeOverlay(cssW, cssH);
     ctx.drawImage(shade, 0, 0, cssW, cssH);
+    this.lighting.draw(ctx, cssW, cssH, this.lights, opts.time);
+    crisp(ctx);
+    for (const paint of this.hudPaint) paint();
+    for (const fx of sim.fx) {
+      if (fx.kind === 'text') this.drawFx(ctx, fx);
+    }
+    for (const drop of this.groundDrops) {
+      const p = this.project(drop.x, drop.y);
+      drawItemNameplate(ctx, p.x, p.y - 16, drop.name, drop.tier);
+    }
+    this.syncItemTags();
     this.publishLook();
+    this.publishAtmos();
     this.drawMinimap(sim, opts.targetId);
   }
 
@@ -321,6 +394,7 @@ export class Renderer {
     canvas.height = height;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    this.mapCtx = ctx;
     const ox = map.height * hw + PAD;
     const oy = PAD;
     crisp(ctx);
@@ -467,19 +541,100 @@ export class Renderer {
     const flinchY = -Math.sin(screen) * mag;
     const dx = footX + flinchX;
     const dy = footY + flinchY;
+    const lean = hero ? heroLean(pose.state) : 0;
+    const paintBody = (target: CanvasRenderingContext2D) =>
+      this.paintFigure(target, unit, opts, tier, dx, dy, height, swing, screen, bob, attack, lean, hero, boss);
+    if (unit.alive && unit.hitFlash >= 0.07) this.blitHitFlash(ctx, dx, dy, paintBody);
+    else paintBody(ctx);
+    if (unit.id === playerId) this.heroScreen = { x: dx, y: dy, h: height };
+    const slash = this.slashT.get(unit.id) ?? 0;
+    if (slash > 0) {
+      this.look.slash = true;
+      drawSlash(ctx, footX, footY, height, this.slashFace.get(unit.id) ?? screen, slash / 0.16);
+    }
+    if (unit.hitFlash > 0.02 && unit.alive) {
+      drawSpark(ctx, dx, dy, height, Math.min(1, unit.hitFlash / 0.12));
+      this.lights.push({
+        screenX: dx,
+        screenY: dy - height * 0.45,
+        radius: 36,
+        intensity: 0.8,
+        color: 'rgb(255, 220, 180)',
+      });
+    }
+    this.collectUnitLight(unit, playerId, footX, footY);
+    if (unit.buffT > 0 && unit.alive) {
+      ctx.strokeStyle = 'rgba(230, 211, 161, 0.75)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(footX, footY, height * 0.34, height * 0.14, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    this.hudPaint.push(() => {
+      if (unit.defId === 'tower' && unit.alive && unit.id === opts.targetId) {
+        this.rangeRing(ctx, unit, unit.team === 'ally' ? '#6aa7ff' : '#e4553c');
+      }
+      if (unit.recall > 0 && unit.alive) {
+        const max = this.recallTrack.get(unit.id)?.max ?? unit.recall;
+        drawRecall(ctx, footX, footY, height, unit.recall, max, opts.time);
+        if (unit.id === playerId || !this.look.recall) {
+          this.look.recall = true;
+          this.look.recallSec = Math.max(0, Math.ceil(unit.recall - 1e-4));
+          this.look.recallFill = Math.max(0, Math.min(1, 1 - unit.recall / max));
+        }
+      }
+      if (unit.alive && opts.autoTargetId != null && unit.id === opts.autoTargetId) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(230, 211, 161, 0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(footX, footY + 2, Math.max(14, height * 0.22), Math.max(6, height * 0.08), 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (unit.alive && (boss || unit.kind !== 'minion' || unit.hp < unit.maxHp)) {
+        this.drawBar(unit, footX, footY, height, opts.targetId);
+      }
+      if (unit.stun > 0 && unit.alive) {
+        ctx.fillStyle = '#c7b377';
+        ctx.font = '700 14px "Cinzel Decorative", serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('✶', footX, footY - height - 8);
+      }
+    });
+  }
+
+  private paintFigure(
+    ctx: CanvasRenderingContext2D,
+    unit: Unit,
+    opts: DrawOpts,
+    tier: ArmorTier,
+    dx: number,
+    dy: number,
+    height: number,
+    swing: number,
+    screen: number,
+    bob: number,
+    attack: AttackPose,
+    lean: number,
+    hero: boolean,
+    boss: BossLook | null,
+  ): void {
+    const body = unit.kind === 'minion' || unit.kind === 'champion';
     ctx.save();
-    if (!unit.alive) ctx.globalAlpha = 0.55;
-    else if ((unit.invuln > 0 || unit.hitFlash > 0) && Math.sin(opts.time * 28) > 0) ctx.globalAlpha = 0.45;
+    if (!unit.alive) {
+      const fade = unit.corpse > 0 ? Math.max(0.05, (unit.corpse / 4.5) * 0.55) : 0.55;
+      ctx.globalAlpha = fade;
+    } else if (unit.invuln > 0 && Math.sin(opts.time * 28) > 0) ctx.globalAlpha = 0.45;
     if (!unit.alive && body) {
       ctx.translate(dx, dy);
       ctx.scale(1, 0.45);
       ctx.translate(-dx, -dy);
     }
     if (hero) {
-      drawBarbarian(ctx, dx, dy, height, swing, heroLean(pose.state), screen, tier, bob, attack, unit.team === 'ally');
+      drawBarbarian(ctx, dx, dy, height, swing, lean, screen, tier, bob, attack, unit.team === 'ally');
     } else if (unit.defId === 'tower') {
       drawSpire(ctx, dx, dy, height, unit.team === 'ally', unit.alive);
-      if (unit.alive && unit.id === opts.targetId) this.rangeRing(ctx, unit, unit.team === 'ally' ? '#6aa7ff' : '#e4553c');
     } else if (unit.defId === 'base-ally' || unit.defId === 'base-enemy') {
       drawStronghold(ctx, dx, dy, height, unit.defId === 'base-ally', unit.alive);
     } else if (unit.kind === 'seal') {
@@ -498,46 +653,6 @@ export class Renderer {
       ctx.stroke();
     }
     ctx.restore();
-    const slash = this.slashT.get(unit.id) ?? 0;
-    if (slash > 0) {
-      this.look.slash = true;
-      drawSlash(ctx, footX, footY, height, this.slashFace.get(unit.id) ?? screen, slash / 0.16);
-    }
-    if (unit.hitFlash > 0.02 && unit.alive) drawSpark(ctx, dx, dy, height, Math.min(1, unit.hitFlash / 0.12));
-    if (unit.recall > 0 && unit.alive) {
-      const max = this.recallTrack.get(unit.id)?.max ?? unit.recall;
-      drawRecall(ctx, footX, footY, height, unit.recall, max, opts.time);
-      if (unit.id === playerId || !this.look.recall) {
-        this.look.recall = true;
-        this.look.recallSec = Math.max(0, Math.ceil(unit.recall - 1e-4));
-        this.look.recallFill = Math.max(0, Math.min(1, 1 - unit.recall / max));
-      }
-    }
-    if (unit.buffT > 0 && unit.alive) {
-      ctx.strokeStyle = 'rgba(230, 211, 161, 0.75)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.ellipse(footX, footY, height * 0.34, height * 0.14, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    if (unit.alive && opts.autoTargetId != null && unit.id === opts.autoTargetId) {
-      ctx.save();
-      ctx.strokeStyle = 'rgba(230, 211, 161, 0.72)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.ellipse(footX, footY + 2, Math.max(14, height * 0.22), Math.max(6, height * 0.08), 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
-    if (unit.alive && (boss || unit.kind !== 'minion' || unit.hp < unit.maxHp)) {
-      this.drawBar(unit, footX, footY, height, opts.targetId);
-    }
-    if (unit.stun > 0 && unit.alive) {
-      ctx.fillStyle = '#f0e2bc';
-      ctx.font = '14px Georgia, serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('✶', footX, footY - height - 8);
-    }
   }
 
   private tickFx(): void {
@@ -619,6 +734,203 @@ export class Renderer {
     this.shadeCanvas = canvas;
     this.shadeKey = key;
     return canvas;
+  }
+
+  private blitHitFlash(
+    ctx: CanvasRenderingContext2D,
+    dx: number,
+    dy: number,
+    paint: (target: CanvasRenderingContext2D) => void,
+  ): void {
+    const width = 420;
+    const height = 560;
+    const ox = 210;
+    const oy = 340;
+    if (!this.flashCanvas) {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      this.flashCanvas = canvas;
+    }
+    const g = this.flashCanvas.getContext('2d');
+    if (!g) {
+      paint(ctx);
+      return;
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.clearRect(0, 0, width, height);
+    g.save();
+    g.translate(ox - dx, oy - dy);
+    paint(g);
+    g.restore();
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = 'rgba(255, 228, 214, 0.88)';
+    g.fillRect(0, 0, width, height);
+    g.globalCompositeOperation = 'source-over';
+    ctx.drawImage(this.flashCanvas, dx - ox, dy - oy);
+  }
+
+  /** Hero is the main pool. Allies, fires, and the recall portal add the rest. */
+  private collectUnitLight(unit: Unit, playerId: number, x: number, y: number): void {
+    if (!unit.alive) return;
+    if (unit.id === playerId) {
+      this.lights.push({ screenX: x, screenY: y - 36, radius: 220, intensity: 1 });
+      if (unit.recall > 0) {
+        this.lights.push({ screenX: x, screenY: y, radius: 80, intensity: 0.85, color: 'rgb(90, 160, 255)' });
+      }
+      return;
+    }
+    if (unit.team !== 'ally') return;
+    if (unit.kind === 'champion') {
+      this.lights.push({ screenX: x, screenY: y - 24, radius: 120, intensity: 0.7 });
+    } else if (unit.defId === 'tower' || unit.defId === 'base-ally') {
+      this.lights.push({ screenX: x, screenY: y - 40, radius: 160, intensity: 0.85 });
+    }
+    if (unit.recall > 0) {
+      this.lights.push({ screenX: x, screenY: y, radius: 70, intensity: 0.75, color: 'rgb(90, 160, 255)' });
+    }
+  }
+
+  private observeBlood(sim: Sim): void {
+    const ctx = this.mapCtx;
+    if (!ctx) return;
+    if (!this.bloodReady) {
+      for (const unit of sim.units) {
+        if (unit.alive) this.aliveWas.add(unit.id);
+      }
+      this.bloodReady = true;
+      return;
+    }
+    for (const unit of sim.units) {
+      const wasAlive = this.aliveWas.has(unit.id);
+      const bleeds = unit.kind === 'minion' || unit.kind === 'champion';
+      if (wasAlive && !unit.alive && bleeds) {
+        this.stampAt(ctx, unit, unit.kind === 'champion' ? 26 : 18);
+        this.bloodStamps += 1;
+      }
+      if (unit.alive) this.aliveWas.add(unit.id);
+      else this.aliveWas.delete(unit.id);
+    }
+  }
+
+  private stampAt(ctx: CanvasRenderingContext2D, unit: Unit, radius: number): void {
+    const p = projectIso(unit.x, unit.y, BAKE_HW, this.ox, this.oy);
+    stampBloodPool(ctx, p.x, p.y, radius, bleedsIchor(unit));
+  }
+
+  private drawMist(sim: Sim, cssW: number, cssH: number): void {
+    const tile = this.ensureMist();
+    if (!tile) return;
+    const drift = (this.mistOffset + Math.min(0.05, this.frameDt) * 13.5) % 256;
+    this.mistOffset = drift;
+    const ox = drift % 256;
+    const oy = (drift * 0.35) % 256;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = this.mistAlpha(sim);
+    for (let y = -256 + oy; y < cssH; y += 256) {
+      for (let x = -256 + ox; x < cssW; x += 256) ctx.drawImage(tile, x, y);
+    }
+    ctx.restore();
+    crisp(ctx);
+  }
+
+  private mistAlpha(sim: Sim): number {
+    const kind = groundAt(sim.map, this.focusX, this.focusY);
+    const camp =
+      Math.hypot(this.focusX - sim.map.playerBase.x, this.focusY - sim.map.playerBase.y) < 260 ||
+      Math.hypot(this.focusX - sim.map.enemyBase.x, this.focusY - sim.map.enemyBase.y) < 260;
+    if (kind === 'town' || camp) return 0.07;
+    if (kind === 'grass' || kind === 'edge' || kind === 'bank' || kind === 'dark' || kind === 'river') return 0.15;
+    return 0.12;
+  }
+
+  private ensureMist(): HTMLCanvasElement | null {
+    if (this.mistCanvas) return this.mistCanvas;
+    {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const g = canvas.getContext('2d');
+      if (!g) return null;
+      for (let i = 0; i < 16; i++) {
+        const x = (i * 67) % 256;
+        const y = (i * 43) % 256;
+        const radius = 26 + (i % 5) * 12;
+        for (const ox of [-256, 0, 256]) {
+          for (const oy of [-256, 0, 256]) {
+            const cx = x + ox;
+            const cy = y + oy;
+            const blob = g.createRadialGradient(cx, cy, 0, cx, cy, radius);
+            blob.addColorStop(0, 'rgba(214, 220, 206, 0.62)');
+            blob.addColorStop(1, 'rgba(214, 220, 206, 0)');
+            g.fillStyle = blob;
+            g.beginPath();
+            g.arc(cx, cy, radius, 0, Math.PI * 2);
+            g.fill();
+          }
+        }
+      }
+      this.mistCanvas = canvas;
+    }
+    return this.mistCanvas;
+  }
+
+  private syncItemTags(): void {
+    const host = document.getElementById('item-tags');
+    if (!host) return;
+    if (this.groundDrops.length === 0) {
+      if (host.childElementCount) host.replaceChildren();
+      return;
+    }
+    host.replaceChildren();
+    for (const drop of this.groundDrops) {
+      const p = this.project(drop.x, drop.y);
+      const tag = document.createElement('div');
+      tag.className = ITEM_LABEL_CLASS;
+      tag.textContent = drop.name;
+      tag.style.color = drop.tier === 'magic' ? 'rgb(112, 112, 255)' : drop.tier === 'rare' ? 'rgb(255, 236, 96)' : drop.tier === 'unique' ? 'rgb(207, 176, 96)' : drop.tier === 'set' ? 'rgb(88, 196, 96)' : 'rgb(244, 244, 244)';
+      tag.style.left = `${p.x}px`;
+      tag.style.top = `${p.y - 18}px`;
+      host.appendChild(tag);
+    }
+  }
+
+  private publishAtmos(): void {
+    if (!ATMOS_LOG) return;
+    const g = globalThis as { __atmos?: AtmosphereProbe };
+    g.__atmos = this.debugAtmosphere();
+  }
+
+  debugAtmosphere(): AtmosphereProbe {
+    return {
+      lightAlloc: this.lighting.allocations,
+      ambientAlpha: AMBIENT_ALPHA,
+      blood: this.bloodStamps,
+      drops: this.groundDrops.length,
+      hero: this.heroScreen ? { ...this.heroScreen } : null,
+    };
+  }
+
+  sampleMap(worldX: number, worldY: number): [number, number, number, number] | null {
+    if (!this.mapCanvas || !this.mapCtx) return null;
+    const p = projectIso(worldX, worldY, BAKE_HW, this.ox, this.oy);
+    const x = Math.round(p.x);
+    const y = Math.round(p.y);
+    if (x < 0 || y < 0 || x >= this.mapCanvas.width || y >= this.mapCanvas.height) return null;
+    const px = this.mapCtx.getImageData(x, y, 1, 1).data;
+    return [px[0], px[1], px[2], px[3]];
+  }
+
+  sampleView(cssX: number, cssY: number): [number, number, number, number] | null {
+    const x = Math.round(cssX * this.camera.dpr);
+    const y = Math.round(cssY * this.camera.dpr);
+    if (x < 0 || y < 0 || x >= this.canvas.width || y >= this.canvas.height) return null;
+    const px = this.ctx.getImageData(x, y, 1, 1).data;
+    return [px[0], px[1], px[2], px[3]];
   }
 
   private publishLook(): void {
@@ -760,9 +1072,15 @@ export class Renderer {
     ctx.save();
     ctx.globalAlpha = alpha;
     if (fx.kind === 'text' && fx.text) {
-      ctx.fillStyle = fx.color;
-      ctx.font = 'bold 16px Georgia, serif';
+      const gothic = fx.text.startsWith('Level') || /^-?\d+$/.test(fx.text);
+      ctx.font = gothic ? '700 16px "Cinzel Decorative", serif' : 'bold 16px Georgia, serif';
       ctx.textAlign = 'center';
+      if (gothic) {
+        ctx.shadowColor = '#000';
+        ctx.shadowOffsetX = 1;
+        ctx.shadowOffsetY = 1;
+        ctx.fillStyle = '#c7b377';
+      } else ctx.fillStyle = fx.color;
       ctx.fillText(fx.text, p.x, p.y);
     } else if (fx.kind === 'ring') {
       const edge = this.project(fx.x + fx.r * (0.35 + fx.t / fx.life), fx.y);
@@ -907,6 +1225,12 @@ function drawBoss(
   time = 0,
 ): void {
   paintBoss(ctx, x, y, height, look.mark, swing, ally, attack, time);
+}
+
+function bleedsIchor(unit: Unit): boolean {
+  if (bossLook(unit)?.mark === 'mephisto') return true;
+  if (unit.defId === 'demon') return true;
+  return unit.defId === 'skeleton' && unit.team !== 'ally';
 }
 
 function tokenLook(unit: Unit): TokenLook {

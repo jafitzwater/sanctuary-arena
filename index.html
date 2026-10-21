@@ -11,6 +11,12 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="description" content="Sanctuary Arena — a personal Diablo II themed MOBA in the browser." />
     <title>Sanctuary Arena</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Metamorphous&display=swap"
+      rel="stylesheet"
+    />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%23120e0b' width='32' height='32'/%3E%3Cpath fill='%23e6d3a1' d='M16 4l3 8h8l-6.5 5 2.5 8L16 20l-7 5 2.5-8L5 12h8z'/%3E%3C/svg%3E"
@@ -59,23 +65,23 @@
               <div class="bar mana" aria-label="Mana"><span id="mp-bar"></span><em id="mp-compact"></em></div>
               <div class="bar xp" aria-label="Experience"><span id="xp-fill"></span></div>
             </div>
-            <div class="stat"><b id="level">1</b><small>lv</small></div>
-            <div class="stat gold"><b id="gold">0</b><small>gold</small></div>
+            <div class="stat"><b id="level" class="d2-text">1</b><small class="d2-text">lv</small></div>
+            <div class="stat gold"><b id="gold" class="d2-text">0</b><small class="d2-text">gold</small></div>
           </div>
           <div class="stat slim"><span id="kd"></span><span id="cs"></span></div>
           <div class="stat slim"><span id="clock">0:00</span><span id="loadout">Unarmed</span></div>
           <div class="top-actions">
-            <button id="tree-btn" type="button">Points</button>
-            <button id="shop-btn" type="button">Shop</button>
-            <button id="recall-btn" type="button">Recall</button>
-            <button id="help-btn" type="button">Help</button>
-            <button id="mute-btn" type="button">Sound on</button>
+            <button id="tree-btn" class="d2-text" type="button">Points</button>
+            <button id="shop-btn" class="d2-text" type="button">Shop</button>
+            <button id="recall-btn" class="d2-text" type="button">Recall</button>
+            <button id="help-btn" class="d2-text" type="button">Help</button>
+            <button id="mute-btn" class="d2-text" type="button">Sound on</button>
           </div>
         </header>
 
         <button id="minimap-toggle" type="button" aria-label="Toggle map">
           <canvas id="minimap" width="180" height="64"></canvas>
-          <span class="map-label">Map</span>
+          <span class="map-label d2-text">Map</span>
         </button>
         <div id="targetbar" hidden>
           <b id="target-name"></b>
@@ -107,17 +113,18 @@
 
         <div id="belt">
           <div id="skills"></div>
-          <button id="attack-btn" type="button">Attack</button>
+          <button id="attack-btn" class="d2-text" type="button">Attack</button>
           <div id="potions" class="side-col">
-            <button id="potion-hp" type="button" aria-label="Drink health potion">
+            <button id="potion-hp" class="d2-text" type="button" aria-label="Drink health potion">
               <span>HP</span><b id="potion-hp-count">0</b><small>5</small>
             </button>
-            <button id="potion-mp" type="button" aria-label="Drink mana potion">
+            <button id="potion-mp" class="d2-text" type="button" aria-label="Drink mana potion">
               <span>MP</span><b id="potion-mp-count">0</b><small>6</small>
             </button>
           </div>
         </div>
         <p id="skill-hint"></p>
+        <div id="item-tags"></div>
         <div id="aim-cursor" aria-hidden="true"></div>
         </div>
 

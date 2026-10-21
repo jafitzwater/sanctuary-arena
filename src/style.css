@@ -887,11 +887,34 @@ body.touch #topbar {
   background: linear-gradient(to bottom, rgba(10, 8, 6, 0.82), rgba(10, 8, 6, 0));
 }
 body.touch .hero-plate { display: flex; align-items: center; gap: 6px; }
-body.touch .portrait { width: 32px; height: 32px; }
+body.touch .portrait {
+  width: 32px;
+  height: 32px;
+  position: relative;
+  overflow: visible;
+  box-shadow:
+    0 0 0 1px #1a120c,
+    0 0 0 3px #6e542c,
+    inset 0 0 0 1px rgba(232, 206, 150, 0.45);
+}
+body.touch .portrait::before,
+body.touch .portrait::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  width: 7px;
+  height: 12px;
+  pointer-events: none;
+  background: linear-gradient(#8d7348, #2a2118);
+  clip-path: polygon(0 35%, 100% 0, 75% 100%, 0 68%);
+}
+body.touch .portrait::before { left: -6px; }
+body.touch .portrait::after { right: -6px; transform: scaleX(-1); }
 body.touch #vitals { width: 128px; gap: 3px; }
 body.touch #vitals .bar {
   height: 6px;
   border-radius: 999px;
+  box-shadow: 0 0 0 1px #4a3824, inset 0 1px 0 rgba(255, 220, 170, 0.35);
 }
 body.touch #vitals .bar em { line-height: 6px; font-size: 7px; }
 body.touch .xp-wrap { width: 36px; }
@@ -972,6 +995,11 @@ body.touch .skill {
   border-radius: 50%;
   padding: 0;
   pointer-events: auto;
+  box-shadow:
+    0 0 0 2px #241910,
+    0 0 0 3px #8a6840,
+    inset 0 1px 0 rgba(255, 220, 170, 0.35),
+    inset 0 -3px 4px rgba(0, 0, 0, 0.55);
 }
 body.touch .skill .key { font-size: 9px; }
 body.touch .skill .sname { font-size: 9px; line-height: 1.05; }
@@ -993,6 +1021,11 @@ body.touch #attack-btn {
   padding: 0;
   z-index: 2;
   pointer-events: auto;
+  box-shadow:
+    0 0 0 2px #241910,
+    0 0 0 4px #8a6840,
+    inset 0 1px 0 rgba(255, 220, 170, 0.4),
+    inset 0 -4px 6px rgba(0, 0, 0, 0.55);
 }
 body.touch #potions {
   position: absolute;
@@ -1013,6 +1046,11 @@ body.touch #potion-mp {
   border-radius: 50%;
   padding: 0;
   font-size: 11px;
+  box-shadow:
+    0 0 0 2px #241910,
+    0 0 0 3px #6e542c,
+    inset 0 1px 0 rgba(255, 220, 170, 0.35),
+    inset 0 -3px 4px rgba(0, 0, 0, 0.5);
 }
 body.touch #quick-buy {
   left: 8px;
@@ -1066,6 +1104,42 @@ body.touch #help .sheet {
 }
 body.touch #skill-hint { max-width: min(280px, 52vw); font-size: 11px; }
 
+#title,
+#end {
+  font-family: Metamorphous, Georgia, "Palatino Linotype", Palatino, serif;
+}
+
 #end h2 { margin: 0; font-weight: normal; letter-spacing: 0.14em; text-transform: uppercase; font-size: clamp(32px, 6vw, 64px); }
 #end-copy { max-width: 32rem; margin: 0; }
 #end-stats { margin: 0; color: var(--gold); }
+
+.d2-text,
+b.d2-text,
+button.d2-text,
+.map-label.d2-text {
+  font-family: "Cinzel Decorative", Metamorphous, serif;
+  font-weight: 700;
+  color: #c7b377;
+  text-shadow: 1px 1px 0 #000, 0 0 2px #000;
+}
+
+#item-tags {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.d2-item-label {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  background: #000;
+  color: #c7b377;
+  font-family: "Cinzel Decorative", Metamorphous, serif;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 1px 5px;
+  pointer-events: none;
+  white-space: nowrap;
+}
