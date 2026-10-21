@@ -1,4 +1,23 @@
 import {
+  drawBolt,
+  drawFire,
+  drawPortal,
+  drawPropArt,
+  drawRecall,
+  drawSlash,
+  drawSpark,
+  paintBarbarian,
+  paintBoss,
+  paintCreature,
+  paintDecorMark,
+  paintSpire,
+  paintStronghold,
+  paintTileVariation,
+  type AttackPose,
+  type BossMark,
+  type CreatureKind,
+} from './art/d2look';
+import {
   advanceHeroPhase,
   heroCycleHz,
   heroDrawHeight,
@@ -13,7 +32,7 @@ import { projectIso, unprojectIso } from './iso';
 import { FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, propForm, sceneryFor, type Prop } from './landscape';
 import type { Vec } from './math';
 import { player } from './query';
-import { GROUND_BASE, groundAt, tilePaint, type GroundKind } from './terrain';
+import { GROUND_BASE, groundAt, tilePaint, walkable, type GroundKind } from './terrain';
 import type { Camera, Sim, Unit } from './types';
 
 export interface DrawOpts {
@@ -41,14 +60,23 @@ interface Pose {
 }
 
 interface TokenLook {
-  body: string;
-  trim: string;
-  weapon: 'sword' | 'bow' | 'spear' | 'club' | 'staff' | 'horns' | 'quills' | 'orb' | 'wraps';
+  mark: CreatureKind;
   scale: number;
 }
 
 const STICK_LOG =
   typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('sticklog') === '1';
+const LOOK_LOG =
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('looklog') === '1';
+
+interface LookLive {
+  recall: boolean;
+  recallSec: number;
+  recallFill: number;
+  slash: boolean;
+  spark: boolean;
+  flinch: boolean;
+}
 
 function crisp(ctx: CanvasRenderingContext2D): void {
   ctx.imageSmoothingEnabled = false;
@@ -121,6 +149,18 @@ export class Renderer {
   private reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private frameDt = 0;
   private readonly poses = new Map<number, Pose>();
+  /** Campfires and braziers. Visual only; they are not collision props. */
+  private fires: { x: number; y: number; hell: boolean }[] = [];
+  private readonly recallTrack = new Map<number, { max: number; x: number; y: number }>();
+  private portals: { x: number; y: number; t: number }[] = [];
+  private readonly slashT = new Map<number, number>();
+  private readonly slashFace = new Map<number, number>();
+  private readonly slashArmed = new Map<number, boolean>();
+  private readonly sparkArmed = new Set<number>();
+  private look: LookLive = { recall: false, recallSec: 0, recallFill: 0, slash: false, spark: false, flinch: false };
+  private seen = { slash: 0, spark: 0, flinch: 0, portal: 0, heroSlash: 0 };
+  private shadeCanvas: HTMLCanvasElement | null = null;
+  private shadeKey = '';
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -203,40 +243,40 @@ export class Renderer {
       ctx.drawImage(this.mapCanvas, srcX, srcY, srcW, srcH, 0, 0, cssW, cssH);
     }
 
+    this.tickFx();
+    this.syncRecall(sim);
+    this.look = { recall: false, recallSec: 0, recallFill: 0, slash: false, spark: false, flinch: false };
     const u = this.spriteScale();
-    const layers: { depth: number; front: number; paint: () => void }[] = [];
-    for (const prop of this.scenery) {
-      layers.push({
-        depth: prop.x + prop.y,
-        front: 0,
-        paint: () => this.drawScenery(ctx, prop, u),
-      });
-    }
+    const layers: { depth: number; paint: () => void }[] = [];
     const units = sim.units.filter((unit) => unit.alive || unit.corpse > 0 || unit.kind !== 'minion');
     for (const unit of units) {
       layers.push({
         depth: unit.x + unit.y,
-        front: 1,
         paint: () => this.drawUnit(ctx, unit, opts, u, this.armorTier(sim), sim.playerId),
       });
     }
-    layers.sort((a, b) => a.depth - b.depth || a.front - b.front);
+    layers.sort((a, b) => a.depth - b.depth);
     for (const layer of layers) layer.paint();
 
     for (const shot of sim.projectiles) {
       const p = this.project(shot.x, shot.y);
-      ctx.fillStyle = shot.color;
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, 4.5, 2.4, 0, 0, Math.PI * 2);
-      ctx.fill();
+      const owner = sim.units.find((unit) => unit.id === shot.attackerId);
+      drawBolt(ctx, p.x, p.y, shot.color, owner?.defId === 'blood-raven');
     }
     for (const fx of sim.fx) this.drawFx(ctx, fx);
+    for (const fire of this.fires) {
+      const p = this.project(fire.x, fire.y);
+      if (p.x < -40 || p.y < -40 || p.x > cssW + 40 || p.y > cssH + 40) continue;
+      drawFire(ctx, p.x, p.y, opts.time, fire.hell);
+    }
+    for (const flash of this.portals) {
+      const p = this.project(flash.x, flash.y);
+      drawPortal(ctx, p.x, p.y, 1 - flash.t / 0.45);
+    }
 
-    const vignette = ctx.createRadialGradient(cssW / 2, cssH / 2, cssH * 0.2, cssW / 2, cssH / 2, cssH * 0.78);
-    vignette.addColorStop(0, 'rgba(0,0,0,0)');
-    vignette.addColorStop(1, 'rgba(0,0,0,0.55)');
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, cssW, cssH);
+    const shade = this.shadeOverlay(cssW, cssH);
+    ctx.drawImage(shade, 0, 0, cssW, cssH);
+    this.publishLook();
     this.drawMinimap(sim, opts.targetId);
   }
 
@@ -285,10 +325,36 @@ export class Renderer {
     crisp(ctx);
     ctx.fillStyle = tilePaint(GROUND_BASE).fill;
     ctx.fillRect(0, 0, width, height);
-    this.stampGround(ctx, map, ox, oy, hw);
     this.scenery = sceneryFor(map);
+    this.stampGround(ctx, map, ox, oy, hw);
+    this.bakeProps(ctx, map, ox, oy, hw);
+    this.fires = [
+      { x: map.playerBase.x + 90, y: map.playerBase.y + 36, hell: false },
+      { x: map.enemyBase.x - 80, y: map.enemyBase.y - 24, hell: true },
+      { x: map.enemyBase.x + 40, y: map.enemyBase.y + 70, hell: true },
+    ];
     this.mapCanvas = canvas;
     this.mapKey = key;
+  }
+
+  /** Props and camp clutter live in the map canvas, so a frame only redraws units. */
+  private bakeProps(ctx: CanvasRenderingContext2D, map: ActDef, ox: number, oy: number, hw: number): void {
+    const u = 0.72;
+    for (const prop of this.scenery) {
+      const p = projectIso(prop.x, prop.y, hw, ox, oy);
+      const form = propForm(prop.kind);
+      const h =
+        (form === 'pillar' ? 78 :
+        form === 'posts' ? 54 :
+        form === 'tent' ? 48 :
+        form === 'cart' ? 36 :
+        form === 'figure' ? 44 :
+        28) * u;
+      const hell = Math.hypot(prop.x - map.enemyBase.x, prop.y - map.enemyBase.y)
+        < Math.hypot(prop.x - map.playerBase.x, prop.y - map.playerBase.y);
+      drawPropArt(ctx, p.x, p.y, h, form, prop.variant, hell);
+      paintDecorMark(ctx, p.x, p.y, prop.variant);
+    }
   }
 
   /** Every grid cell gets an opaque grass diamond, then the lane or camp. */
@@ -298,16 +364,40 @@ export class Renderer {
     const j1 = Math.ceil(map.height / step) + 2;
     for (let j = -2; j <= j1; j++) {
       for (let i = -2; i <= i1; i++) {
-        const kind = groundAt(map, i * step, j * step);
+        const wx = i * step;
+        const wy = j * step;
+        const kind = groundAt(map, wx, wy);
         const sx = Math.round((i - j) * 80 + ox);
         const sy = Math.round((i + j) * 40 + oy);
-        this.paintTile(ctx, GROUND_BASE, i, j, sx, sy);
-        if (kind !== GROUND_BASE) this.paintTile(ctx, kind, i, j, sx, sy);
+        const overlay = kind !== GROUND_BASE;
+        const wild = kind === 'grass' || kind === 'edge' || kind === 'bank' || kind === 'dark' || kind === 'river';
+        const decor = wild && !walkable(map, wx, wy);
+        const mud = kind === 'grass' && this.nearPath(map, wx, wy, step);
+        this.paintTile(ctx, GROUND_BASE, i, j, sx, sy, !overlay && decor, !overlay && mud);
+        if (overlay) this.paintTile(ctx, kind, i, j, sx, sy, false, false);
       }
     }
   }
 
-  private paintTile(ctx: CanvasRenderingContext2D, kind: GroundKind, i: number, j: number, sx: number, sy: number): void {
+  private nearPath(map: ActDef, x: number, y: number, step: number): boolean {
+    return (
+      groundAt(map, x + step, y) === 'path' ||
+      groundAt(map, x - step, y) === 'path' ||
+      groundAt(map, x, y + step) === 'path' ||
+      groundAt(map, x, y - step) === 'path'
+    );
+  }
+
+  private paintTile(
+    ctx: CanvasRenderingContext2D,
+    kind: GroundKind,
+    i: number,
+    j: number,
+    sx: number,
+    sy: number,
+    decor: boolean,
+    mud: boolean,
+  ): void {
     const paint = tilePaint(kind);
     diamond(ctx, sx, sy);
     ctx.fillStyle = paint.fill;
@@ -337,21 +427,9 @@ export class Renderer {
       const fy = sy - 16 + hash(j + k, i) * 32;
       ctx.fillRect(fx, fy, kind === 'pale' ? 3 : 2, 2);
     }
+    ctx.globalAlpha = 1;
+    paintTileVariation(ctx, kind, i, j, sx, sy, decor, mud);
     ctx.restore();
-  }
-
-  private drawScenery(ctx: CanvasRenderingContext2D, prop: Prop, u: number): void {
-    const p = this.project(prop.x, prop.y);
-    if (p.x < -120 || p.y < -180 || p.x > this.camera.cssW + 120 || p.y > this.camera.cssH + 40) return;
-    const form = propForm(prop.kind);
-    const h =
-      form === 'pillar' ? 78 :
-      form === 'posts' ? 54 :
-      form === 'tent' ? 48 :
-      form === 'cart' ? 36 :
-      form === 'figure' ? 44 :
-      28;
-    drawProp(ctx, p.x, p.y, h * u, form, prop.variant);
   }
 
   private drawUnit(
@@ -374,40 +452,66 @@ export class Renderer {
     const ahead = this.project(unit.x + Math.cos(pose.shown) * 24, unit.y + Math.sin(pose.shown) * 24);
     const screen = Math.atan2(ahead.y - p.y, ahead.x - p.x);
     const swing = Math.sin(pose.phase * Math.PI * 2);
+    const attack = attackPose(unit);
     const hero = unit.defId === 'barbarian';
+    const boss = bossLook(unit);
     const height = (hero ? heroDrawHeight(pose.state) : this.unitHeight(unit)) * u;
     const bob = swing * (pose.state === 'idle' ? 1.5 : pose.state === 'run' ? 5 : 3.5) * u;
+    const melee = !unit.ranged && unit.defId !== 'tower' && unit.kind !== 'base' && unit.kind !== 'seal';
+    this.armSlash(unit, melee && (attack === 'swing' || unit.swing > 0.82), screen, playerId);
+    this.noteHit(unit);
+    const body = unit.kind === 'minion' || unit.kind === 'champion';
+    const mag = body && unit.hitFlash > 0 ? 3 * Math.min(1, unit.hitFlash / 0.12) : 0;
+    const flinchX = -Math.cos(screen) * mag;
+    const flinchY = -Math.sin(screen) * mag;
+    const dx = footX + flinchX;
+    const dy = footY + flinchY;
     ctx.save();
     if (!unit.alive) ctx.globalAlpha = 0.55;
     else if ((unit.invuln > 0 || unit.hitFlash > 0) && Math.sin(opts.time * 28) > 0) ctx.globalAlpha = 0.45;
-    if (!unit.alive && (unit.kind === 'minion' || unit.kind === 'champion')) {
-      ctx.translate(footX, footY);
+    if (!unit.alive && body) {
+      ctx.translate(dx, dy);
       ctx.scale(1, 0.45);
-      ctx.translate(-footX, -footY);
+      ctx.translate(-dx, -dy);
     }
     if (hero) {
-      drawBarbarian(ctx, footX, footY, height, swing, heroLean(pose.state), screen, tier, bob, attackPose(unit));
+      drawBarbarian(ctx, dx, dy, height, swing, heroLean(pose.state), screen, tier, bob, attack, unit.team === 'ally');
     } else if (unit.defId === 'tower') {
-      drawSpire(ctx, footX, footY, height, unit.team === 'ally', unit.alive);
+      drawSpire(ctx, dx, dy, height, unit.team === 'ally', unit.alive);
       if (unit.alive && unit.id === opts.targetId) this.rangeRing(ctx, unit, unit.team === 'ally' ? '#6aa7ff' : '#e4553c');
     } else if (unit.defId === 'base-ally' || unit.defId === 'base-enemy') {
-      drawStronghold(ctx, footX, footY, height, unit.defId === 'base-ally', unit.alive);
+      drawStronghold(ctx, dx, dy, height, unit.defId === 'base-ally', unit.alive);
     } else if (unit.kind === 'seal') {
-      drawProp(ctx, footX, footY, height * 0.45, 'rock', 1);
-    } else if (bossLook(unit)) {
-      drawBoss(ctx, footX, footY - bob, height, bossLook(unit) as BossLook, swing, unit.team === 'ally');
+      drawProp(ctx, dx, dy, height * 0.45, 'rock', 1);
+    } else if (boss) {
+      drawBoss(ctx, dx, dy - bob, height, boss, swing, unit.team === 'ally', attack, opts.time);
     } else {
       const look = tokenLook(unit);
-      drawToken(ctx, footX, footY - bob, height * look.scale, look, swing, unit.team === 'ally');
+      drawToken(ctx, dx, dy - bob, height * look.scale, look, swing, unit.team === 'ally', attack);
     }
     if (unit.whirlT > 0) {
       ctx.strokeStyle = 'rgba(240, 220, 170, 0.8)';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.ellipse(footX, footY - height * 0.45, height * 0.42, height * 0.16, opts.time * 6, 0, Math.PI * 1.5);
+      ctx.ellipse(dx, dy - height * 0.45, height * 0.42, height * 0.16, opts.time * 6, 0, Math.PI * 1.5);
       ctx.stroke();
     }
     ctx.restore();
+    const slash = this.slashT.get(unit.id) ?? 0;
+    if (slash > 0) {
+      this.look.slash = true;
+      drawSlash(ctx, footX, footY, height, this.slashFace.get(unit.id) ?? screen, slash / 0.16);
+    }
+    if (unit.hitFlash > 0.02 && unit.alive) drawSpark(ctx, dx, dy, height, Math.min(1, unit.hitFlash / 0.12));
+    if (unit.recall > 0 && unit.alive) {
+      const max = this.recallTrack.get(unit.id)?.max ?? unit.recall;
+      drawRecall(ctx, footX, footY, height, unit.recall, max, opts.time);
+      if (unit.id === playerId || !this.look.recall) {
+        this.look.recall = true;
+        this.look.recallSec = Math.max(0, Math.ceil(unit.recall - 1e-4));
+        this.look.recallFill = Math.max(0, Math.min(1, 1 - unit.recall / max));
+      }
+    }
     if (unit.buffT > 0 && unit.alive) {
       ctx.strokeStyle = 'rgba(230, 211, 161, 0.75)';
       ctx.lineWidth = 2;
@@ -415,7 +519,7 @@ export class Renderer {
       ctx.ellipse(footX, footY, height * 0.34, height * 0.14, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
-    if (unit.alive && (unit.kind !== 'minion' || unit.hp < unit.maxHp)) {
+    if (unit.alive && (boss || unit.kind !== 'minion' || unit.hp < unit.maxHp)) {
       this.drawBar(unit, footX, footY, height, opts.targetId);
     }
     if (unit.stun > 0 && unit.alive) {
@@ -424,6 +528,102 @@ export class Renderer {
       ctx.textAlign = 'center';
       ctx.fillText('✶', footX, footY - height - 8);
     }
+  }
+
+  private tickFx(): void {
+    const dt = Math.min(0.05, this.frameDt);
+    for (const [id, t] of this.slashT) {
+      const next = t - dt;
+      if (next <= 0) this.slashT.delete(id);
+      else this.slashT.set(id, next);
+    }
+    for (const flash of this.portals) flash.t += dt;
+    if (this.portals.length) this.portals = this.portals.filter((flash) => flash.t < 0.45);
+  }
+
+  private syncRecall(sim: Sim): void {
+    const present = new Set<number>();
+    for (const unit of sim.units) {
+      present.add(unit.id);
+      const prev = this.recallTrack.get(unit.id);
+      if (unit.recall > 0) {
+        if (!prev) this.recallTrack.set(unit.id, { max: Math.max(unit.recall, 0.01), x: unit.x, y: unit.y });
+      } else if (prev) {
+        if (Math.hypot(unit.x - prev.x, unit.y - prev.y) > 40) {
+          this.portals.push({ x: prev.x, y: prev.y, t: 0 }, { x: unit.x, y: unit.y, t: 0 });
+          this.seen.portal += 1;
+        }
+        this.recallTrack.delete(unit.id);
+      }
+    }
+    for (const id of this.recallTrack.keys()) {
+      if (!present.has(id)) this.recallTrack.delete(id);
+    }
+  }
+
+  private armSlash(unit: Unit, punching: boolean, screen: number, playerId: number): void {
+    const armed = this.slashArmed.get(unit.id) ?? false;
+    if (punching && !armed) {
+      this.slashArmed.set(unit.id, true);
+      this.slashT.set(unit.id, 0.16);
+      this.slashFace.set(unit.id, screen);
+      this.seen.slash += 1;
+      if (unit.id === playerId) this.seen.heroSlash += 1;
+    } else if (!punching && (this.slashT.get(unit.id) ?? 0) <= 0) {
+      this.slashArmed.set(unit.id, false);
+    }
+  }
+
+  private noteHit(unit: Unit): void {
+    if (unit.hitFlash > 0.02) {
+      this.look.spark = true;
+      if (unit.kind === 'minion' || unit.kind === 'champion') this.look.flinch = true;
+      if (!this.sparkArmed.has(unit.id)) {
+        this.sparkArmed.add(unit.id);
+        this.seen.spark += 1;
+        if (unit.kind === 'minion' || unit.kind === 'champion') this.seen.flinch += 1;
+      }
+    } else this.sparkArmed.delete(unit.id);
+  }
+
+  /** One cached fullscreen tint. Rebuilt only when the CSS size changes. */
+  private shadeOverlay(cssW: number, cssH: number): HTMLCanvasElement {
+    const key = `${Math.round(cssW)}x${Math.round(cssH)}`;
+    if (this.shadeCanvas && this.shadeKey === key) return this.shadeCanvas;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(cssW));
+    canvas.height = Math.max(1, Math.round(cssH));
+    const g = canvas.getContext('2d');
+    if (!g) return canvas;
+    const tint = g.createLinearGradient(0, 0, 0, cssH);
+    tint.addColorStop(0, 'rgba(16, 24, 38, 0.18)');
+    tint.addColorStop(0.55, 'rgba(0,0,0,0)');
+    tint.addColorStop(1, 'rgba(48, 24, 10, 0.16)');
+    g.fillStyle = tint;
+    g.fillRect(0, 0, cssW, cssH);
+    const vignette = g.createRadialGradient(cssW / 2, cssH / 2, cssH * 0.2, cssW / 2, cssH / 2, cssH * 0.78);
+    vignette.addColorStop(0, 'rgba(0,0,0,0)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0.62)');
+    g.fillStyle = vignette;
+    g.fillRect(0, 0, cssW, cssH);
+    this.shadeCanvas = canvas;
+    this.shadeKey = key;
+    return canvas;
+  }
+
+  private publishLook(): void {
+    if (!LOOK_LOG) return;
+    const g = globalThis as { __look?: unknown };
+    g.__look = {
+      recall: this.look.recall,
+      recallSec: this.look.recallSec,
+      recallFill: this.look.recallFill,
+      slash: this.look.slash,
+      spark: this.look.spark,
+      flinch: this.look.flinch,
+      portal: this.portals.length > 0,
+      seen: { ...this.seen },
+    };
   }
 
   /** One dt drives the sine. Facing eases toward the compass and never resets the phase. */
@@ -634,21 +834,9 @@ function roadPoints(map: ActDef, lane: Vec[]): Vec[] {
   return [map.playerBase, ...lane, map.enemyBase];
 }
 
-function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  ctx.beginPath();
-  ctx.ellipse(x, y, w, h, 0, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-const ARMOR: Record<ArmorTier, { cloth: string; metal: string; skin: string; leather: string }> = {
-  light: { cloth: '#6e2a22', metal: '#c8b496', skin: '#c48a62', leather: '#8a5a32' },
-  medium: { cloth: '#5c2420', metal: '#d5dbe4', skin: '#c48a62', leather: '#6a4030' },
-  heavy: { cloth: '#3a2428', metal: '#e6ebf2', skin: '#c48a62', leather: '#4a4038' },
-};
 
 /** Weapon pose for the committed swing. Canceled attacks leave this at none. */
-function attackPose(unit: Unit): 'none' | 'raise' | 'swing' | 'follow' {
+function attackPose(unit: Unit): AttackPose {
   if (unit.attackCycle.phase === AttackPhase.Windup) return 'raise';
   if (unit.attackCycle.phase !== AttackPhase.Backswing) return 'none';
   return unit.swing > 0.82 ? 'swing' : 'follow';
@@ -665,97 +853,10 @@ function drawBarbarian(
   screen: number,
   tier: ArmorTier,
   bob: number,
-  attack: 'none' | 'raise' | 'swing' | 'follow' = 'none',
+  attack: AttackPose = 'none',
+  ally = true,
 ): void {
-  const colors = ARMOR[tier];
-  const h = height;
-  const fwdX = Math.cos(screen);
-  const fwdY = Math.sin(screen);
-  const sideX = -fwdY;
-  const sideY = fwdX;
-  const step = swing * h * (lean > 0.3 ? 0.16 : lean > 0 ? 0.11 : 0.02);
-  shadow(ctx, x, y, h * 0.22, h * 0.08);
-  ctx.save();
-  ctx.translate(x, y + bob);
-  const hipY = -h * 0.42;
-  const leanX = fwdX * lean * h * 0.28;
-  const leanY = fwdY * lean * h * 0.28;
-  const leg = (sign: number) => {
-    ctx.strokeStyle = colors.leather;
-    ctx.lineWidth = Math.max(2, h * 0.06);
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(leanX * 0.3, hipY);
-    ctx.lineTo(sideX * step * sign, sideY * step * sign - h * 0.02);
-    ctx.stroke();
-  };
-  leg(1);
-  leg(-1);
-  ctx.translate(leanX, leanY);
-  ctx.fillStyle = colors.cloth;
-  ctx.beginPath();
-  ctx.moveTo(-h * 0.16, hipY);
-  ctx.lineTo(h * 0.16, hipY);
-  ctx.lineTo(h * 0.12, -h * 0.72);
-  ctx.lineTo(-h * 0.12, -h * 0.72);
-  ctx.closePath();
-  ctx.fill();
-  if (tier !== 'light') {
-    ctx.fillStyle = colors.metal;
-    ctx.fillRect(-h * 0.1, -h * 0.68, h * 0.2, h * 0.16);
-  }
-  if (tier === 'heavy') {
-    ctx.fillStyle = colors.metal;
-    ctx.fillRect(-h * 0.18, -h * 0.58, h * 0.08, h * 0.12);
-    ctx.fillRect(h * 0.1, -h * 0.58, h * 0.08, h * 0.12);
-  }
-  ctx.fillStyle = colors.skin;
-  ctx.beginPath();
-  ctx.arc(0, -h * 0.82, h * 0.11, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = colors.leather;
-  ctx.fillRect(-h * 0.12, -h * 0.9, h * 0.24, h * 0.06);
-  const arm = (sign: number, weapon: 'sword' | 'axe') => {
-    const raised = attack === 'raise' ? -h * 0.2 : 0;
-    const ax = sideX * h * 0.2 * sign + (attack === 'none' ? sideX * -step * sign * 0.8 : 0);
-    const ay = -h * 0.62 + raised + (attack === 'none' ? sideY * -step * sign * 0.35 : 0);
-    ctx.strokeStyle = colors.skin;
-    ctx.lineWidth = Math.max(2, h * 0.045);
-    ctx.beginPath();
-    ctx.moveTo(0, -h * 0.66);
-    ctx.lineTo(ax, ay);
-    ctx.stroke();
-    ctx.save();
-    ctx.translate(ax, ay);
-    const pose =
-      attack === 'raise' ? -1.15 : attack === 'swing' ? 1.2 : attack === 'follow' ? 0.45 : swing * 0.6;
-    ctx.rotate(screen + pose * sign);
-    ctx.fillStyle = colors.metal;
-    if (weapon === 'sword') {
-      ctx.fillRect(-h * 0.02, -h * 0.28, h * 0.04, h * 0.28);
-      ctx.fillStyle = colors.leather;
-      ctx.fillRect(-h * 0.05, -h * 0.04, h * 0.1, h * 0.035);
-    } else {
-      ctx.beginPath();
-      ctx.moveTo(0, -h * 0.22);
-      ctx.lineTo(h * 0.1, -h * 0.08);
-      ctx.lineTo(0, -h * 0.02);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillRect(-h * 0.015, -h * 0.02, h * 0.03, h * 0.12);
-    }
-    ctx.restore();
-  };
-  arm(-1, 'sword');
-  arm(1, 'axe');
-  ctx.fillStyle = '#f0e2bc';
-  ctx.beginPath();
-  ctx.moveTo(fwdX * h * 0.2, -h * 0.82 + fwdY * h * 0.2);
-  ctx.lineTo(fwdX * h * 0.34, -h * 0.82 + fwdY * h * 0.34);
-  ctx.lineTo(fwdX * h * 0.16 + sideX * h * 0.08, -h * 0.82 + fwdY * h * 0.16 + sideY * h * 0.08);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
+  paintBarbarian(ctx, x, y, height, swing, lean, screen, tier, bob, attack, ally);
 }
 
 function drawToken(
@@ -766,115 +867,21 @@ function drawToken(
   look: TokenLook,
   swing: number,
   ally: boolean,
+  attack: AttackPose = 'none',
 ): void {
-  const h = height;
-  shadow(ctx, x, y, h * 0.28, h * 0.1);
-  ctx.strokeStyle = ally ? '#6aa7ff' : '#e4553c';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.ellipse(x, y, h * 0.34, h * 0.13, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.fillStyle = look.body;
-  ctx.beginPath();
-  ctx.moveTo(x, y - h);
-  ctx.lineTo(x + h * 0.22, y - h * 0.15);
-  ctx.lineTo(x, y - h * 0.28);
-  ctx.lineTo(x - h * 0.22, y - h * 0.15);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = look.trim;
-  ctx.fillRect(x - h * 0.08, y - h * 0.72, h * 0.16, h * 0.12);
-  drawWeapon(ctx, x + h * 0.18, y - h * 0.45 + swing * h * 0.06, h, look.weapon, swing);
-}
-
-function drawWeapon(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  h: number,
-  weapon: TokenLook['weapon'],
-  swing: number,
-): void {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(swing * 0.4);
-  ctx.fillStyle = '#e6d3a1';
-  ctx.strokeStyle = '#e6d3a1';
-  ctx.lineWidth = Math.max(1.5, h * 0.04);
-  if (weapon === 'bow') {
-    ctx.beginPath();
-    ctx.arc(0, 0, h * 0.16, -1.2, 1.2);
-    ctx.stroke();
-  } else if (weapon === 'spear') {
-    ctx.beginPath();
-    ctx.moveTo(0, h * 0.12);
-    ctx.lineTo(0, -h * 0.28);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, -h * 0.32);
-    ctx.lineTo(h * 0.05, -h * 0.2);
-    ctx.lineTo(-h * 0.05, -h * 0.2);
-    ctx.fill();
-  } else if (weapon === 'club') {
-    ctx.fillRect(-h * 0.04, -h * 0.05, h * 0.08, h * 0.22);
-    ctx.beginPath();
-    ctx.arc(0, -h * 0.08, h * 0.08, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (weapon === 'staff') {
-    ctx.beginPath();
-    ctx.moveTo(0, h * 0.16);
-    ctx.lineTo(0, -h * 0.28);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, -h * 0.32, h * 0.06, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (weapon === 'horns') {
-    ctx.beginPath();
-    ctx.moveTo(-h * 0.16, -h * 0.2);
-    ctx.lineTo(-h * 0.28, -h * 0.42);
-    ctx.lineTo(-h * 0.08, -h * 0.22);
-    ctx.moveTo(h * 0.16, -h * 0.2);
-    ctx.lineTo(h * 0.28, -h * 0.42);
-    ctx.lineTo(h * 0.08, -h * 0.22);
-    ctx.fill();
-  } else if (weapon === 'quills') {
-    for (const sign of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(sign * h * 0.04, 0);
-      ctx.lineTo(sign * h * 0.2, -h * 0.16);
-      ctx.lineTo(sign * h * 0.06, -h * 0.02);
-      ctx.fill();
-    }
-  } else if (weapon === 'orb') {
-    ctx.beginPath();
-    ctx.arc(0, -h * 0.1, h * 0.1, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (weapon === 'wraps') {
-    ctx.strokeStyle = '#e6dcc4';
-    for (let i = 0; i < 3; i++) {
-      ctx.beginPath();
-      ctx.moveTo(-h * 0.12, -h * 0.05 + i * h * 0.06);
-      ctx.lineTo(h * 0.12, -h * 0.08 + i * h * 0.06);
-      ctx.stroke();
-    }
-  } else {
-    ctx.fillRect(-h * 0.02, -h * 0.26, h * 0.04, h * 0.26);
-  }
-  ctx.restore();
+  paintCreature(ctx, look.mark, x, y, height, swing, ally, attack);
 }
 
 interface BossLook {
-  body: string;
-  trim: string;
-  mark: string;
+  mark: BossMark;
   height: number;
 }
 
 function bossLook(unit: Unit): BossLook | null {
-  if (unit.objective === 'baron') return { body: '#8a1a14', trim: '#f0c14a', mark: 'diablo', height: 168 };
-  if (unit.objective === 'herald') return { body: '#c45520', trim: '#f2d2a2', mark: 'mephisto', height: 160 };
-  if (unit.objective === 'dragon') return { body: '#6a8a32', trim: '#d7e2a4', mark: 'duriel', height: 156 };
-  if (unit.defId === 'blood-raven') return { body: '#5a8a28', trim: '#e7d48a', mark: 'andariel', height: 150 };
+  if (unit.objective === 'baron') return { mark: 'diablo', height: 188 };
+  if (unit.objective === 'herald') return { mark: 'mephisto', height: 180 };
+  if (unit.objective === 'dragon') return { mark: 'duriel', height: 176 };
+  if (unit.defId === 'blood-raven') return { mark: 'raven', height: 172 };
   return null;
 }
 
@@ -886,148 +893,48 @@ function drawBoss(
   look: BossLook,
   swing: number,
   ally: boolean,
+  attack: AttackPose = 'none',
+  time = 0,
 ): void {
-  const h = height;
-  shadow(ctx, x, y, h * 0.36, h * 0.12);
-  ctx.strokeStyle = ally ? '#6aa7ff' : '#e4553c';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.ellipse(x, y, h * 0.4, h * 0.15, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.fillStyle = look.body;
-  ctx.beginPath();
-  ctx.moveTo(x, y - h);
-  ctx.lineTo(x + h * 0.32, y - h * 0.2);
-  ctx.lineTo(x, y - h * 0.08);
-  ctx.lineTo(x - h * 0.32, y - h * 0.2);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = look.trim;
-  if (look.mark === 'diablo') {
-    ctx.beginPath();
-    ctx.moveTo(x - h * 0.16, y - h * 0.82);
-    ctx.lineTo(x - h * 0.28, y - h);
-    ctx.lineTo(x - h * 0.04, y - h * 0.78);
-    ctx.moveTo(x + h * 0.16, y - h * 0.82);
-    ctx.lineTo(x + h * 0.28, y - h);
-    ctx.lineTo(x + h * 0.04, y - h * 0.78);
-    ctx.fill();
-  } else if (look.mark === 'duriel') {
-    ctx.beginPath();
-    ctx.ellipse(x, y - h * 0.55, h * 0.22, h * 0.16, 0, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (look.mark === 'andariel') {
-    for (const sign of [-1, 0, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(x + sign * h * 0.1, y - h * 0.7);
-      ctx.lineTo(x + sign * h * 0.16, y - h * 0.95);
-      ctx.lineTo(x + sign * h * 0.04, y - h * 0.7);
-      ctx.fill();
-    }
-  } else {
-    ctx.fillRect(x - h * 0.18, y - h * 0.78, h * 0.36, h * 0.08);
-  }
-  drawWeapon(ctx, x + h * 0.22, y - h * 0.4 + swing * 4, h * 0.7, look.mark === 'andariel' ? 'bow' : 'club', swing);
+  paintBoss(ctx, x, y, height, look.mark, swing, ally, attack, time);
 }
 
 function tokenLook(unit: Unit): TokenLook {
   const ally = unit.team === 'ally';
-  if (unit.defId === 'rogue' || unit.defId === 'rogue-archer') {
-    return { body: '#2f6a3a', trim: '#d7c48a', weapon: 'bow', scale: 1 };
-  }
-  if (ally && (unit.defId === 'skeleton' || unit.defId === 'hungry-dead')) {
-    return { body: '#d9c27a', trim: '#f4ecd2', weapon: 'spear', scale: 1.05 };
-  }
-  if (ally && (unit.defId === 'goatman' || unit.defId === 'demon' || unit.defId === 'mummy')) {
-    return { body: '#8a93a0', trim: '#e6ebf2', weapon: 'spear', scale: 1.05 };
-  }
+  if (unit.defId === 'rogue' || unit.defId === 'rogue-archer') return { mark: 'rogue', scale: 1 };
+  if (ally && (unit.defId === 'skeleton' || unit.defId === 'hungry-dead')) return { mark: 'valkyrie', scale: 1.08 };
+  if (ally && (unit.defId === 'goatman' || unit.defId === 'demon' || unit.defId === 'mummy')) return { mark: 'guard', scale: 1.05 };
   switch (unit.defId) {
     case 'fallen':
-      return { body: '#c4492a', trim: '#f0c14a', weapon: 'sword', scale: 0.9 };
+      return { mark: 'fallen', scale: 0.92 };
     case 'zombie':
-      return { body: '#6a8a55', trim: '#c9d2b0', weapon: 'club', scale: 1 };
+      return { mark: 'raider', scale: 1 };
     case 'quillrat':
-      return { body: '#a67c4e', trim: '#e6d3a1', weapon: 'quills', scale: 0.85 };
+      return { mark: 'quill', scale: 0.9 };
     case 'goatman':
-      return { body: '#8a5a28', trim: '#e6d3a1', weapon: 'horns', scale: 1.05 };
+      return { mark: 'goatman', scale: 1.08 };
     case 'demon':
-      return { body: '#c4a06a', trim: '#6a3a28', weapon: 'club', scale: 1.15 };
+      return { mark: 'bovine', scale: 1.22 };
     case 'willowisp':
-      return { body: '#7ec8e3', trim: '#e8fbff', weapon: 'orb', scale: 0.8 };
+      return { mark: 'wisp', scale: 0.85 };
     case 'mummy':
-      return { body: '#d9c7a2', trim: '#8a7048', weapon: 'wraps', scale: 1.05 };
+      return { mark: 'mummy', scale: 1.05 };
     case 'skeleton':
-      return { body: '#e6dcc8', trim: '#8a8070', weapon: 'sword', scale: 1 };
+      return { mark: 'destruction', scale: 1.28 };
     case 'hungry-dead':
-      return { body: '#6b5a48', trim: '#c4b49a', weapon: 'club', scale: 1 };
+      return { mark: 'blunder', scale: 1.2 };
     default:
-      return { body: unit.color || '#888', trim: unit.accent || '#eee', weapon: 'sword', scale: 1 };
+      return { mark: 'raider', scale: 1 };
   }
 }
 
 /** Isometric spire. The foot is the bottom center of the masonry. */
 function drawSpire(ctx: CanvasRenderingContext2D, x: number, y: number, height: number, ally: boolean, alive: boolean): void {
-  const h = alive ? height : height * 0.55;
-  shadow(ctx, x, y, h * 0.28, h * 0.1);
-  const core = ally ? '#6aa7ff' : '#e4553c';
-  ctx.fillStyle = '#6e6458';
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(x + h * 0.28, y - h * 0.12);
-  ctx.lineTo(x, y - h * 0.24);
-  ctx.lineTo(x - h * 0.28, y - h * 0.12);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#8a7d6c';
-  ctx.beginPath();
-  ctx.moveTo(x, y - h * 0.18);
-  ctx.lineTo(x + h * 0.18, y - h * 0.42);
-  ctx.lineTo(x, y - h * 0.5);
-  ctx.lineTo(x - h * 0.18, y - h * 0.42);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#4e463c';
-  ctx.beginPath();
-  ctx.moveTo(x, y - h * 0.46);
-  ctx.lineTo(x + h * 0.08, y - h * 0.78);
-  ctx.lineTo(x, y - h);
-  ctx.lineTo(x - h * 0.08, y - h * 0.78);
-  ctx.closePath();
-  ctx.fill();
-  if (!alive) return;
-  const glow = ctx.createRadialGradient(x, y - h * 0.55, 1, x, y - h * 0.55, h * 0.16);
-  glow.addColorStop(0, '#fff6d8');
-  glow.addColorStop(0.45, core);
-  glow.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(x, y - h * 0.55, h * 0.16, 0, Math.PI * 2);
-  ctx.fill();
+  paintSpire(ctx, x, y, height, ally, alive);
 }
 
 function drawStronghold(ctx: CanvasRenderingContext2D, x: number, y: number, height: number, ally: boolean, alive: boolean): void {
-  const h = alive ? height : height * 0.55;
-  shadow(ctx, x, y, h * 0.34, h * 0.12);
-  ctx.fillStyle = ally ? '#8d7b62' : '#3a3144';
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(x + h * 0.42, y - h * 0.16);
-  ctx.lineTo(x, y - h * 0.32);
-  ctx.lineTo(x - h * 0.42, y - h * 0.16);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = ally ? '#c9b89a' : '#2c2636';
-  ctx.fillRect(x - h * 0.16, y - h * 0.72, h * 0.32, h * 0.42);
-  ctx.fillStyle = ally ? '#6aa7ff' : '#e4553c';
-  ctx.beginPath();
-  ctx.moveTo(x, y - h * 0.78);
-  ctx.lineTo(x, y - h);
-  ctx.lineTo(x + h * 0.16, y - h * 0.9);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = ally ? '#e6d3a1' : '#7a4ea8';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x - h * 0.16, y - h * 0.72, h * 0.32, h * 0.42);
+  paintStronghold(ctx, x, y, height, ally, alive);
 }
 
 function drawProp(
@@ -1037,50 +944,7 @@ function drawProp(
   height: number,
   form: ReturnType<typeof propForm>,
   variant: number,
+  hell = false,
 ): void {
-  const h = height;
-  shadow(ctx, x, y, h * 0.28, h * 0.1);
-  if (form === 'pillar') {
-    ctx.fillStyle = variant % 2 === 0 ? '#5c564c' : '#3e4a34';
-    ctx.fillRect(x - h * 0.08, y - h, h * 0.16, h);
-    ctx.fillStyle = '#7a7264';
-    ctx.fillRect(x - h * 0.14, y - h, h * 0.28, h * 0.08);
-  } else if (form === 'posts') {
-    ctx.fillStyle = '#6a5038';
-    for (const ox of [-0.22, 0, 0.22]) ctx.fillRect(x + ox * h - 2, y - h, 4, h);
-    ctx.fillRect(x - h * 0.24, y - h * 0.62, h * 0.48, 3);
-  } else if (form === 'tent') {
-    ctx.fillStyle = '#c4b494';
-    ctx.beginPath();
-    ctx.moveTo(x, y - h);
-    ctx.lineTo(x + h * 0.36, y);
-    ctx.lineTo(x - h * 0.36, y);
-    ctx.fill();
-    ctx.fillStyle = '#8d7b62';
-    ctx.fillRect(x - 2, y - h, 4, h);
-  } else if (form === 'cart') {
-    ctx.fillStyle = '#6a5038';
-    ctx.fillRect(x - h * 0.28, y - h * 0.55, h * 0.56, h * 0.28);
-    ctx.fillStyle = '#3a342c';
-    ctx.beginPath();
-    ctx.arc(x - h * 0.16, y - h * 0.12, h * 0.1, 0, Math.PI * 2);
-    ctx.arc(x + h * 0.16, y - h * 0.12, h * 0.1, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (form === 'figure') {
-    ctx.fillStyle = '#6e3a55';
-    ctx.fillRect(x - h * 0.12, y - h * 0.7, h * 0.24, h * 0.55);
-    ctx.fillStyle = '#e6c8a8';
-    ctx.beginPath();
-    ctx.arc(x, y - h * 0.82, h * 0.12, 0, Math.PI * 2);
-    ctx.fill();
-  } else {
-    ctx.fillStyle = variant % 2 === 0 ? '#6a6458' : '#4e463c';
-    ctx.beginPath();
-    ctx.ellipse(x, y - h * 0.28, h * 0.32, h * 0.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#8a8174';
-    ctx.beginPath();
-    ctx.ellipse(x - h * 0.08, y - h * 0.42, h * 0.16, h * 0.1, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  drawPropArt(ctx, x, y, height, form, variant, hell);
 }
