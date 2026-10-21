@@ -352,7 +352,7 @@ export class Hud {
     for (let slot = 0; slot < 4; slot++) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'skill';
+      button.className = 'skill d2-text';
       button.dataset.slot = String(slot);
       button.innerHTML = `
         <span class="sweep" data-sweep="${slot}"></span>

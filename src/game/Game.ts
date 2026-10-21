@@ -2,6 +2,7 @@ import { sanctuary } from './data/acts/sanctuary';
 import { getClass } from './data/classes';
 import { playableIds } from './data/classes/roster';
 import { AudioBus, registerAudioBus } from './audio';
+import { damageUnit } from './combat';
 import { player } from './query';
 import { Hud } from './hud';
 import { InputController } from './input';
@@ -122,6 +123,7 @@ export class Game {
     this.hud.setMuteLabel(this.audio.muted);
     this.input.attach();
     this.publishAimHook();
+    this.publishAtmosHook();
     this.syncTouchClass();
     window.addEventListener('resize', () => this.syncTouchClass());
     window.matchMedia('(pointer: coarse)').addEventListener('change', () => this.syncTouchClass());
@@ -192,6 +194,32 @@ export class Game {
     this.hud.setMuteLabel(this.audio.muted);
   }
 
+  private publishAtmosHook(): void {
+    if (typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('atmoslog') !== '1') return;
+    const game = this;
+    (globalThis as { __atmosCtl?: unknown }).__atmosCtl = {
+      probe: () => game.renderer.debugAtmosphere(),
+      sampleMap: (x: number, y: number) => game.renderer.sampleMap(x, y),
+      sampleView: (x: number, y: number) => game.renderer.sampleView(x, y),
+      setHitFlash() {
+        player(game.sim).hitFlash = 0.12;
+      },
+      nearest() {
+        return nearestMinion(game.sim);
+      },
+      killNearest() {
+        const hero = player(game.sim);
+        const spot = nearestMinion(game.sim);
+        if (!spot) return null;
+        const unit = game.sim.units.find((entry) => entry.id === spot.id);
+        if (!unit) return null;
+        damageUnit(game.sim, unit, unit.maxHp * 20 + 5000, hero);
+        return spot;
+      },
+    };
+  }
+
   private publishAimHook(): void {
     if (typeof window === 'undefined') return;
     if (new URLSearchParams(window.location.search).get('aimlog') !== '1') return;
@@ -208,6 +236,21 @@ export class Game {
       },
     };
   }
+}
+
+function nearestMinion(sim: Sim): { id: number; x: number; y: number } | null {
+  const hero = player(sim);
+  let best: { id: number; x: number; y: number } | null = null;
+  let bestD = Infinity;
+  for (const unit of sim.units) {
+    if (!unit.alive || unit.team === 'ally' || unit.kind !== 'minion') continue;
+    const dist = Math.hypot(unit.x - hero.x, unit.y - hero.y);
+    if (dist < bestD) {
+      bestD = dist;
+      best = { id: unit.id, x: unit.x, y: unit.y };
+    }
+  }
+  return best;
 }
 
 function portrait(): boolean {
