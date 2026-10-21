@@ -11,6 +11,16 @@ export interface Prop {
   block: number;
 }
 
+/** How a placed obstacle is drawn. Positions and block radii stay on the prop. */
+export function propForm(kind: Prop['kind']): 'pillar' | 'rock' | 'posts' | 'tent' | 'cart' | 'figure' {
+  if (kind === 'tree') return 'pillar';
+  if (kind === 'fence') return 'posts';
+  if (kind === 'rock' || kind === 'stump') return 'rock';
+  if (kind === 'tent') return 'tent';
+  if (kind === 'wagon') return 'cart';
+  return 'figure';
+}
+
 /** World size of one baked floor diamond. */
 export const FLOOR_STEP = 80 / 0.85;
 /** Half of the 5-tile collision-free lane corridor. */
