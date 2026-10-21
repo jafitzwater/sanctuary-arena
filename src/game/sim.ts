@@ -1522,7 +1522,7 @@ function tryCast(sim: Sim, input: FrameInput): void {
   }
   const handler = SKILLS[id];
   if (!handler) return;
-  const ok = handler({ sim, hero, rank, aimX: input.aimX, aimY: input.aimY });
+  const ok = handler({ sim, hero, rank, aimX: input.aimX, aimY: input.aimY, focusId: input.targetId });
   if (!ok) return;
   hero.mana -= cost;
   sim.cooldowns[id] = def.cooldown;

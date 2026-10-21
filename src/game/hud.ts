@@ -56,6 +56,11 @@ export class Hud {
   bind(): void {
     const portrait = this.root.querySelector<HTMLImageElement>('#portrait-img');
     if (portrait) portrait.src = portraitUrl;
+    this.root.querySelector('#minimap-toggle')?.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      (event.currentTarget as HTMLElement).classList.toggle('off');
+    });
     this.arm('#play-btn', () => this.onPlay?.());
     this.buildClasses();
     this.arm('#again-btn', () => this.onAgain?.());
@@ -126,8 +131,7 @@ export class Hud {
         this.pendingSkill = null;
         return;
       }
-      if (skill.dataset.cast) this.onCast?.(skill.dataset.cast);
-      else this.onOpenTree?.(slot);
+      if (!skill.dataset.cast) this.onOpenTree?.(slot);
     });
     this.ghost = document.createElement('div');
     this.ghost.id = 'drag-ghost';
@@ -367,7 +371,11 @@ export class Hud {
       const hideHint = () => this.text('#skill-hint', '');
       button.addEventListener('pointerdown', (ev) => {
         showHint();
-        if (button.setPointerCapture) button.setPointerCapture(ev.pointerId);
+        try {
+          button.setPointerCapture(ev.pointerId);
+        } catch {
+          /* rebuilt skill buttons are tracked without capture */
+        }
       });
       button.addEventListener('pointerup', hideHint);
       button.addEventListener('pointercancel', hideHint);

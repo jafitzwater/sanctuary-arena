@@ -1,4 +1,5 @@
 import './style.css';
+import { armGestureAudio } from './game/audio';
 import { Game } from './game/Game';
 import { watchCanvasBacking } from './game/render';
 
@@ -9,5 +10,6 @@ if (!canvas || !root) {
 }
 
 watchCanvasBacking(canvas);
+armGestureAudio();
 const game = new Game(canvas, root);
 game.start();

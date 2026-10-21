@@ -21,6 +21,7 @@ import { UNIT_DEFS } from '../src/game/data/units';
 import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
 import { campGates, DECOR_MARGIN, FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, sceneryFor } from '../src/game/landscape';
 import { advanceHeroPhase, heroCycleHz, heroDrawHeight, smoothFacing } from '../src/game/art/figures';
+import { getAutoTarget } from '../src/game/mobileInput';
 import { FOOTPRINT, GROUND_BASE, groundAt, slide, tilePaint, walkable } from '../src/game/terrain';
 import {
   animFrame,
@@ -1069,7 +1070,39 @@ function campSpeed(gait: 'idle' | 'walk' | 'run'): number {
   const mainSrc = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
   assert.ok(mainSrc.includes('watchCanvasBacking'));
   const renderSrc = readFileSync(new URL('../src/game/render.ts', import.meta.url), 'utf8');
-  assert.ok(renderSrc.includes('Math.min(3, Math.max(1, window.devicePixelRatio || 1))'));
+  assert.ok(renderSrc.includes('Math.min(2, Math.max(1, window.devicePixelRatio || 1))'));
+
+  const hero = { x: 0, y: 0, team: 'ally' };
+  const champion = {
+    id: 1,
+    x: 80,
+    y: 0,
+    radius: 16,
+    hp: 100,
+    alive: true,
+    team: 'enemy',
+    kind: 'champion',
+  };
+  const minion = {
+    id: 2,
+    x: 50,
+    y: 0,
+    radius: 12,
+    hp: 10,
+    alive: true,
+    team: 'enemy',
+    kind: 'minion',
+  };
+  assert.equal(getAutoTarget([champion, minion], hero, 100)?.id, 1, 'champion beats a closer minion');
+  const bruised = { ...champion, id: 3, hp: 20 };
+  const healthy = { ...champion, id: 4, hp: 90 };
+  assert.equal(getAutoTarget([healthy, bruised], hero, 100)?.id, 3, 'lowest hp wins a tie');
+  const nearer = { ...champion, id: 5, x: 40, hp: 50 };
+  const farther = { ...champion, id: 6, x: 90, hp: 50 };
+  assert.equal(getAutoTarget([farther, nearer], hero, 100)?.id, 5, 'nearest wins equal hp');
+  const tiedScoreMinion = { ...minion, id: 7, x: 60, hp: 40 };
+  const tiedScoreHero = { ...champion, id: 8, x: 100, hp: 40 };
+  assert.equal(getAutoTarget([tiedScoreMinion, tiedScoreHero], hero, 120)?.id, 7, 'equal score then nearest');
   assert.ok(renderSrc.includes('imageRendering = \'pixelated\''));
   assert.ok(renderSrc.includes('orientationchange'));
   assert.ok(renderSrc.includes('visualViewport'));
