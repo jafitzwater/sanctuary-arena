@@ -45,7 +45,7 @@
           <div class="help-grid">
             <div>
               <h3>Touch</h3>
-              <p>Touch the left half of the screen to drop a stick under your thumb, and let go to hide it. Attack is the large button in the bottom-right, with four skill petals around it. Tap a skill to cast at your target, or drag off it to aim. A gold + spends a point. Only a learned skill can sit on a slot. The map card in the top-right toggles. Shop uses category tabs and an icon grid.</p>
+              <p>Touch the left half of the screen to drop a stick under your thumb, and let go to hide it. Attack is the sword button in the bottom-right, with four skill petals around it. Tap a skill to cast at your target, or drag off it to aim. A gold + spends a point. Only a learned skill can sit on a slot. The map sits in the top-left and toggles. Shop uses category tabs and an icon grid.</p>
             </div>
             <div>
               <h3>Mouse and keys</h3>
@@ -66,16 +66,33 @@
               <div class="bar xp" aria-label="Experience"><span id="xp-fill"></span></div>
             </div>
             <div class="stat"><b id="level" class="d2-text">1</b><small class="d2-text">lv</small></div>
-            <div class="stat gold"><b id="gold" class="d2-text">0</b><small class="d2-text">gold</small></div>
           </div>
-          <div class="stat slim"><span id="kd"></span><span id="cs"></span></div>
-          <div class="stat slim"><span id="clock">0:00</span><span id="loadout">Unarmed</span></div>
+          <div id="gold-badge" class="stat gold">
+            <b id="gold" class="d2-text">0</b><small class="d2-text">GOLD</small>
+          </div>
+          <div id="telemetry">
+            <span id="clock" class="d2-text">00:00</span>
+            <span id="score" class="d2-text">0–0</span>
+            <span id="kd" class="d2-text">0 / 0</span>
+          </div>
+          <div hidden><span id="cs"></span><span id="loadout">Unarmed</span></div>
           <div class="top-actions">
             <button id="tree-btn" class="d2-text" type="button">Points</button>
             <button id="shop-btn" class="d2-text" type="button">Shop</button>
-            <button id="recall-btn" class="d2-text" type="button">Recall</button>
-            <button id="help-btn" class="d2-text" type="button">Help</button>
-            <button id="mute-btn" class="d2-text" type="button">Sound on</button>
+            <button id="recall-btn" class="d2-text" type="button" aria-label="Recall">
+              <svg class="recall-icon" viewBox="0 0 32 32" aria-hidden="true">
+                <path d="M7 26V15a9 9 0 0 1 18 0v11" fill="none" stroke="#7eb6ea" stroke-width="2" />
+                <path d="M5 26h22" stroke="#c7b377" stroke-width="2" />
+                <circle cx="16" cy="16" r="2.2" fill="#c7b377" />
+              </svg>
+              <span class="recall-label">Recall</span>
+            </button>
+            <button id="settings-btn" type="button" aria-label="Settings">
+              <svg class="cog" viewBox="0 0 32 32" aria-hidden="true">
+                <circle cx="16" cy="16" r="3.5" fill="none" stroke="#c7b377" stroke-width="2" />
+                <path d="M16 5v3.5M16 23.5V27M5 16h3.5M23.5 16H27M8.2 8.2l2.4 2.4M21.4 21.4l2.4 2.4M23.8 8.2l-2.4 2.4M10.6 21.4l-2.4 2.4" fill="none" stroke="#c7b377" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </button>
           </div>
         </header>
 
@@ -113,7 +130,14 @@
 
         <div id="belt">
           <div id="skills"></div>
-          <button id="attack-btn" class="d2-text" type="button">Attack</button>
+          <button id="attack-btn" type="button" aria-label="Attack">
+            <svg class="sword" viewBox="0 0 32 32" aria-hidden="true">
+              <path fill="#e7eef6" stroke="#1a120c" stroke-width="1" d="M15 2h2l1.2 15h-4.4z" />
+              <path fill="#c7b377" stroke="#1a120c" stroke-width="1" d="M9 17h14v3.2H9z" />
+              <path fill="#6e542c" stroke="#1a120c" stroke-width="1" d="M14.2 20.2h3.6V28h-3.6z" />
+              <path fill="#ffffff" opacity="0.55" d="M16 3.2h.9l.6 12.6H16z" />
+            </svg>
+          </button>
           <div id="potions" class="side-col">
             <button id="potion-hp" class="d2-text" type="button" aria-label="Drink health potion">
               <span>HP</span><b id="potion-hp-count">0</b><small>5</small>
@@ -175,12 +199,13 @@
           <div class="sheet">
             <header>
               <h2 id="help-heading">Controls</h2>
+              <button id="mute-btn" class="d2-text" type="button">Sound on</button>
               <button id="help-close" type="button">Close</button>
             </header>
             <div class="help-grid">
               <div>
                 <h3>Touch</h3>
-                <p>Touch the left half to anchor a stick under your thumb. Releasing it hides the stick. Tapping the ground does not walk you. Attack is the big button in the bottom-right, with four skills arcing around it. Tap a skill to cast, or drag off the button to aim and drag back onto it to cancel. Potions sit just left of that fan. A gold + spends a point. The map card in the top-right toggles. Points opens stats and the loadout. Shop is a category list and an icon grid. The fight pauses while a panel is open.</p>
+                <p>Touch the left half to anchor a stick under your thumb. Releasing it hides the stick. Tapping the ground does not walk you. Attack is the sword button in the bottom-right, with four skills arcing around it. Tap a skill to cast, or drag off the button to aim and drag back onto it to cancel. Potions sit just left of that fan. Recall is the arch just above the arc. A gold + spends a point. The map card in the top-left toggles, and gold sits under it. The cog opens this panel and the sound control. Points opens stats and the loadout. Shop is a category list and an icon grid. The fight pauses while a panel is open.</p>
               </div>
               <div>
                 <h3>Mouse and keyboard</h3>

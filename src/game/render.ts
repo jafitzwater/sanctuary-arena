@@ -187,6 +187,12 @@ export class Renderer {
   private bloodReady = false;
   private bloodStamps = 0;
   private heroScreen: { x: number; y: number; h: number } | null = null;
+  private heroLevel = 1;
+  private miniStatic: HTMLCanvasElement | null = null;
+  private miniStaticKey = '';
+  private miniW = 0;
+  private miniH = 0;
+  private miniView = '';
   /** Empty until a future drop system fills it. Rendering only. */
   private readonly groundDrops: GroundDrop[] = [];
 
@@ -214,6 +220,13 @@ export class Renderer {
     this.camera.viewW = WORLD_ACROSS;
     this.camera.viewH = cssH / (hw * 0.5);
     this.camera.zoom = hw;
+    const view = `${cssW}x${cssH}`;
+    if (this.miniView !== view) {
+      this.miniView = view;
+      this.miniW = 0;
+      this.miniH = 0;
+      this.miniStatic = null;
+    }
   }
 
   screenToWorld(sx: number, sy: number): Vec {
@@ -279,6 +292,7 @@ export class Renderer {
     this.lights.length = 0;
     this.hudPaint.length = 0;
     this.heroScreen = null;
+    this.heroLevel = sim.level;
     const u = this.spriteScale();
     const layers: { depth: number; paint: () => void }[] = [];
     const units = sim.units.filter((unit) => unit.alive || unit.corpse > 0 || unit.kind !== 'minion');
@@ -343,7 +357,7 @@ export class Renderer {
     crisp(ctx);
     for (const paint of this.hudPaint) paint();
     for (const fx of sim.fx) {
-      if (fx.kind === 'text') this.drawFx(ctx, fx);
+      if (fx.kind === 'text') this.drawFx(ctx, fx, sim);
     }
     for (const drop of this.groundDrops) {
       const p = this.project(drop.x, drop.y);
@@ -594,7 +608,7 @@ export class Renderer {
         ctx.restore();
       }
       if (unit.alive && (boss || unit.kind !== 'minion' || unit.hp < unit.maxHp)) {
-        this.drawBar(unit, footX, footY, height, opts.targetId);
+        this.drawBar(unit, footX, footY, height, opts.targetId, playerId);
       }
       if (unit.stun > 0 && unit.alive) {
         ctx.fillStyle = '#c7b377';
@@ -1054,39 +1068,82 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawBar(unit: Unit, x: number, footY: number, height: number, targetId: number | null): void {
+  private drawBar(unit: Unit, x: number, footY: number, height: number, targetId: number | null, playerId: number): void {
     const ctx = this.ctx;
     const w = unit.kind === 'base' ? 74 : unit.kind === 'champion' ? 54 : 34;
-    const y = footY - height - (unit.kind === 'minion' ? 6 : 16);
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, 6);
-    ctx.fillStyle = '#9a2a22';
-    ctx.fillRect(x - w / 2, y, w, 4);
+    const barH = 5;
+    const y = footY - height - (unit.kind === 'minion' ? 10 : 18);
+    const pct = Math.max(0, Math.min(1, unit.hp / Math.max(1, unit.maxHp)));
+    const mine = unit.id === playerId;
+    if (mine || unit.kind === 'champion') {
+      const badge = 13;
+      const bx = x - w / 2 - badge - 1;
+      const by = y + barH / 2;
+      const border = unit.team === 'enemy' ? '#e4553c' : '#c7b377';
+      ctx.beginPath();
+      ctx.arc(bx, by, badge / 2, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(8, 6, 4, 0.88)';
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = border;
+      ctx.stroke();
+      if (mine) {
+        ctx.save();
+        ctx.fillStyle = '#c7b377';
+        ctx.font = '700 8px "Cinzel Decorative", serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(this.heroLevel), bx, by + 0.5);
+        ctx.restore();
+      }
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.78)';
+    ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, barH + 2);
+    ctx.fillStyle = unit.team === 'ally' ? '#2a2218' : '#2a1210';
+    ctx.fillRect(x - w / 2, y, w, barH);
     ctx.fillStyle = unit.team === 'ally' ? '#c6d28a' : unit.team === 'wild' ? '#c49a3a' : '#e4553c';
-    ctx.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, unit.hp / unit.maxHp)), 4);
+    ctx.fillRect(x - w / 2, y, w * pct, barH);
+    const step = pipStep(unit.maxHp, w);
+    ctx.fillStyle = 'rgba(0,0,0,0.9)';
+    for (let mark = step; mark < unit.maxHp - 0.5; mark += step) {
+      const tx = Math.round(x - w / 2 + (mark / unit.maxHp) * w);
+      ctx.fillRect(tx, y, 1, barH);
+    }
+    if (mine && unit.maxMana > 0) {
+      const my = y + barH + 2;
+      const mana = Math.max(0, Math.min(1, unit.mana / unit.maxMana));
+      ctx.fillStyle = 'rgba(0,0,0,0.78)';
+      ctx.fillRect(x - w / 2 - 1, my - 1, w + 2, 4);
+      ctx.fillStyle = '#071422';
+      ctx.fillRect(x - w / 2, my, w, 2);
+      ctx.fillStyle = '#3ec0ff';
+      ctx.fillRect(x - w / 2, my, w * mana, 2);
+    }
     if (unit.id === targetId && unit.kind !== 'base') {
       ctx.fillStyle = '#f0e2bc';
       ctx.font = '12px Georgia, serif';
       ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
       ctx.fillText(unit.name, x, y - 4);
     }
   }
 
-  private drawFx(ctx: CanvasRenderingContext2D, fx: Sim['fx'][number]): void {
+  private drawFx(ctx: CanvasRenderingContext2D, fx: Sim['fx'][number], sim?: Sim): void {
     const alpha = Math.max(0, 1 - fx.t / fx.life);
     const p = this.project(fx.x, fx.y);
     ctx.save();
     ctx.globalAlpha = alpha;
     if (fx.kind === 'text' && fx.text) {
-      const gothic = fx.text.startsWith('Level') || /^-?\d+$/.test(fx.text);
+      const numeric = /^-?\d+$/.test(fx.text);
+      const damage = fx.color === '#f4efe4' && numeric;
+      const gothic = fx.text.startsWith('Level') || numeric;
       ctx.font = gothic ? '700 16px "Cinzel Decorative", serif' : 'bold 16px Georgia, serif';
       ctx.textAlign = 'center';
-      if (gothic) {
-        ctx.shadowColor = '#000';
-        ctx.shadowOffsetX = 1;
-        ctx.shadowOffsetY = 1;
-        ctx.fillStyle = '#c7b377';
-      } else ctx.fillStyle = fx.color;
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#000';
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+      ctx.fillStyle = damage && sim ? damageInk(fx, sim) : gothic ? '#c7b377' : fx.color;
       ctx.fillText(fx.text, p.x, p.y);
     } else if (fx.kind === 'ring') {
       const edge = this.project(fx.x + fx.r * (0.35 + fx.t / fx.life), fx.y);
@@ -1108,42 +1165,37 @@ export class Renderer {
   private drawMinimap(sim: Sim, targetId: number | null): void {
     const mini = document.querySelector<HTMLCanvasElement>('#minimap');
     if (!mini) return;
-    const rect = mini.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = Math.max(1, Math.round(rect.width * dpr));
-    const h = Math.max(1, Math.round(rect.height * dpr));
+    const toggle = mini.closest('#minimap-toggle');
+    if (toggle?.classList.contains('off')) return;
+    let w = this.miniW;
+    let h = this.miniH;
+    if (w < 2 || h < 2) {
+      const rect = mini.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = Math.max(1, Math.round(rect.width * dpr));
+      h = Math.max(1, Math.round(rect.height * dpr));
+      if (w < 2 || h < 2) return;
+      this.miniW = w;
+      this.miniH = h;
+    }
     if (mini.width !== w || mini.height !== h) {
       mini.width = w;
       mini.height = h;
+      this.miniStatic = null;
     }
     const ctx = mini.getContext('2d');
     if (!ctx) return;
     crisp(ctx);
     const map = sim.map;
+    const plate = this.ensureMiniStatic(map, w, h);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (plate) ctx.drawImage(plate, 0, 0);
+    else {
+      ctx.fillStyle = '#120e0b';
+      ctx.fillRect(0, 0, w, h);
+    }
     const sx = w / map.width;
     const sy = h / map.height;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#120e0b';
-    ctx.fillRect(0, 0, w, h);
-    const strokeLane = (points: Vec[], color: string, width: number) => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = width;
-      ctx.beginPath();
-      points.forEach((point, index) => {
-        const x = point.x * sx;
-        const y = point.y * sy;
-        if (index === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-    };
-    if (map.river && map.river.length > 1) strokeLane(map.river, '#8a2424', 4);
-    const paths = map.paths?.length ? map.paths : null;
-    if (paths) {
-      for (const path of paths) strokeLane(roadPoints(map, path.lane), path.road, 3);
-    } else {
-      strokeLane(map.lane, '#6a5340', 3);
-    }
     for (const unit of sim.units) {
       if (!unit.alive && unit.kind === 'minion') continue;
       const x = unit.x * sx;
@@ -1158,14 +1210,89 @@ export class Renderer {
         ctx.strokeRect(x - 3, y - 3, 6, 6);
       }
     }
-    ctx.strokeStyle = 'rgba(240, 226, 188, 0.55)';
+    ctx.strokeStyle = 'rgba(240, 226, 188, 0.85)';
     ctx.lineWidth = 1;
     ctx.strokeRect(this.camera.x * sx, this.camera.y * sy, this.camera.viewW * sx, this.camera.viewH * sy);
+  }
+
+  /** Lanes, camps, and Worldstones. Rebuilt only when the map card changes size. */
+  private ensureMiniStatic(map: Sim['map'], w: number, h: number): HTMLCanvasElement | null {
+    const key = `${map.id}:${w}x${h}`;
+    if (this.miniStatic && this.miniStaticKey === key) return this.miniStatic;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const sx = w / map.width;
+    const sy = h / map.height;
+    ctx.fillStyle = '#120e0b';
+    ctx.fillRect(0, 0, w, h);
+    const strokeLane = (points: Vec[], color: string, width: number) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      points.forEach((point, index) => {
+        const x = point.x * sx;
+        const y = point.y * sy;
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    };
+    if (map.river && map.river.length > 1) strokeLane(map.river, '#c44a3a', 4);
+    const paths = map.paths?.length ? map.paths : null;
+    const roads = paths ? paths.map((path) => roadPoints(map, path.lane)) : [map.lane];
+    for (const road of roads) strokeLane(road, '#3a2c22', 5);
+    for (const road of roads) strokeLane(road, '#e6d3a1', 2);
+    const diamond = (x: number, y: number, r: number, fill: string, stroke: string) => {
+      ctx.beginPath();
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r, y);
+      ctx.lineTo(x, y + r);
+      ctx.lineTo(x - r, y);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    };
+    for (const den of map.dens ?? []) diamond(den.x * sx, den.y * sy, 3.5, '#c49a3a', '#1a120c');
+    diamond(map.playerBase.x * sx, map.playerBase.y * sy, 5, '#e6d3a1', '#1a120c');
+    diamond(map.enemyBase.x * sx, map.enemyBase.y * sy, 5, '#e4553c', '#1a120c');
+    this.miniStatic = canvas;
+    this.miniStaticKey = key;
+    return canvas;
   }
 }
 
 function roadPoints(map: ActDef, lane: Vec[]): Vec[] {
   return [map.playerBase, ...lane, map.enemyBase];
+}
+
+/** 100 HP per tick, or 250 when 100 would pack the marks closer than 4px. */
+function pipStep(maxHp: number, width: number): number {
+  const gap = width / Math.max(1, maxHp / 100);
+  return gap >= 4 ? 100 : 250;
+}
+
+/**
+ * Damage floaters carry no type. A number sitting on the player is damage
+ * taken (red). Every other hit number is drawn as a physical hit (orange).
+ */
+function damageInk(fx: Sim['fx'][number], sim: Sim): string {
+  let best = 72;
+  let onPlayer = false;
+  for (const unit of sim.units) {
+    const d = Math.hypot(unit.x - fx.x, unit.y - fx.y);
+    if (d < best) {
+      best = d;
+      onPlayer = unit.id === sim.playerId;
+    }
+  }
+  return onPlayer ? '#e23b3b' : '#e07a32';
 }
 
 

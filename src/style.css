@@ -202,7 +202,6 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
   pointer-events: none;
 }
 
-#kd,
 #cs,
 #loadout,
 #tip { display: none !important; }
@@ -254,6 +253,33 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
 .stat.gold b { color: #e6c864; }
 .stat.slim { color: #d9c7a2; line-height: 1.2; }
 .stat small { color: #b5a48a; letter-spacing: 0.06em; }
+
+#telemetry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: #c7b377;
+  pointer-events: none;
+  text-shadow: 1px 1px 0 #000;
+}
+#telemetry span { white-space: nowrap; }
+#settings-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(12, 8, 6, 0.55);
+  border-color: rgba(199, 179, 119, 0.8);
+}
+#settings-btn .cog { width: 18px; height: 18px; display: block; pointer-events: none; }
+.recall-icon { display: none; width: 22px; height: 22px; }
+#attack-btn .sword { width: 28px; height: 28px; display: block; margin: 0 auto; pointer-events: none; }
 
 .top-actions { margin-left: auto; display: flex; gap: 4px; pointer-events: auto; }
 .top-actions button { min-height: 32px; min-width: 44px; padding: 2px 8px; font-size: 13px; }
@@ -523,10 +549,13 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
   display: flex;
   align-items: center;
   justify-content: center;
+  color: #fff;
+  font-family: Metamorphous, Georgia, serif;
+  font-weight: 700;
   font-size: 16px;
-  z-index: 1;
+  z-index: 2;
   pointer-events: none;
-  text-shadow: 0 1px 2px #000;
+  text-shadow: 0 1px 2px #000, 0 0 4px #000;
 }
 .skill .plus {
   position: absolute;
@@ -544,6 +573,14 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
   line-height: 1;
   z-index: 3;
   pointer-events: auto;
+  box-shadow: 0 0 8px rgba(230, 200, 100, 0.85);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .skill .plus { animation: pip-pulse 1.15s ease-in-out infinite; }
+}
+@keyframes pip-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 6px rgba(230, 200, 100, 0.45); }
+  50% { transform: scale(1.16); box-shadow: 0 0 12px 2px rgba(255, 228, 150, 0.95); }
 }
 
 #potion-hp,
@@ -834,8 +871,9 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: conic-gradient(rgba(0, 0, 0, 0.72) calc(var(--cd, 0) * 1turn), transparent 0);
+  background: conic-gradient(rgba(4, 3, 2, 0.82) calc(var(--cd, 0) * 1turn), transparent 0);
   pointer-events: none;
+  z-index: 1;
 }
 .skill.nomana { border-color: #6a90b4; box-shadow: inset 0 0 0 2px rgba(90, 150, 210, 0.55); }
 .skill.nomana .sname { color: #b7d4ee; }
@@ -880,12 +918,35 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
 body.touch #topbar {
   width: auto;
   max-width: none;
-  height: 40px;
+  height: 32px;
   z-index: 5;
-  padding: 0 8px 0 4px;
-  padding-right: calc(min(112px, 16vw) + 8px);
-  background: linear-gradient(to bottom, rgba(10, 8, 6, 0.82), rgba(10, 8, 6, 0));
+  padding: 0 6px 0 4px;
+  padding-left: calc(min(112px, 16vw) + 8px);
+  background: linear-gradient(to bottom, rgba(10, 8, 6, 0.72), rgba(10, 8, 6, 0));
 }
+body.touch .hero-plate .portrait,
+body.touch #vitals,
+body.touch .hero-plate .stat { display: none; }
+body.touch #telemetry { gap: 8px; font-size: 12px; }
+body.touch #gold-badge {
+  position: absolute;
+  top: 42px;
+  left: max(4px, env(safe-area-inset-left));
+  z-index: 5;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 2px 8px 3px;
+  border-radius: 999px;
+  background: rgba(12, 8, 6, 0.55);
+  border: 1px solid rgba(199, 179, 119, 0.75);
+  box-shadow: 0 0 8px rgba(199, 179, 119, 0.28);
+  pointer-events: auto;
+}
+body.touch #gold-badge b { font-size: 13px; }
+body.touch #gold-badge small { font-size: 10px; letter-spacing: 0.08em; }
 body.touch .hero-plate { display: flex; align-items: center; gap: 6px; }
 body.touch .portrait {
   width: 32px;
@@ -935,9 +996,13 @@ body.touch .orb em { font-size: 8px; bottom: 18%; }
 
 body.touch #minimap-toggle {
   top: 0;
-  right: 0;
+  left: 0;
+  right: auto;
   width: min(112px, 16vw);
   height: 40px;
+  background: rgba(12, 8, 6, 0.72);
+  border-color: rgba(199, 179, 119, 0.8);
+  box-shadow: 0 0 8px rgba(199, 179, 119, 0.22);
 }
 body.touch .top-actions {
   position: static;
@@ -995,13 +1060,13 @@ body.touch .skill {
   border-radius: 50%;
   padding: 0;
   pointer-events: auto;
+  background: rgba(12, 8, 6, 0.5);
+  border: 1px solid rgba(199, 179, 119, 0.85);
   box-shadow:
-    0 0 0 2px #241910,
-    0 0 0 3px #8a6840,
-    inset 0 1px 0 rgba(255, 220, 170, 0.35),
-    inset 0 -3px 4px rgba(0, 0, 0, 0.55);
+    0 0 8px rgba(199, 179, 119, 0.32),
+    inset 0 1px 0 rgba(255, 220, 170, 0.2);
 }
-body.touch .skill .key { font-size: 9px; }
+body.touch .skill .key { display: none; }
 body.touch .skill .sname { font-size: 9px; line-height: 1.05; }
 body.touch .skill.locked .sname { font-size: 16px; color: var(--gold); }
 body.touch .skill .rank { font-size: 9px; }
@@ -1021,12 +1086,30 @@ body.touch #attack-btn {
   padding: 0;
   z-index: 2;
   pointer-events: auto;
+  background: rgba(28, 10, 8, 0.52);
+  border: 1px solid rgba(199, 179, 119, 0.9);
   box-shadow:
-    0 0 0 2px #241910,
-    0 0 0 4px #8a6840,
-    inset 0 1px 0 rgba(255, 220, 170, 0.4),
-    inset 0 -4px 6px rgba(0, 0, 0, 0.55);
+    0 0 10px rgba(199, 179, 119, 0.38),
+    inset 0 1px 0 rgba(255, 220, 170, 0.28);
 }
+body.touch #attack-btn .sword { width: 34px; height: 34px; }
+body.touch #recall-btn {
+  position: absolute;
+  right: 46px;
+  bottom: 196px;
+  width: 40px;
+  height: 40px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  z-index: 6;
+  background: rgba(12, 8, 6, 0.52);
+  border: 1px solid rgba(199, 179, 119, 0.85);
+  box-shadow: 0 0 8px rgba(199, 179, 119, 0.32);
+}
+body.touch #recall-btn .recall-icon { display: block; margin: 0 auto; }
+body.touch #recall-btn .recall-label { display: none; }
 body.touch #potions {
   position: absolute;
   right: 154px;
@@ -1046,11 +1129,11 @@ body.touch #potion-mp {
   border-radius: 50%;
   padding: 0;
   font-size: 11px;
+  background: rgba(12, 8, 6, 0.52);
+  border: 1px solid rgba(199, 179, 119, 0.75);
   box-shadow:
-    0 0 0 2px #241910,
-    0 0 0 3px #6e542c,
-    inset 0 1px 0 rgba(255, 220, 170, 0.35),
-    inset 0 -3px 4px rgba(0, 0, 0, 0.5);
+    0 0 8px rgba(199, 179, 119, 0.28),
+    inset 0 1px 0 rgba(255, 220, 170, 0.2);
 }
 body.touch #quick-buy {
   left: 8px;
