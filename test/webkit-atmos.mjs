@@ -203,7 +203,7 @@ async function fps(page) {
   };
   console.log('FPS_AFTER', JSON.stringify(result));
   expect(after.light === before.light && after.light >= 1, `light buffer realloc ${JSON.stringify(result)}`);
-  expect(after.ambient === 0.88, `ambient ${after.ambient}`);
+  expect(after.ambient === 0.55, `ambient ${after.ambient}`);
   const idle = await page.evaluate(
     () =>
       new Promise((resolve) => {

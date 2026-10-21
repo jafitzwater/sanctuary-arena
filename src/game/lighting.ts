@@ -1,10 +1,11 @@
 /**
- * Ambient darkness with soft radial holes. The buffer is half the CSS size
- * and is allocated only when that size changes.
+ * Ambient darkness with soft radial holes. The buffer is a quarter of the CSS
+ * size and is allocated only when that size changes. Light sprites are baked
+ * once; a frame stamps them and composites the buffer a single time.
  */
 
-/** Single knob for the night overlay. Lanes outside a light read as night. */
-export const AMBIENT_ALPHA = 0.88;
+/** Single knob for the night overlay. 0.55 keeps the lanes outside a light playable. */
+export const AMBIENT_ALPHA = 0.55;
 export const AMBIENT_DARKNESS = `rgba(8,10,6,${AMBIENT_ALPHA})`;
 
 export interface LightSource {
@@ -16,11 +17,14 @@ export interface LightSource {
   flicker?: boolean;
 }
 
-/** Half CSS pixels. Smoothing is enabled only while this buffer is blitted. */
-const BUFFER_SCALE = 0.5;
+/** Quarter of the CSS pixel size. Smoothing is on only for the upscale blit. */
+const BUFFER_SCALE = 0.25;
 
 export class DarkGothicLighting {
   private buffer: HTMLCanvasElement | null = null;
+  private mask: HTMLCanvasElement | null = null;
+  private bufCtx: CanvasRenderingContext2D | null = null;
+  private maskCtx: CanvasRenderingContext2D | null = null;
   private bufW = 0;
   private bufH = 0;
   private disc: HTMLCanvasElement | null = null;
@@ -31,11 +35,22 @@ export class DarkGothicLighting {
   ensure(cssW: number, cssH: number): void {
     const w = Math.max(1, Math.round(cssW * BUFFER_SCALE));
     const h = Math.max(1, Math.round(cssH * BUFFER_SCALE));
-    if (this.buffer && this.bufW === w && this.bufH === h) return;
+    if (this.buffer && this.mask && this.bufW === w && this.bufH === h && this.bufCtx && this.maskCtx) return;
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
+    const mask = document.createElement('canvas');
+    mask.width = w;
+    mask.height = h;
+    const bufCtx = canvas.getContext('2d');
+    const maskCtx = mask.getContext('2d');
+    if (!bufCtx || !maskCtx) return;
+    bufCtx.imageSmoothingEnabled = true;
+    maskCtx.imageSmoothingEnabled = true;
     this.buffer = canvas;
+    this.mask = mask;
+    this.bufCtx = bufCtx;
+    this.maskCtx = maskCtx;
     this.bufW = w;
     this.bufH = h;
     this.allocations += 1;
@@ -50,40 +65,46 @@ export class DarkGothicLighting {
   ): void {
     this.ensure(cssW, cssH);
     const buffer = this.buffer;
-    if (!buffer) return;
-    const g = buffer.getContext('2d');
-    if (!g) return;
+    const mask = this.mask;
+    const g = this.bufCtx;
+    const m = this.maskCtx;
+    if (!buffer || !mask || !g || !m) return;
+    const disc = this.softDisc();
+    const width = this.bufW;
+    const height = this.bufH;
+
+    m.setTransform(1, 0, 0, 1, 0, 0);
+    m.globalCompositeOperation = 'source-over';
+    m.globalAlpha = 1;
+    m.clearRect(0, 0, width, height);
+    m.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < sources.length; i++) {
+      const src = sources[i];
+      const placed = placeLight(src, time, width, height);
+      if (!placed) continue;
+      m.globalAlpha = placed.alpha;
+      m.drawImage(disc, placed.x, placed.y, placed.size, placed.size);
+    }
+
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.globalCompositeOperation = 'source-over';
     g.globalAlpha = 1;
-    g.clearRect(0, 0, this.bufW, this.bufH);
     g.fillStyle = AMBIENT_DARKNESS;
-    g.fillRect(0, 0, this.bufW, this.bufH);
-    const disc = this.softDisc();
+    g.fillRect(0, 0, width, height);
     g.globalCompositeOperation = 'destination-out';
-    for (const src of sources) {
-      const flicker = src.flicker ? fireFlicker(time) : 1;
-      const radius = Math.max(4, src.radius * flicker) * BUFFER_SCALE;
-      const x = src.screenX * BUFFER_SCALE;
-      const y = src.screenY * BUFFER_SCALE;
-      if (x < -radius || y < -radius || x > this.bufW + radius || y > this.bufH + radius) continue;
-      g.globalAlpha = Math.max(0, Math.min(1, src.intensity));
-      g.drawImage(disc, x - radius, y - radius, radius * 2, radius * 2);
-    }
-    g.globalAlpha = 1;
+    g.drawImage(mask, 0, 0);
     g.globalCompositeOperation = 'screen';
-    for (const src of sources) {
+    for (let i = 0; i < sources.length; i++) {
+      const src = sources[i];
       if (!src.color) continue;
-      const flicker = src.flicker ? fireFlicker(time) : 1;
-      const radius = Math.max(4, src.radius * flicker) * BUFFER_SCALE;
-      const x = src.screenX * BUFFER_SCALE;
-      const y = src.screenY * BUFFER_SCALE;
-      if (x < -radius || y < -radius || x > this.bufW + radius || y > this.bufH + radius) continue;
-      g.globalAlpha = Math.max(0, Math.min(0.55, 0.45 * src.intensity));
-      g.drawImage(this.tintDisc(src.color), x - radius, y - radius, radius * 2, radius * 2);
+      const placed = placeLight(src, time, width, height);
+      if (!placed) continue;
+      g.globalAlpha = Math.min(0.65, 0.58 * src.intensity);
+      g.drawImage(this.tintDisc(src.color), placed.x, placed.y, placed.size, placed.size);
     }
     g.globalAlpha = 1;
     g.globalCompositeOperation = 'source-over';
+
     const smoothing = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(buffer, 0, 0, cssW, cssH);
@@ -105,6 +126,25 @@ export class DarkGothicLighting {
     this.tints.set(key, canvas);
     return canvas;
   }
+}
+
+function placeLight(
+  src: LightSource,
+  time: number,
+  width: number,
+  height: number,
+): { x: number; y: number; size: number; alpha: number } | null {
+  const flicker = src.flicker ? fireFlicker(time) : 1;
+  const radius = Math.max(4, src.radius * flicker) * BUFFER_SCALE;
+  const cx = src.screenX * BUFFER_SCALE;
+  const cy = src.screenY * BUFFER_SCALE;
+  if (cx < -radius || cy < -radius || cx > width + radius || cy > height + radius) return null;
+  return {
+    x: cx - radius,
+    y: cy - radius,
+    size: radius * 2,
+    alpha: Math.max(0, Math.min(1, src.intensity)),
+  };
 }
 
 function radialDisc(rgb: string): HTMLCanvasElement {
