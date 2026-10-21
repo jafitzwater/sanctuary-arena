@@ -6,6 +6,7 @@ import {
   smoothFacing,
   type HeroPose,
 } from './art/figures';
+import { AttackPhase } from './combat/attackCycle';
 import { heroGaitStep, heroHoldCompass, readStickMotion } from './gait';
 import type { ActDef } from './data/acts/types';
 import { projectIso, unprojectIso } from './iso';
@@ -385,7 +386,7 @@ export class Renderer {
       ctx.translate(-footX, -footY);
     }
     if (hero) {
-      drawBarbarian(ctx, footX, footY, height, swing, heroLean(pose.state), screen, tier, bob);
+      drawBarbarian(ctx, footX, footY, height, swing, heroLean(pose.state), screen, tier, bob, attackPose(unit));
     } else if (unit.defId === 'tower') {
       drawSpire(ctx, footX, footY, height, unit.team === 'ally', unit.alive);
       if (unit.alive && unit.id === opts.targetId) this.rangeRing(ctx, unit, unit.team === 'ally' ? '#6aa7ff' : '#e4553c');
@@ -646,6 +647,13 @@ const ARMOR: Record<ArmorTier, { cloth: string; metal: string; skin: string; lea
   heavy: { cloth: '#3a2428', metal: '#e6ebf2', skin: '#c48a62', leather: '#4a4038' },
 };
 
+/** Weapon pose for the committed swing. Canceled attacks leave this at none. */
+function attackPose(unit: Unit): 'none' | 'raise' | 'swing' | 'follow' {
+  if (unit.attackCycle.phase === AttackPhase.Windup) return 'raise';
+  if (unit.attackCycle.phase !== AttackPhase.Backswing) return 'none';
+  return unit.swing > 0.82 ? 'swing' : 'follow';
+}
+
 /** Layered barbarian. Feet sit on (x, y). Body height is the constant scale. */
 function drawBarbarian(
   ctx: CanvasRenderingContext2D,
@@ -657,6 +665,7 @@ function drawBarbarian(
   screen: number,
   tier: ArmorTier,
   bob: number,
+  attack: 'none' | 'raise' | 'swing' | 'follow' = 'none',
 ): void {
   const colors = ARMOR[tier];
   const h = height;
@@ -707,8 +716,9 @@ function drawBarbarian(
   ctx.fillStyle = colors.leather;
   ctx.fillRect(-h * 0.12, -h * 0.9, h * 0.24, h * 0.06);
   const arm = (sign: number, weapon: 'sword' | 'axe') => {
-    const ax = sideX * h * 0.2 * sign + sideX * -step * sign * 0.8;
-    const ay = -h * 0.62 + sideY * -step * sign * 0.35;
+    const raised = attack === 'raise' ? -h * 0.2 : 0;
+    const ax = sideX * h * 0.2 * sign + (attack === 'none' ? sideX * -step * sign * 0.8 : 0);
+    const ay = -h * 0.62 + raised + (attack === 'none' ? sideY * -step * sign * 0.35 : 0);
     ctx.strokeStyle = colors.skin;
     ctx.lineWidth = Math.max(2, h * 0.045);
     ctx.beginPath();
@@ -717,7 +727,9 @@ function drawBarbarian(
     ctx.stroke();
     ctx.save();
     ctx.translate(ax, ay);
-    ctx.rotate(screen + swing * 0.6 * sign);
+    const pose =
+      attack === 'raise' ? -1.15 : attack === 'swing' ? 1.2 : attack === 'follow' ? 0.45 : swing * 0.6;
+    ctx.rotate(screen + pose * sign);
     ctx.fillStyle = colors.metal;
     if (weapon === 'sword') {
       ctx.fillRect(-h * 0.02, -h * 0.28, h * 0.04, h * 0.28);
