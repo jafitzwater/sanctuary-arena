@@ -25,6 +25,22 @@ export function sfx(sim: Sim, name: string): void {
   if (sim.sfx.length > 24) sim.sfx.shift();
 }
 
+function creditChampion(sim: Sim, unit: Unit, killer: Unit | null): void {
+  const team = killer?.team;
+  if (team === 'ally') sim.allyKills += 1;
+  else if (team === 'enemy') sim.enemyKills += 1;
+  if (!killer || (team !== 'ally' && team !== 'enemy')) return;
+  const seen = new Set<number>([killer.id]);
+  for (const mark of unit.threats) {
+    if (sim.time - mark.t > ASSIST_WINDOW) continue;
+    if (mark.team !== team || seen.has(mark.id)) continue;
+    seen.add(mark.id);
+    const mate = sim.units.find((other) => other.id === mark.id);
+    if (!mate || mate.kind !== 'champion') continue;
+    if (mate.id === sim.playerId) sim.assists += 1;
+  }
+}
+
 function fxCap(): number {
   return typeof window !== 'undefined' && 'ontouchstart' in window ? 120 : 80;
 }
@@ -35,8 +51,68 @@ export function pushFx(sim: Sim, fx: Fx): void {
   if (sim.fx.length > cap) sim.fx.splice(0, sim.fx.length - cap);
 }
 
-export function floater(sim: Sim, x: number, y: number, text: string, color: string): void {
-  pushFx(sim, { kind: 'text', x, y, text, color, life: 0.9, t: 0, r: 0, vy: -38 });
+export type DamageSchool = 'physical' | 'magic';
+
+const ASSIST_WINDOW = 10;
+
+/** Orange physical, magenta magic or skill, red when the player takes the hit. */
+export function damageColor(school: DamageSchool, taken: boolean): string {
+  if (taken) return '#e23b3b';
+  return school === 'magic' ? '#e454c8' : '#e07a32';
+}
+
+export function floater(
+  sim: Sim,
+  x: number,
+  y: number,
+  text: string,
+  color: string,
+  hit?: { school: DamageSchool; taken: boolean },
+): void {
+  pushFx(sim, {
+    kind: 'text',
+    x,
+    y,
+    text,
+    color,
+    life: 0.9,
+    t: 0,
+    r: 0,
+    vy: -38,
+    school: hit?.school,
+    taken: hit?.taken,
+  });
+}
+
+/** Remember a champion hit or debuff so a teammate's kill can award an assist. */
+export function noteDebuff(sim: Sim, target: Unit, attacker: Unit | null): void {
+  if (!attacker || attacker.id === target.id || target.kind !== 'champion') return;
+  if (attacker.team === target.team) return;
+  const mark = target.threats.find((entry) => entry.id === attacker.id);
+  if (mark) {
+    mark.t = sim.time;
+    mark.team = attacker.team;
+    return;
+  }
+  target.threats.push({ id: attacker.id, team: attacker.team, t: sim.time });
+  if (target.threats.length > 12) {
+    const now = sim.time;
+    target.threats = target.threats.filter((entry) => now - entry.t <= ASSIST_WINDOW).slice(-8);
+  }
+}
+
+/**
+ * Player level follows the xp track. Enemy champions show a clock level
+ * (one step each 45s, capped) that does not change their stats.
+ */
+export function syncChampionLevels(sim: Sim): void {
+  const clock = 1 + Math.min(MAX_LEVEL - 1, Math.floor(sim.time / 45));
+  for (const unit of sim.units) {
+    if (unit.kind !== 'champion') continue;
+    if (unit.id === sim.playerId) unit.level = sim.level;
+    else if (unit.team === 'enemy') unit.level = clock;
+    else if (!unit.level) unit.level = 1;
+  }
 }
 
 export function ring(sim: Sim, x: number, y: number, r: number, color: string): void {
@@ -69,6 +145,7 @@ export function grantXp(sim: Sim, amount: number): void {
       hero.hp = hero.maxHp;
       hero.mana = hero.maxMana;
     }
+    hero.level = sim.level;
     banner(sim, `Level ${sim.level} — life and mana restored`);
     floater(sim, hero.x, hero.y - hero.radius - 28, `Level ${sim.level}`, '#e6c864');
     pushFx(sim, { kind: 'ring', x: hero.x, y: hero.y, r: 54, color: '#e6c864', life: 0.75, t: 0 });
@@ -87,7 +164,13 @@ export function fillEmptyBelt(sim: Sim): void {
   }
 }
 
-export function damageUnit(sim: Sim, target: Unit, amount: number, attacker: Unit | null): void {
+export function damageUnit(
+  sim: Sim,
+  target: Unit,
+  amount: number,
+  attacker: Unit | null,
+  school: DamageSchool = 'physical',
+): void {
   if (!target.alive || target.invuln > 0 || sim.phase !== 'playing') return;
   const armor = target.armor + (target.buffT > 0 ? target.buffArmor : 0) + (target.guardT > 0 ? 14 : 0);
   const dealt = mitigated(amount, armor);
@@ -95,7 +178,9 @@ export function damageUnit(sim: Sim, target: Unit, amount: number, attacker: Uni
   target.hitFlash = 0.12;
   target.combat = 4;
   if (attacker) attacker.combat = 4;
-  floater(sim, target.x, target.y - target.radius - 8, String(Math.round(dealt)), '#f4efe4');
+  const taken = target.id === sim.playerId;
+  floater(sim, target.x, target.y - target.radius - 8, String(Math.round(dealt)), '#f4efe4', { school, taken });
+  noteDebuff(sim, target, attacker);
   if (target.id === sim.playerId) {
     sfx(sim, 'hurt');
     if (dealt >= target.maxHp * 0.15) sfx(sim, 'heavy');
@@ -108,6 +193,7 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
   if (!unit.alive) return;
   unit.alive = false;
   unit.hp = 0;
+  unit.diedAt = sim.time;
   unit.leap = null;
   unit.whirlT = 0;
   unit.targetId = null;
@@ -122,6 +208,7 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
       banner(sim, `${unit.name} has fallen`);
       sfx(sim, 'death');
     }
+    creditChampion(sim, unit, killer);
   }
   if (unit.kind === 'tower' || unit.kind === 'seal') {
     banner(sim, `${unit.name} has fallen`);

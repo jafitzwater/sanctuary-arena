@@ -26,6 +26,9 @@ import {
   type HeroPose,
 } from './art/figures';
 import { AttackPhase } from './combat/attackCycle';
+import { damageColor } from './combat';
+import { attackSheetFrame, cycleFrame } from './art/flare-frames';
+import { drawFlare, flareFrameCount, flareReady, type FlareAnim } from './art/flare';
 import { stampBloodPool } from './decals';
 import { heroGaitStep, heroHoldCompass, readStickMotion } from './gait';
 import type { ActDef } from './data/acts/types';
@@ -188,6 +191,7 @@ export class Renderer {
   private bloodStamps = 0;
   private heroScreen: { x: number; y: number; h: number } | null = null;
   private heroLevel = 1;
+  private simTime = 0;
   private miniStatic: HTMLCanvasElement | null = null;
   private miniStaticKey = '';
   private miniW = 0;
@@ -293,6 +297,7 @@ export class Renderer {
     this.hudPaint.length = 0;
     this.heroScreen = null;
     this.heroLevel = sim.level;
+    this.simTime = sim.time;
     const u = this.spriteScale();
     const layers: { depth: number; paint: () => void }[] = [];
     const units = sim.units.filter((unit) => unit.alive || unit.corpse > 0 || unit.kind !== 'minion');
@@ -557,8 +562,10 @@ export class Renderer {
     const dx = footX + flinchX;
     const dy = footY + flinchY;
     const lean = hero ? heroLean(pose.state) : 0;
-    const paintBody = (target: CanvasRenderingContext2D) =>
+    const paintBody = (target: CanvasRenderingContext2D) => {
+      if (this.paintSprite(target, unit, pose, attack, dx, dy, height, opts)) return;
       this.paintFigure(target, unit, opts, tier, dx, dy, height, swing, screen, bob, attack, lean, hero, boss);
+    };
     if (unit.alive && unit.hitFlash >= 0.07) this.blitHitFlash(ctx, dx, dy, paintBody);
     else paintBody(ctx);
     if (unit.id === playerId) this.heroScreen = { x: dx, y: dy, h: height };
@@ -617,6 +624,54 @@ export class Renderer {
         ctx.fillText('✶', footX, footY - height - 8);
       }
     });
+  }
+
+  private paintSprite(
+    ctx: CanvasRenderingContext2D,
+    unit: Unit,
+    pose: Pose,
+    attack: AttackPose,
+    dx: number,
+    dy: number,
+    height: number,
+    opts: DrawOpts,
+  ): boolean {
+    const anim: FlareAnim = !unit.alive
+      ? 'die'
+      : attack !== 'none'
+        ? 'attack'
+        : pose.state === 'run'
+          ? 'run'
+          : pose.state === 'walk'
+            ? 'walk'
+            : 'idle';
+    const cols = flareFrameCount(unit.defId, anim);
+    if (cols <= 0 || !flareReady(unit.defId, anim)) return false;
+    let frame = cycleFrame(pose.phase, cols);
+    if (anim === 'attack') {
+      const phase = unit.attackCycle.phase === AttackPhase.Windup ? 'Windup' : 'Backswing';
+      frame = attackSheetFrame(phase, unit.attackCycle.phaseElapsedMs, unit.attackInterval, cols);
+    } else if (anim === 'die') {
+      const elapsed = Math.max(0, this.simTime - unit.diedAt);
+      frame = Math.min(cols - 1, Math.floor(Math.min(0.999, elapsed / 0.8) * cols));
+    }
+    ctx.save();
+    if (!unit.alive) {
+      const fade = unit.corpse > 0 ? Math.max(0.05, (unit.corpse / 4.5) * 0.55) : 0.55;
+      ctx.globalAlpha = fade;
+    } else if (unit.invuln > 0 && Math.sin(opts.time * 28) > 0) ctx.globalAlpha = 0.45;
+    groundShadow(ctx, dx, dy, height);
+    groundRing(ctx, dx, dy, height, unit.team === 'ally');
+    const drew = drawFlare(ctx, unit.defId, anim, pose.compass, frame, dx, dy, height);
+    if (unit.whirlT > 0) {
+      ctx.strokeStyle = 'rgba(240, 220, 170, 0.8)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(dx, dy - height * 0.45, height * 0.42, height * 0.16, opts.time * 6, 0, Math.PI * 1.5);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return drew;
   }
 
   private paintFigure(
@@ -1087,15 +1142,14 @@ export class Renderer {
       ctx.lineWidth = 1.5;
       ctx.strokeStyle = border;
       ctx.stroke();
-      if (mine) {
-        ctx.save();
-        ctx.fillStyle = '#c7b377';
-        ctx.font = '700 8px "Cinzel Decorative", serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(String(this.heroLevel), bx, by + 0.5);
-        ctx.restore();
-      }
+      const level = mine ? this.heroLevel : unit.level || 1;
+      ctx.save();
+      ctx.fillStyle = '#c7b377';
+      ctx.font = '700 8px "Cinzel Decorative", serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(level), bx, by + 0.5);
+      ctx.restore();
     }
     ctx.fillStyle = 'rgba(0,0,0,0.78)';
     ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, barH + 2);
@@ -1268,6 +1322,24 @@ export class Renderer {
   }
 }
 
+function groundShadow(ctx: CanvasRenderingContext2D, x: number, y: number, height: number): void {
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.beginPath();
+  ctx.ellipse(x, y, height * 0.26, height * 0.09, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function groundRing(ctx: CanvasRenderingContext2D, x: number, y: number, height: number, ally: boolean): void {
+  ctx.save();
+  ctx.globalAlpha = 0.4;
+  ctx.strokeStyle = ally ? '#6aa7ff' : '#e4553c';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.ellipse(x, y, height * 0.2, height * 0.075, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function roadPoints(map: ActDef, lane: Vec[]): Vec[] {
   return [map.playerBase, ...lane, map.enemyBase];
 }
@@ -1278,11 +1350,9 @@ function pipStep(maxHp: number, width: number): number {
   return gap >= 4 ? 100 : 250;
 }
 
-/**
- * Damage floaters carry no type. A number sitting on the player is damage
- * taken (red). Every other hit number is drawn as a physical hit (orange).
- */
+/** Tagged hits use their school. Untagged numbers keep the old proximity colors. */
 function damageInk(fx: Sim['fx'][number], sim: Sim): string {
+  if (fx.school === 'physical' || fx.school === 'magic') return damageColor(fx.school, fx.taken === true);
   let best = 72;
   let onPlayer = false;
   for (const unit of sim.units) {

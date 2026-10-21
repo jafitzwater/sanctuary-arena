@@ -1,4 +1,4 @@
-import { banner, damageUnit, recomputeHero, ring, sfx } from '../combat';
+import { banner, damageUnit, noteDebuff, recomputeHero, ring, sfx } from '../combat';
 import { clampToPlayable } from '../lane';
 import { clamp } from '../math';
 import type { Unit } from '../types';
@@ -34,8 +34,11 @@ function smack(ctx: CastContext, foe: Unit, damage: number, stun = 0): void {
   const { hero } = ctx;
   hero.facing = Math.atan2(foe.y - hero.y, foe.x - hero.x);
   hero.swing = 1;
-  damageUnit(ctx.sim, foe, damage, hero);
-  if (stun > 0) foe.stun = Math.max(foe.stun, stun);
+  damageUnit(ctx.sim, foe, damage, hero, 'magic');
+  if (stun > 0) {
+    foe.stun = Math.max(foe.stun, stun);
+    noteDebuff(ctx.sim, foe, hero);
+  }
 }
 
 export const bash: SkillHandler = (ctx) => {

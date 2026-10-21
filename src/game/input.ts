@@ -465,6 +465,7 @@ export class InputController {
     const radius = this.mobile.zone.maxRadius;
     stick.style.left = `${this.mobile.anchorX - radius}px`;
     stick.style.top = `${this.mobile.anchorY - radius}px`;
+    stick.style.bottom = 'auto';
     stick.classList.toggle('on', this.mobile.engaged);
     const move = this.mobile.moveVector;
     knob.style.transform = `translate(${move.x * radius}px, ${move.y * radius}px)`;
@@ -476,6 +477,9 @@ export class InputController {
     this.stickEngaged = false;
     this.stickPointerId = null;
     knob.style.transform = 'translate(0px, 0px)';
+    stick.style.left = '';
+    stick.style.top = '';
+    stick.style.bottom = '';
     stick.classList.remove('on');
     if (was) this.stickReleasedAt = performance.now();
   }

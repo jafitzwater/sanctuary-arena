@@ -70,7 +70,7 @@ function circ(g: CanvasRenderingContext2D, x: number, y: number, r: number, fill
 }
 
 function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.beginPath();
   ctx.ellipse(x, y, w, h, 0, 0, Math.PI * 2);
   ctx.fill();

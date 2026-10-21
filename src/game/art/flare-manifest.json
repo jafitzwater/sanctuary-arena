@@ -1,0 +1,347 @@
+{
+  "rows": "compass 0 east, then clockwise",
+  "creatures": {
+    "barbarian": {
+      "body": 124,
+      "anims": {
+        "idle": {
+          "cols": 4,
+          "rows": 8,
+          "fw": 157,
+          "fh": 128,
+          "footX": 68,
+          "footY": 108,
+          "body": 124,
+          "file": "barbarian-idle.webp"
+        },
+        "run": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 133,
+          "fh": 128,
+          "footX": 58,
+          "footY": 105,
+          "body": 94,
+          "file": "barbarian-run.webp"
+        },
+        "attack": {
+          "cols": 4,
+          "rows": 8,
+          "fw": 159,
+          "fh": 128,
+          "footX": 69,
+          "footY": 98,
+          "body": 106,
+          "file": "barbarian-attack.webp"
+        },
+        "die": {
+          "cols": 6,
+          "rows": 8,
+          "fw": 163,
+          "fh": 128,
+          "footX": 81,
+          "footY": 90,
+          "body": 99,
+          "file": "barbarian-die.webp"
+        },
+        "walk": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 133,
+          "fh": 128,
+          "footX": 58,
+          "footY": 105,
+          "body": 94,
+          "file": "barbarian-run.webp"
+        }
+      },
+      "note": "Flare male plate armor, short hair, and battle axe. no walk section; walk reuses the run sheet at the walk clock"
+    },
+    "skeleton": {
+      "body": 95,
+      "anims": {
+        "idle": {
+          "cols": 4,
+          "rows": 8,
+          "fw": 186,
+          "fh": 128,
+          "footX": 88,
+          "footY": 95,
+          "body": 95,
+          "file": "skeleton-idle.webp"
+        },
+        "run": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 184,
+          "fh": 128,
+          "footX": 83,
+          "footY": 100,
+          "body": 99,
+          "file": "skeleton-run.webp"
+        },
+        "attack": {
+          "cols": 4,
+          "rows": 8,
+          "fw": 188,
+          "fh": 128,
+          "footX": 94,
+          "footY": 91,
+          "body": 79,
+          "file": "skeleton-attack.webp"
+        },
+        "die": {
+          "cols": 6,
+          "rows": 8,
+          "fw": 188,
+          "fh": 128,
+          "footX": 91,
+          "footY": 90,
+          "body": 94,
+          "file": "skeleton-die.webp"
+        },
+        "walk": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 184,
+          "fh": 128,
+          "footX": 83,
+          "footY": 100,
+          "body": 99,
+          "file": "skeleton-run.webp"
+        }
+      },
+      "note": "no walk section; walk reuses the run sheet at the walk clock"
+    },
+    "zombie": {
+      "body": 123,
+      "anims": {
+        "idle": {
+          "cols": 4,
+          "rows": 8,
+          "fw": 84,
+          "fh": 128,
+          "footX": 31,
+          "footY": 112,
+          "body": 123,
+          "file": "zombie-idle.webp"
+        },
+        "run": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 132,
+          "fh": 128,
+          "footX": 56,
+          "footY": 109,
+          "body": 115,
+          "file": "zombie-run.webp"
+        },
+        "attack": {
+          "cols": 4,
+          "rows": 8,
+          "fw": 126,
+          "fh": 128,
+          "footX": 56,
+          "footY": 112,
+          "body": 127,
+          "file": "zombie-attack.webp"
+        },
+        "die": {
+          "cols": 6,
+          "rows": 8,
+          "fw": 119,
+          "fh": 128,
+          "footX": 59,
+          "footY": 99,
+          "body": 103,
+          "file": "zombie-die.webp"
+        },
+        "walk": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 132,
+          "fh": 128,
+          "footX": 56,
+          "footY": 109,
+          "body": 115,
+          "file": "zombie-run.webp"
+        }
+      },
+      "note": "no walk section; walk reuses the run sheet at the walk clock"
+    },
+    "goblin": {
+      "body": 88,
+      "anims": {
+        "idle": {
+          "cols": 4,
+          "rows": 8,
+          "fw": 154,
+          "fh": 110,
+          "footX": 70,
+          "footY": 87,
+          "body": 88,
+          "file": "goblin-idle.webp"
+        },
+        "run": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 123,
+          "fh": 128,
+          "footX": 56,
+          "footY": 109,
+          "body": 61,
+          "file": "goblin-run.webp"
+        },
+        "attack": {
+          "cols": 3,
+          "rows": 8,
+          "fw": 182,
+          "fh": 128,
+          "footX": 84,
+          "footY": 102,
+          "body": 83,
+          "file": "goblin-attack.webp"
+        },
+        "die": {
+          "cols": 6,
+          "rows": 8,
+          "fw": 143,
+          "fh": 128,
+          "footX": 68,
+          "footY": 96,
+          "body": 95,
+          "file": "goblin-die.webp"
+        },
+        "walk": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 123,
+          "fh": 128,
+          "footX": 56,
+          "footY": 109,
+          "body": 61,
+          "file": "goblin-run.webp"
+        }
+      },
+      "note": "no walk section; walk reuses the run sheet at the walk clock"
+    },
+    "minotaur": {
+      "body": 122,
+      "anims": {
+        "idle": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 137,
+          "fh": 128,
+          "footX": 63,
+          "footY": 106,
+          "body": 122,
+          "file": "minotaur-idle.webp"
+        },
+        "run": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 147,
+          "fh": 128,
+          "footX": 68,
+          "footY": 104,
+          "body": 97,
+          "file": "minotaur-run.webp"
+        },
+        "attack": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 145,
+          "fh": 128,
+          "footX": 72,
+          "footY": 104,
+          "body": 88,
+          "file": "minotaur-attack.webp"
+        },
+        "die": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 139,
+          "fh": 128,
+          "footX": 67,
+          "footY": 95,
+          "body": 123,
+          "file": "minotaur-die.webp"
+        },
+        "walk": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 147,
+          "fh": 128,
+          "footX": 68,
+          "footY": 104,
+          "body": 97,
+          "file": "minotaur-run.webp"
+        }
+      },
+      "note": "no walk section; walk reuses the run sheet at the walk clock"
+    },
+    "antlion": {
+      "body": 125,
+      "anims": {
+        "idle": {
+          "cols": 4,
+          "rows": 8,
+          "fw": 172,
+          "fh": 128,
+          "footX": 86,
+          "footY": 86,
+          "body": 125,
+          "file": "antlion-idle.webp"
+        },
+        "run": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 200,
+          "fh": 128,
+          "footX": 98,
+          "footY": 86,
+          "body": 116,
+          "file": "antlion-run.webp"
+        },
+        "attack": {
+          "cols": 4,
+          "rows": 8,
+          "fw": 177,
+          "fh": 128,
+          "footX": 87,
+          "footY": 90,
+          "body": 59,
+          "file": "antlion-attack.webp"
+        },
+        "die": {
+          "cols": 6,
+          "rows": 8,
+          "fw": 152,
+          "fh": 128,
+          "footX": 72,
+          "footY": 96,
+          "body": 96,
+          "file": "antlion-die.webp"
+        },
+        "walk": {
+          "cols": 8,
+          "rows": 8,
+          "fw": 200,
+          "fh": 128,
+          "footX": 98,
+          "footY": 86,
+          "body": 116,
+          "file": "antlion-run.webp"
+        }
+      },
+      "note": "no walk section; walk reuses the run sheet at the walk clock"
+    }
+  },
+  "aliases": {
+    "fallen": "goblin",
+    "goatman": "minotaur",
+    "quillrat": "antlion",
+    "hungry-dead": "zombie"
+  }
+}

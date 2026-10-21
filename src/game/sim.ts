@@ -23,7 +23,9 @@ import {
   heroNumbers,
   inShopRange,
   manaCost,
+  noteDebuff,
   recomputeHero,
+  syncChampionLevels,
   ring,
   sfx,
   tryAssignBelt,
@@ -86,6 +88,9 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     cs: 0,
     kills: 0,
     deaths: 0,
+    assists: 0,
+    allyKills: 0,
+    enemyKills: 0,
     sfx: [],
     shake: 0,
   };
@@ -167,6 +172,7 @@ function blankUnit(sim: Sim, partial: Pick<Unit, 'defId' | 'kind' | 'team' | 'na
     kind: partial.kind,
     team: partial.team,
     name: partial.name,
+    level: partial.level ?? 1,
     x: partial.x ?? 0,
     y: partial.y ?? 0,
     radius: partial.radius ?? 16,
@@ -230,6 +236,8 @@ function blankUnit(sim: Sim, partial: Pick<Unit, 'defId' | 'kind' | 'team' | 'na
     combat: 0,
     respawn: 0,
     corpse: 0,
+    diedAt: 0,
+    threats: [],
     color: partial.color ?? '#888',
     accent: partial.accent ?? '#fff',
   };
@@ -393,6 +401,7 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
   if (sim.phase !== 'playing') return;
   const step = Math.max(0, Math.min(dt, 0.05));
   sim.time += step;
+  syncChampionLevels(sim);
   championsMoved = new Set();
   activeSim = sim;
 
@@ -509,7 +518,7 @@ function tickStatus(sim: Sim, unit: Unit, dt: number): void {
       for (const other of sim.units) {
         if (!other.alive || other.team === unit.team) continue;
         if (Math.hypot(other.x - unit.x, other.y - unit.y) <= radius + other.radius) {
-          damageUnit(sim, other, damage, unit);
+          damageUnit(sim, other, damage, unit, 'magic');
         }
       }
       ring(sim, unit.x, unit.y, radius * 0.7, 'rgba(230, 211, 161, 0.9)');
@@ -532,8 +541,9 @@ function advanceLeap(sim: Sim, unit: Unit, dt: number): void {
   for (const other of [...sim.units]) {
     if (!other.alive || other.team === unit.team) continue;
     if (Math.hypot(other.x - unit.x, other.y - unit.y) <= radius + other.radius) {
-      damageUnit(sim, other, damage, unit);
+      damageUnit(sim, other, damage, unit, 'magic');
       other.slow = Math.max(other.slow, 1.15);
+      noteDebuff(sim, other, unit);
       other.slowPct = Math.max(other.slowPct, 0.35);
     }
   }
@@ -1036,6 +1046,7 @@ function deliverAttack(sim: Sim, unit: Unit, target: Unit): void {
   if (unit.affix === 'Cursed') {
     target.slow = Math.max(target.slow, 1.2);
     target.slowPct = Math.max(target.slowPct, 0.25);
+    noteDebuff(sim, target, unit);
   }
   if (unit.affix === 'Mana Burn') target.mana = Math.max(0, target.mana - 12);
   unit.swing = 1;
