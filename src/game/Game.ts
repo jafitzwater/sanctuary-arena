@@ -234,6 +234,21 @@ export class Game {
         const hero = player(game.sim);
         return hero.leap ? { x0: hero.leap.x0, y0: hero.leap.y0, x1: hero.leap.x1, y1: hero.leap.y1 } : null;
       },
+      stats() {
+        const hero = player(game.sim);
+        const enemy = game.sim.units.find((unit) => unit.id === game.sim.enemyChampionId);
+        return {
+          kills: game.sim.kills,
+          deaths: game.sim.deaths,
+          assists: game.sim.assists,
+          allyKills: game.sim.allyKills,
+          enemyKills: game.sim.enemyKills,
+          heroLevel: hero.level,
+          enemyLevel: enemy?.level ?? 0,
+          kd: document.querySelector('#kd')?.textContent ?? '',
+          score: document.querySelector('#score')?.textContent ?? '',
+        };
+      },
     };
   }
 }

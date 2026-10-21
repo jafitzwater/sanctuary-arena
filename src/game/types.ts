@@ -17,12 +17,20 @@ export interface LeapState {
   kind: 'leap' | 'leap-attack';
 }
 
+export interface ThreatMark {
+  id: number;
+  team: Team;
+  t: number;
+}
+
 export interface Unit {
   id: number;
   defId: string;
   kind: UnitKind;
   team: Team;
   name: string;
+  /** Overhead badge. Only the player's level changes combat stats. */
+  level: number;
   x: number;
   y: number;
   radius: number;
@@ -95,6 +103,10 @@ export interface Unit {
   combat: number;
   respawn: number;
   corpse: number;
+  /** sim.time when this unit died. 0 while alive. */
+  diedAt: number;
+  /** Recent champion damage or debuff, for assists. */
+  threats: ThreatMark[];
   color: string;
   accent: string;
 }
@@ -124,6 +136,9 @@ export interface Fx {
   text?: string;
   vy?: number;
   facing?: number;
+  /** Set on damage numbers. Physical is orange, magic is magenta, taken is red. */
+  school?: 'physical' | 'magic';
+  taken?: boolean;
 }
 
 export interface Loadout {
@@ -174,6 +189,10 @@ export interface Sim {
   cs: number;
   kills: number;
   deaths: number;
+  assists: number;
+  /** Champion kills scored by each team. */
+  allyKills: number;
+  enemyKills: number;
   sfx: string[];
   shake: number;
 }

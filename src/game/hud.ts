@@ -1,6 +1,6 @@
 import portraitUrl from '../assets/art/d2/portrait.webp';
 import { ROSTER } from './data/classes/roster';
-import { itemIcon, skillIcon } from './art/icons';
+import { itemIcon, plateIcons, skillIcon } from './art/icons';
 import { isShopItem, ITEMS, potionCap, type ItemDef } from './data/items';
 import { inShopRange, manaCost, MAX_LEVEL, xpToNext } from './combat';
 import { player } from './query';
@@ -55,7 +55,22 @@ export class Hud {
   private drag: { id: string; pointer: number; x: number; y: number; moved: boolean } | null = null;
   private ghost: HTMLElement | null = null;
 
-  constructor(private root: HTMLElement) {}
+  constructor(private root: HTMLElement) {
+    this.bindPlateIcons();
+  }
+
+  /** Decode each plate image once. The frame loop does not touch these nodes. */
+  private bindPlateIcons(): void {
+    const set = (selector: string, src: string) => {
+      const img = this.root.querySelector<HTMLImageElement>(selector);
+      if (img && img.getAttribute('src') !== src) img.src = src;
+    };
+    set('#attack-btn img', plateIcons.attack);
+    set('#recall-btn img', plateIcons.recall);
+    set('#settings-btn img', plateIcons.cog);
+    set('#potion-hp img', plateIcons.health);
+    set('#potion-mp img', plateIcons.mana);
+  }
 
   bind(): void {
     const portrait = this.root.querySelector<HTMLImageElement>('#portrait-img');
@@ -223,8 +238,8 @@ export class Hud {
     this.text('#level', String(sim.level));
     this.text('#gold', String(Math.floor(sim.gold)));
     this.text('#cs', `${sim.cs} cs`);
-    this.text('#kd', `${sim.kills} / ${sim.deaths}`);
-    this.text('#score', structureScore(sim));
+    this.text('#kd', `${sim.kills} / ${sim.deaths} / ${sim.assists}`);
+    this.text('#score', `${sim.allyKills}–${sim.enemyKills}`);
     this.text('#clock', formatClock(sim.time));
     const names = [sim.loadout.weapon, sim.loadout.offhand, sim.loadout.armor, sim.loadout.helm, sim.loadout.belt].filter(Boolean);
     this.text('#loadout', names.length ? names.map(labelOf).join(' · ') : 'Unarmed');
@@ -353,7 +368,7 @@ export class Hud {
     );
     this.text(
       '#end-stats',
-      `Level ${sim.level}  ·  ${sim.kills} kills  ·  ${sim.deaths} deaths  ·  ${sim.cs} last hits  ·  ${formatTime(sim.time)}`,
+      `Level ${sim.level}  ·  ${sim.kills} / ${sim.deaths} / ${sim.assists}  ·  ${sim.cs} last hits  ·  ${formatTime(sim.time)}`,
     );
   }
 
@@ -881,18 +896,6 @@ function formatClock(seconds: number): string {
   const m = Math.floor(whole / 60);
   const s = whole % 60;
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-}
-
-/** Towers and Worldstones down. There is no stored team-kill counter. */
-function structureScore(sim: Sim): string {
-  let ally = 0;
-  let enemy = 0;
-  for (const unit of sim.units) {
-    if (unit.alive || (unit.kind !== 'tower' && unit.kind !== 'base')) continue;
-    if (unit.team === 'enemy') ally += 1;
-    else if (unit.team === 'ally') enemy += 1;
-  }
-  return `${ally}–${enemy}`;
 }
 
 function labelOf(id: string | null): string {

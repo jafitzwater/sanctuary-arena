@@ -1,11 +1,14 @@
-import bash from '../../assets/art/icons/bash.png';
-import shout from '../../assets/art/icons/shout.png';
-import stun from '../../assets/art/icons/stun.png';
-import leap from '../../assets/art/icons/leap-attack.png';
+import bash from '../../assets/ui/icons/shield-bash.svg';
+import shout from '../../assets/ui/icons/screaming.svg';
+import stun from '../../assets/ui/icons/knockout.svg';
+import leap from '../../assets/ui/icons/wingfoot.svg';
 import orders from '../../assets/art/icons/battle-orders.png';
-import whirl from '../../assets/art/icons/whirlwind.png';
-import health from '../../assets/art/icons/health-potion.png';
-import mana from '../../assets/art/icons/mana-potion.png';
+import whirl from '../../assets/ui/icons/whirlwind.svg';
+import health from '../../assets/ui/icons/health-potion.svg';
+import mana from '../../assets/ui/icons/magic-potion.svg';
+import attack from '../../assets/ui/icons/battle-axe.svg';
+import recall from '../../assets/ui/icons/portal.svg';
+import cog from '../../assets/ui/icons/cog.svg';
 import clb from '../../assets/art/icons/clb.png';
 import ssd from '../../assets/art/icons/ssd.png';
 import flc from '../../assets/art/icons/flc.png';
@@ -48,6 +51,15 @@ const GEAR: Record<string, string> = {
   fhl,
   lbl,
   mbl,
+};
+
+/** Attack, recall, and the cog are not skill ids. The plates read these once. */
+export const plateIcons = {
+  attack,
+  recall,
+  cog,
+  health,
+  mana,
 };
 
 export function skillIcon(id: string): string {

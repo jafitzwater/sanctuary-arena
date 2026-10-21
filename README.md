@@ -2,7 +2,7 @@
 
 A personal, non-commercial browser MOBA with a Diablo II theme. The match is Sanctuary: three paths from the Rogue Encampment to Harrogath, split by a river. The Barbarian's goal is the enemy Worldstone. Act I's single Blood Moor lane is still in the data files for the older tests.
 
-The look is an isometric take on Act I. Real Spriters Resource frames (Barbarian light, medium, and heavy; Fallen; Fallen Shaman; Zombie; Rogue mercenary; Akara; Act I town and outdoor floor diamonds; outdoor trees, rocks, fences, and tents) are bundled under `src/assets/art/d2/`. Blood Raven and the quill rat are still drawn for this project. There is no water tile or Worldstone sheet in the supplied art, so the river uses the darkest floor diamonds and the Worldstones use outdoor stone sprites. The page does not hotlink art or audio. Sound effects and the ambient bed are synthesized in the browser (`src/game/audio.ts`).
+The look is an isometric take on Act I. The Barbarian and the mapped monsters are 8-direction sheets from Flare, repacked to WebP by `tools/slice-flare.py` and drawn from `src/assets/art/flare/`. Flare's art is dual licensed CC BY-SA 3.0 and GPL-3.0. Share-alike covers those sprite sheets and adaptations of them; it does not relicense the rest of this repository. Blood Raven, rogues, willowisps, mummies, demons, towers, bases, and seals stay procedural. The page does not hotlink art or audio. Sound effects and the ambient bed are synthesized in the browser (`src/game/audio.ts`). See [CREDITS.md](CREDITS.md).
 
 Numbers for the Barbarian, the skill tree, Act I normal shop bases, and Act I monsters come from Diablo II 1.13c text files, converted once by `tools/import-d2.mjs` into `src/game/data/d2/`. The match does not fetch them at runtime. See [Diablo II data](#diablo-ii-data).
 
@@ -145,19 +145,11 @@ node tools/import-d2.mjs
 
 ### Sprites
 
-The Spriters Resource hosts Diablo II and Lord of Destruction sheets (Barbarian by mode and weapon class, Act I monsters, Rogues, and town tiles) at <https://www.spriters-resource.com/pc_computer/diablo2diablo2lordofdestruction/>. Those are Blizzard assets. This personal, non-commercial project does not hotlink them.
+Live units come from Flare (`tools/slice-flare.py`, `src/game/art/flare.ts`). The atlases are served from `public/flare/`. Rows are the eight compass directions, east then clockwise. Columns are the frames of one animation. Walk reuses Flare's run sheet and plays it at 4 Hz; run plays it at 6.25 Hz; idle is the stance at 1 Hz. Attack frames follow the champion windup and backswing. A unit with no sheet falls back to the procedural figure. The Flare sheets are CC BY-SA 3.0 (share-alike) and GPL-3.0; see [CREDITS.md](CREDITS.md).
 
-`tools/slice-explicit.py` cuts whole cells from the labeled Barbarian bands (Town Walk, Neutral, Run, Attack1) on the light, medium, and heavy sheets. `tools/slice-act1.py` re-anchors those frames on one foot per armor tier, keys Akara, and cuts 160×80 floor diamonds plus outdoor trees, rocks, fences, tents, and stones. `tools/slice-monsters.py` cuts eight-direction walk and idle atlases from the Fallen body, Zombie body, and Fallen Shaman sheets. Each atlas is south, then clockwise. Medium and heavy have no Neutral block, so their idle frame is the first town-walk pose. Whirlwind, leap, cast, get-hit, and death stay on that same armor atlas (run, attack, or idle) instead of a second drawing. The Rogue mercenary sheet supplies the Rogue and Rogue archer. Bishibosh uses the Fallen Shaman sheet. Akara stands in the encampment. The ground is stamped from Act I floor diamonds (grass, path, town, pale stone, dark). `src/game/art/sheets.ts` (`d2Atlas`) is the swap point. DCC and COF files are not extracted. The plain rat sheet is not used for the quill rat.
+Older Spriters Resource crops and their slicers (`tools/slice-explicit.py`, `tools/slice-act1.py`, `tools/slice-monsters.py`) are not the live unit renderer. The ground, orbs, and belt are still the project's own drawings. Plate icons for attack, Bash, Shout, Stun, Leap Attack, Whirlwind, Recall, potions, and settings are game-icons.net SVGs in `src/assets/ui/icons/`. Battle Orders and the gear icons stay in `src/assets/art/icons/`. The Kenney stick is `src/assets/ui/joystick/`.
 
-Real, from the supplied Spriters Resource sheets: Barbarian idle, walk, run, and attack in eight directions for light, medium, and heavy armor; Fallen; Zombie; Fallen Shaman; Rogue mercenary; Akara; Act I town and outdoor floor diamonds; Act I trees, rocks, fences, tents, and stones.
-
-Still drawn for this project: the quill rat (no sheet was supplied); Blood Raven. Skeleton, hungry dead, and mummy reuse the Zombie sheet. Goatman reuses Fallen. Demon, willowisp, and the pit monsters reuse Fallen Shaman. No Act I water tile, Worldstone, well, campfire, or tower sheet was supplied. Kashya, Warriv, and the graveyard sheet are not drawn. Level-up plays the existing three-note cue plus a gold ring and a "Level N" floater, and refills life and mana after the new maximums.
-
-Generated stand-ins, drawn for this project to match the Diablo II shapes rather than ripped from the sheets:
-
-- Life orb, mana orb, and belt frame: `src/assets/art/ui/`
-- Bash, Shout, Stun, Leap Attack, Battle Orders, and Whirlwind icons, plus weapon, armor, helm, belt, and potion icons: `src/assets/art/icons/` (`src/game/art/icons.ts`)
-- Blood Raven, idle and walk: `src/assets/art/generated/`. The quill rat atlas is `src/assets/art/d2/quillrat.webp`.
+Still procedural: Blood Raven, rogue, rogue archer, willowisp, mummy, demon, towers, bases, and seals. Fallen uses the goblin sheet, the goatman uses the minotaur, the quill rat uses the antlion, and the hungry dead share the zombie sheet. Level-up plays the existing three-note cue plus a gold ring and a "Level N" floater, and refills life and mana after the new maximums.
 
 ## Known gaps
 
@@ -165,5 +157,5 @@ Generated stand-ins, drawn for this project to match the Diablo II shapes rather
 - The match uses six Barbarian skills and a four-slot belt, not the full 30-skill tree. The 1.13c JSON is still in the repo as the reference for names and raw numbers. Ranks stop at 5. Battle Orders raises life only. Shout raises defense for a few seconds.
 - Cooldowns and monster damage are scaled for a short match. Exceptional and elite items are not in the shop. Dual wield uses the slower swing and about half the offhand damage.
 - Blood Raven kites and retreats; she does not cast a skill kit. Rogues use the mercenary sheet, not a separate archer body.
-- Death is not a labeled block on the Barbarian sheets, so a corpse is the idle frame laid flat. Audio is synthesized, not the Diablo II soundtrack.
+- Audio is synthesized, not the Diablo II soundtrack. Flare supplies a die animation for the units that have a sheet.
 - The isometric camera shows the lane from a 2:1 angle. Movement on the stick and arrow keys follows the screen, not the raw map axes.
