@@ -180,6 +180,7 @@ export class Renderer {
   private readonly lights: LightSource[] = [];
   private readonly hudPaint: (() => void)[] = [];
   private mistCanvas: HTMLCanvasElement | null = null;
+  private mistPattern: CanvasPattern | null = null;
   private mistOffset = 0;
   private flashCanvas: HTMLCanvasElement | null = null;
   private readonly aliveWas = new Set<number>();
@@ -821,21 +822,18 @@ export class Renderer {
   }
 
   private drawMist(sim: Sim, cssW: number, cssH: number): void {
-    const tile = this.ensureMist();
-    if (!tile) return;
+    const pattern = this.ensureMistPattern();
+    if (!pattern) return;
     const drift = (this.mistOffset + Math.min(0.05, this.frameDt) * 13.5) % 256;
     this.mistOffset = drift;
-    const ox = drift % 256;
-    const oy = (drift * 0.35) % 256;
     const ctx = this.ctx;
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
     ctx.globalAlpha = this.mistAlpha(sim);
-    for (let y = -256 + oy; y < cssH; y += 256) {
-      for (let x = -256 + ox; x < cssW; x += 256) ctx.drawImage(tile, x, y);
-    }
+    ctx.translate(drift, (drift * 0.35) % 256);
+    ctx.fillStyle = pattern;
+    ctx.fillRect(-256, -256, cssW + 512, cssH + 512);
     ctx.restore();
-    crisp(ctx);
   }
 
   private mistAlpha(sim: Sim): number {
@@ -846,6 +844,14 @@ export class Renderer {
     if (kind === 'town' || camp) return 0.07;
     if (kind === 'grass' || kind === 'edge' || kind === 'bank' || kind === 'dark' || kind === 'river') return 0.15;
     return 0.12;
+  }
+
+  private ensureMistPattern(): CanvasPattern | null {
+    if (this.mistPattern) return this.mistPattern;
+    const tile = this.ensureMist();
+    if (!tile) return null;
+    this.mistPattern = this.ctx.createPattern(tile, 'repeat');
+    return this.mistPattern;
   }
 
   private ensureMist(): HTMLCanvasElement | null {

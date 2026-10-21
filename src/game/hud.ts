@@ -48,6 +48,10 @@ export class Hud {
   private shopPick: string | null = null;
   private quickId: string | null = null;
   private shopGridKey = '';
+  private readonly skillSig = ['', '', '', ''];
+  private readonly textSeen = new WeakMap<Node, string>();
+  private readonly barSeen = new Map<string, string>();
+  private readonly attrSeen = new WeakMap<Element, Map<string, string>>();
   private drag: { id: string; pointer: number; x: number; y: number; moved: boolean } | null = null;
   private ghost: HTMLElement | null = null;
 
@@ -195,9 +199,9 @@ export class Hud {
     const title = this.q('#title');
     const hud = this.q('#hud');
     const end = this.q('#end');
-    title.hidden = mode !== 'title';
-    hud.hidden = mode !== 'play';
-    end.hidden = mode !== 'end';
+    this.reveal(title, mode === 'title');
+    this.reveal(hud, mode === 'play');
+    this.reveal(end, mode === 'end');
     if (mode === 'end') this.fillEnd(sim);
     if (mode !== 'play') return;
 
@@ -226,18 +230,18 @@ export class Hud {
 
     const banner = this.q('#banner');
     if (sim.banner) {
-      banner.hidden = false;
-      banner.textContent = sim.banner.text;
-    } else banner.hidden = true;
+      this.reveal(banner, true);
+      this.writeText(banner, sim.banner.text);
+    } else this.reveal(banner, false);
     const tip = this.q('#tip');
-    tip.hidden = true;
-    tip.textContent = '';
+    this.reveal(tip, false);
+    this.writeText(tip, '');
 
     const death = this.q('#death');
     if (!hero.alive) {
-      death.hidden = false;
-      death.textContent = `Slain — returning in ${Math.ceil(hero.respawn)}s`;
-    } else death.hidden = true;
+      this.reveal(death, true);
+      this.writeText(death, `Slain — returning in ${Math.ceil(hero.respawn)}s`);
+    } else this.reveal(death, false);
 
     const near = !hero.alive || inShopRange(sim, hero);
     const shopJust = this.shopOpen && !this.sawShop;
@@ -246,15 +250,18 @@ export class Hud {
     this.sawTree = this.treeOpen;
     const note = this.q('#shop-note');
     const stats = `Str ${sim.attributes.str} · Dex ${sim.attributes.dex} · potions ${potionCap(sim.loadout.belt)}`;
-    note.textContent = near
-      ? hero.alive
-        ? `In camp. A new piece replaces the old one. ${stats}`
-        : `You can trade while you wait to return. ${stats}`
-      : `Outside camp. Walk back before Akara will sell. ${stats}`;
+    this.writeText(
+      note,
+      near
+        ? hero.alive
+          ? `In camp. A new piece replaces the old one. ${stats}`
+          : `You can trade while you wait to return. ${stats}`
+        : `Outside camp. Walk back before Akara will sell. ${stats}`,
+    );
     const shopBtn = this.root.querySelector<HTMLButtonElement>('#shop-btn');
     if (shopBtn) {
       const touch = document.body.classList.contains('touch');
-      shopBtn.textContent = near ? 'Shop' : touch ? 'Camp' : 'Shop · camp';
+      this.writeText(shopBtn, near ? 'Shop' : touch ? 'Camp' : 'Shop · camp');
     }
     this.syncTarget(sim, focusId);
     this.syncSkills(sim);
@@ -262,30 +269,35 @@ export class Hud {
     this.text('#potion-hp-count', String(sim.potions.health));
     this.text('#potion-mp-count', String(sim.potions.mana));
     const help = this.q('#help');
-    help.hidden = !this.helpOpen;
+    this.reveal(help, this.helpOpen);
     const tree = this.q('#tree');
-    tree.hidden = !this.treeOpen;
+    this.reveal(tree, this.treeOpen);
     const shop = this.q('#shop');
-    shop.hidden = !this.shopOpen;
-    shop.classList.toggle('far', this.shopOpen && !near);
-    for (const id of ['skills', 'stats'] as const) {
-      this.root.querySelector(`#tab-${id}`)?.classList.toggle('on', this.tab === id);
-      this.root.querySelector(`#tab-${id}`)?.setAttribute('aria-selected', this.tab === id ? 'true' : 'false');
-      const pane = this.root.querySelector<HTMLElement>(`#pane-${id}`);
-      if (pane) pane.hidden = this.tab !== id;
+    this.reveal(shop, this.shopOpen);
+    if (this.shopOpen) this.setClass(shop, 'far', !near);
+    if (this.treeOpen) {
+      for (const id of ['skills', 'stats'] as const) {
+        const tab = this.root.querySelector(`#tab-${id}`);
+        if (tab) {
+          this.setClass(tab, 'on', this.tab === id);
+          this.setAttr(tab, 'aria-selected', this.tab === id ? 'true' : 'false');
+        }
+        const pane = this.root.querySelector<HTMLElement>(`#pane-${id}`);
+        if (pane) this.reveal(pane, this.tab === id);
+      }
+      const heading = this.root.querySelector('#tree-heading');
+      if (heading) this.writeText(heading, this.tab === 'stats' ? 'Stats' : 'Loadout');
     }
-    const heading = this.root.querySelector('#tree-heading');
-    if (heading) heading.textContent = this.tab === 'stats' ? 'Stats' : 'Loadout';
     const treeBtn = this.root.querySelector<HTMLButtonElement>('#tree-btn');
     if (treeBtn) {
       const pts = sim.skillPoints + sim.statPoints;
       const touch = document.body.classList.contains('touch');
-      treeBtn.textContent = pts > 0 ? (touch ? `Pts ${pts}` : `Points ${pts}`) : touch ? 'Pts' : 'Points';
-      treeBtn.setAttribute('aria-label', pts > 0 ? `${pts} points to spend` : 'Points');
-      treeBtn.classList.toggle('has-points', pts > 0);
+      this.writeText(treeBtn, pts > 0 ? (touch ? `Pts ${pts}` : `Points ${pts}`) : touch ? 'Pts' : 'Points');
+      this.setAttr(treeBtn, 'aria-label', pts > 0 ? `${pts} points to spend` : 'Points');
+      this.setClass(treeBtn, 'has-points', pts > 0);
     }
     if (!this.treeOpen || this.tab !== 'skills') this.pendingSkill = null;
-    this.syncTree(sim);
+    if (this.treeOpen) this.syncTree(sim);
   }
 
   markClass(id: string): void {
@@ -387,46 +399,63 @@ export class Hud {
     const keys = ['Q', 'W', 'E', 'R'];
     const hero = player(sim);
     sim.belt.forEach((id, slot) => {
-      const button = this.root.querySelector<HTMLButtonElement>(`#skills [data-slot="${slot}"]`);
-      if (!button) return;
       const skill = sim.classDef.skills.find((entry) => entry.id === id);
-      button.dataset.cast = id;
-      const name = button.querySelector('[data-sname]');
-      if (name) name.textContent = skill ? skill.short || skill.name : '+';
-      const icon = button.querySelector<HTMLImageElement>('[data-sicon]');
-      if (icon) {
-        const src = skill ? skillIcon(skill.id) : '';
-        icon.hidden = !src;
-        if (src) icon.src = src;
-      }
-      button.removeAttribute('title');
       const rank = skill ? (sim.skillRanks[skill.id] ?? 0) : 0;
       const cd = skill ? (sim.cooldowns[skill.id] ?? 0) : 0;
       const cost = skill && rank > 0 ? manaCost(skill, rank) : 0;
       const dry = !!skill && rank > 0 && hero.mana < cost;
-      button.classList.toggle('locked', !skill || rank <= 0);
-      button.classList.toggle('nomana', dry);
-      button.classList.toggle('ready', !!skill && rank > 0 && cd <= 0.05 && !dry);
-      button.classList.toggle('arming', this.pendingSkill != null);
-      const rankEl = button.querySelector<HTMLElement>('[data-rank]');
-      if (rankEl) rankEl.textContent = skill && rank > 0 ? String(rank) : '';
-      const cdEl = button.querySelector<HTMLElement>('[data-cd]');
+      const ready = !!skill && rank > 0 && cd <= 0.05 && !dry;
       const fraction = skill && cd > 0.05 && rank > 0 ? cd / Math.max(0.1, skill.cooldown) : 0;
-      button.style.setProperty('--cd', String(fraction));
+      const canLearn = !!skill && sim.skillPoints > 0 && sim.level >= skill.unlockLevel && rank < skill.maxRank;
+      const cdLabel = fraction > 0 ? String(Math.ceil(cd)) : '';
+      const sig = [
+        id,
+        skill ? skill.short || skill.name : '',
+        rank,
+        dry ? 1 : 0,
+        ready ? 1 : 0,
+        this.pendingSkill != null ? 1 : 0,
+        fraction.toFixed(3),
+        cdLabel,
+        canLearn && skill ? skill.id : '',
+        dry ? cost : 0,
+      ].join('|');
+      if (this.skillSig[slot] === sig) return;
+      this.skillSig[slot] = sig;
+      const button = this.root.querySelector<HTMLButtonElement>(`#skills [data-slot="${slot}"]`);
+      if (!button) return;
+      button.dataset.cast = id;
+      const name = button.querySelector('[data-sname]');
+      if (name) this.writeText(name, skill ? skill.short || skill.name : '+');
+      const icon = button.querySelector<HTMLImageElement>('[data-sicon]');
+      if (icon) {
+        const src = skill ? skillIcon(skill.id) : '';
+        const hide = !src;
+        if (icon.hidden !== hide) icon.hidden = hide;
+        if (src && icon.getAttribute('src') !== src) icon.src = src;
+      }
+      button.removeAttribute('title');
+      this.setClass(button, 'locked', !skill || rank <= 0);
+      this.setClass(button, 'nomana', dry);
+      this.setClass(button, 'ready', ready);
+      this.setClass(button, 'arming', this.pendingSkill != null);
+      const rankEl = button.querySelector<HTMLElement>('[data-rank]');
+      if (rankEl) this.writeText(rankEl, skill && rank > 0 ? String(rank) : '');
+      const cdEl = button.querySelector<HTMLElement>('[data-cd]');
+      button.style.setProperty('--cd', fraction.toFixed(3));
       if (cdEl) {
         if (fraction > 0) {
-          cdEl.hidden = false;
-          cdEl.textContent = String(Math.ceil(cd));
-        } else cdEl.hidden = true;
+          this.reveal(cdEl, true);
+          this.writeText(cdEl, cdLabel);
+        } else this.reveal(cdEl, false);
       }
       const plus = button.querySelector<HTMLElement>('[data-upgrade]');
-      const canLearn = !!skill && sim.skillPoints > 0 && sim.level >= skill.unlockLevel && rank < skill.maxRank;
       if (plus) {
-        plus.hidden = !canLearn;
+        this.reveal(plus, canLearn);
         plus.dataset.upgrade = skill && canLearn ? skill.id : '';
       }
       const manaNote = dry ? `, need ${cost} mana` : '';
-      button.setAttribute('aria-label', skill ? `${keys[slot]} ${skill.name}${manaNote}` : `${keys[slot]} empty`);
+      this.setAttr(button, 'aria-label', skill ? `${keys[slot]} ${skill.name}${manaNote}` : `${keys[slot]} empty`);
     });
   }
 
@@ -437,10 +466,10 @@ export class Hud {
     const id = focusId ?? hero.targetId;
     const unit = sim.units.find((entry) => entry.id === id && entry.alive && entry.team !== 'ally');
     if (!unit || unit.maxHp <= 0) {
-      bar.hidden = true;
+      this.reveal(bar, false);
       return;
     }
-    bar.hidden = false;
+    this.reveal(bar, true);
     this.text('#target-name', unit.name);
     this.setBar('#target-fill', unit.hp / unit.maxHp);
   }
@@ -462,6 +491,11 @@ export class Hud {
   }
 
   private syncShop(sim: Sim, near: boolean, justOpened: boolean): void {
+    if (!this.shopOpen) {
+      const chip = this.root.querySelector<HTMLButtonElement>('#quick-buy');
+      if (chip && !chip.hidden) chip.hidden = true;
+      return;
+    }
     const recommended = this.recommended(sim);
     const ready = recommended.find((item) => this.affordable(this.quote(sim, item), near));
     const fallback = recommended.find((item) => !item.consumable) ?? recommended[0] ?? null;
@@ -640,6 +674,7 @@ export class Hud {
   }
 
   private syncTree(sim: Sim): void {
+    if (!this.treeOpen) return;
     this.text(
       '#tree-points',
       `${sim.skillPoints} skill · ${sim.statPoints} stat${document.body.classList.contains('touch') && (this.treeOpen || this.shopOpen) ? ' · paused' : ''}`,
@@ -759,15 +794,46 @@ export class Hud {
 
   private text(sel: string, value: string): void {
     const node = this.root.querySelector(sel);
-    if (node) node.textContent = value;
+    if (node) this.writeText(node, value);
+  }
+
+  /** Skip the write when the string is already on the node. Identical text still invalidates layout. */
+  private writeText(node: Node, value: string): void {
+    if (this.textSeen.get(node) === value) return;
+    node.textContent = value;
+    this.textSeen.set(node, value);
+  }
+
+  private reveal(el: HTMLElement, show: boolean): void {
+    if (el.hidden === !show) return;
+    el.hidden = !show;
+  }
+
+  private setClass(el: Element, name: string, on: boolean): void {
+    if (el.classList.contains(name) === on) return;
+    el.classList.toggle(name, on);
+  }
+
+  private setAttr(el: Element, name: string, value: string): void {
+    let bag = this.attrSeen.get(el);
+    if (!bag) {
+      bag = new Map();
+      this.attrSeen.set(el, bag);
+    }
+    if (bag.get(name) === value) return;
+    el.setAttribute(name, value);
+    bag.set(name, value);
   }
 
   private setBar(sel: string, pct: number): void {
+    const clamped = Math.max(0, Math.min(1, pct));
+    const key = clamped.toFixed(3);
+    if (this.barSeen.get(sel) === key) return;
     const node = this.root.querySelector<HTMLElement>(sel);
     if (!node) return;
-    const clamped = Math.max(0, Math.min(1, pct));
-    if (node.classList.contains('orb-liquid')) node.style.setProperty('--fill', String(clamped));
-    else node.style.width = `${clamped * 100}%`;
+    this.barSeen.set(sel, key);
+    if (node.classList.contains('orb-liquid')) node.style.setProperty('--fill', key);
+    else node.style.width = `${(Number(key) * 100).toFixed(1)}%`;
   }
 
   /**
