@@ -693,7 +693,7 @@ export class Hud {
     if (!this.treeOpen) return;
     this.text(
       '#tree-points',
-      `${sim.skillPoints} skill · ${sim.statPoints} stat${document.body.classList.contains('touch') && (this.treeOpen || this.shopOpen) ? ' · paused' : ''}`,
+      `${sim.skillPoints} skill · ${sim.statPoints} stat`,
     );
     const pending = sim.classDef.skills.find((skill) => skill.id === this.pendingSkill);
     this.text(

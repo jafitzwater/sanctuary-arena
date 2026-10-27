@@ -5,7 +5,6 @@ import { clamp, distToPolyline, nearestOnPolyline, type Vec } from './math';
 /** Outer cliff. Inside this margin the ground is open only on roads and clearings. */
 const EDGE = 48;
 /** Half-width of the impassable channel. Fords are where a road crosses it. */
-const RIVER = 62;
 const OPENING = 150;
 const CORRIDOR = 64;
 /** Bottom 30% of a sprite. Units, towers, and boulders share this band. */
@@ -115,7 +114,6 @@ export function walkable(map: ActDef, x: number, y: number): boolean {
   if (hitProp(map, x, y)) return false;
   if (inOpening(map, x, y)) return true;
   const road = nearestRoad(map, x, y);
-  if (map.river && map.river.length > 1 && distToPolyline({ x, y }, map.river) < RIVER && road > LANE_CLEAR_HALF) return false;
   if (inPlaza(map, x, y)) return true;
   return road <= LANE_CLEAR_HALF;
 }
@@ -182,7 +180,7 @@ export function slide(map: ActDef, from: Vec, to: Vec): Vec {
   return settle(map, to.x, to.y);
 }
 
-/** Push a point out of cliffs, the river, and solid props. */
+/** Push a point out of cliffs and solid props. The river is ground paint only (item 23). */
 export function resolveSanctuary(map: ActDef, x: number, y: number, from?: Vec): Vec {
   if (from && map.paths) return slide(map, from, { x, y });
   return settle(map, x, y);
