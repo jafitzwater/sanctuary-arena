@@ -44,8 +44,9 @@ import { stampBloodPool } from './decals';
 import { heroGaitStep, heroHoldCompass, readStickMotion } from './gait';
 import type { ActDef } from './data/acts/types';
 import { projectIso, unprojectIso } from './iso';
+import { TEAM_GLOW, baseFloorReady, onBaseFloor, paintBaseFloor, paintTeamGlow } from './art/base-ground';
 import { drawItemBeam, drawItemNameplate, ITEM_LABEL_CLASS, type GroundDrop } from './itemBeam';
-import { FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, propForm, sceneryFor, type Prop } from './landscape';
+import { FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, mirroredBases, propForm, sceneryFor, type Prop } from './landscape';
 import { AMBIENT_ALPHA, DarkGothicLighting, type LightSource } from './lighting';
 import type { Vec } from './math';
 import { player } from './query';
@@ -165,6 +166,8 @@ export class Renderer {
   };
   private mapCanvas: HTMLCanvasElement | null = null;
   private mapKey = '';
+  /** Item 7: the CC0 stone floor is loaded and paints both base yards. */
+  private floorArt = false;
   private scenery: Prop[] = [];
   private snapped = false;
   private focusX = 0;
@@ -178,7 +181,7 @@ export class Renderer {
   private frameDt = 0;
   private readonly poses = new Map<number, Pose>();
   /** Campfires and braziers. Visual only; they are not collision props. */
-  private fires: { x: number; y: number; hell: boolean }[] = [];
+  private fires: { x: number; y: number; hell: boolean; blue?: boolean }[] = [];
   private readonly recallTrack = new Map<number, { max: number; x: number; y: number }>();
   private portals: { x: number; y: number; t: number }[] = [];
   private readonly slashT = new Map<number, number>();
@@ -344,13 +347,13 @@ export class Renderer {
     for (const fire of this.fires) {
       const p = this.project(fire.x, fire.y);
       if (p.x < -40 || p.y < -40 || p.x > cssW + 40 || p.y > cssH + 40) continue;
-      drawFire(ctx, p.x, p.y, opts.time, fire.hell);
+      drawFire(ctx, p.x, p.y, opts.time, fire.hell, fire.blue);
       this.lights.push({
         screenX: p.x,
         screenY: p.y - 10,
         radius: fire.hell ? 90 : 100,
         intensity: fire.hell ? 0.75 : 0.9,
-        color: fire.hell ? 'rgb(210, 36, 28)' : 'rgb(255, 148, 48)',
+        color: fire.blue ? TEAM_GLOW.ally : fire.hell ? TEAM_GLOW.enemy : 'rgb(255, 148, 48)',
         flicker: !this.reduceMotion,
       });
     }
@@ -415,8 +418,12 @@ export class Renderer {
   }
 
   private ensureMap(map: ActDef): void {
-    const key = map.id;
+    const mirrored = mirroredBases(map);
+    const floor = mirrored && baseFloorReady();
+    const key = `${map.id}${floor ? ':floor' : ''}`;
     if (this.mapCanvas && this.mapKey === key) return;
+    if (mirrored && !floor) onBaseFloor(() => { this.mapKey = ''; });
+    this.floorArt = floor;
     const hw = BAKE_HW;
     const width = Math.ceil((map.width + map.height) * hw + PAD * 2);
     const height = Math.ceil((map.width + map.height) * hw * 0.5 + PAD * 2);
@@ -433,12 +440,26 @@ export class Renderer {
     ctx.fillRect(0, 0, width, height);
     this.scenery = sceneryFor(map);
     this.stampGround(ctx, map, ox, oy, hw);
+    if (mirrored) {
+      // Item 7: red and blue primary glow over each yard (doc: "Red is one side's primary glow. Blue is the other.").
+      const r = map.fountainRadius * hw * Math.SQRT2 * 1.15;
+      for (const [base, color] of [[map.playerBase, TEAM_GLOW.ally], [map.enemyBase, TEAM_GLOW.enemy]] as const) {
+        const c = projectIso(base.x, base.y, hw, ox, oy);
+        paintTeamGlow(ctx, c.x, c.y, r, r * 0.5, color);
+      }
+    }
     this.bakeProps(ctx, map, ox, oy, hw);
-    this.fires = [
+    this.fires = mirrored
+      ? [
+          // Item 7: the same brazier on each side, mirrored, burning in the side's color.
+          { x: map.playerBase.x + 90, y: map.playerBase.y + 36, hell: false, blue: true },
+          { x: map.enemyBase.x - 90, y: map.enemyBase.y - 36, hell: true },
+        ]
+      : [
       { x: map.playerBase.x + 90, y: map.playerBase.y + 36, hell: false },
       { x: map.enemyBase.x - 80, y: map.enemyBase.y - 24, hell: true },
       { x: map.enemyBase.x + 40, y: map.enemyBase.y + 70, hell: true },
-    ];
+        ];
     this.mapCanvas = canvas;
     this.mapKey = key;
   }
@@ -456,7 +477,7 @@ export class Renderer {
         form === 'cart' ? 36 :
         form === 'figure' ? 44 :
         28) * u;
-      const hell = Math.hypot(prop.x - map.enemyBase.x, prop.y - map.enemyBase.y)
+      const hell = !mirroredBases(map) && Math.hypot(prop.x - map.enemyBase.x, prop.y - map.enemyBase.y)
         < Math.hypot(prop.x - map.playerBase.x, prop.y - map.playerBase.y);
       drawPropArt(ctx, p.x, p.y, h, form, prop.variant, hell);
       paintDecorMark(ctx, p.x, p.y, prop.variant);
@@ -504,6 +525,15 @@ export class Renderer {
     decor: boolean,
     mud: boolean,
   ): void {
+    if (kind === 'town' && this.floorArt) {
+      ctx.save();
+      diamond(ctx, sx, sy);
+      ctx.lineWidth = 2;
+      ctx.clip();
+      const drew = paintBaseFloor(ctx, sx, sy, Math.floor(hash(i, j) * 16));
+      ctx.restore();
+      if (drew) return;
+    }
     const paint = tilePaint(kind);
     diamond(ctx, sx, sy);
     ctx.fillStyle = paint.fill;

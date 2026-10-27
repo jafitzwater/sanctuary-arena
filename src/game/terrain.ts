@@ -233,7 +233,8 @@ export function groundAt(map: ActDef, x: number, y: number): GroundKind {
   }
   const yard = map.paths ? map.fountainRadius : map.plaza;
   if (camp <= yard) return 'town';
-  if (lair <= yard) return map.theme.decor === 'sanctuary' ? 'pale' : 'town';
+  // Item 7: "a similar base, just different colors" - both yards are the same stone.
+  if (lair <= yard) return 'town';
   if (road <= cobble + FLOOR_STEP) return 'blend';
   return 'grass';
 }

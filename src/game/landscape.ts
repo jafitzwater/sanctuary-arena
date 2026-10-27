@@ -175,7 +175,8 @@ function build(map: ActDef): Prop[] {
   if (!map.paths?.length) return props;
   for (const gate of campGates(map)) placePalisade(props, map, gate);
   campFurnish(props, map, map.playerBase, campGates(map)[0], true);
-  campFurnish(props, map, map.enemyBase, campGates(map)[1], false);
+  // Item 7: mirrored bases get the same furnishings.
+  campFurnish(props, map, map.enemyBase, campGates(map)[1], mirroredBases(map));
   placeBoulders(props, map);
   plantForests(props, map);
   return props;
@@ -314,4 +315,9 @@ function plantForests(props: Prop[], map: ActDef): void {
       });
     }
   }
+}
+
+/** Item 7: both sides are the same town (Sanctuary), so the camps are mirrored. */
+export function mirroredBases(map: ActDef): boolean {
+  return !!map.towns && map.towns.ally === map.towns.enemy;
 }

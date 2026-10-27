@@ -47,7 +47,6 @@ Flare's run cycle is also the walk cycle. Playback still uses this game's clocks
 
 These units stay procedural (`src/game/art/figures.ts`, `src/game/art/d2look.ts`): Blood Raven, rogue, rogue archer, willowisp, mummy, demon, towers, bases, and seals.
 
-## Class and wave-mob sheets (batch 3 item a)
+## Base floor (batch 3 item 7)
 
-`public/sprites/classes/*-sheet-64.png`: from Joseph's supplied concept sprites (Sprite Director downscale). No third-party license; Joseph approved committing them (Oct 27).
-`public/sprites/mobs/*-sheet-64.png` (rogue, valkyrie, Act 2 and Act 3 mercenary): original art generated for this project from Joseph-approved concepts. No Diablo 2 ripped assets. No third-party license.
+`public/env/stone_path_128x64.png` is the stone path sheet from [Isometric ground tiles](https://opengameart.org/content/isometric-ground-tiles) by rubberduck, [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Attribution is not required. Both mirrored base yards use the first 16 full-diamond variants, darkened. See `public/env/LICENSE-stone_path.txt`.

@@ -978,14 +978,14 @@ export function drawBolt(ctx: CanvasRenderingContext2D, x: number, y: number, co
   ctx.stroke();
 }
 
-export function drawFire(ctx: CanvasRenderingContext2D, x: number, y: number, time: number, hell: boolean): void {
+export function drawFire(ctx: CanvasRenderingContext2D, x: number, y: number, time: number, hell: boolean, blue = false): void {
   const flick = 0.82 + Math.sin(time * 11 + (hell ? 1 : 0)) * 0.18;
   const radius = 30 * flick;
-  ctx.fillStyle = hell ? 'rgba(255, 90, 40, 0.28)' : 'rgba(255, 176, 72, 0.26)';
+  ctx.fillStyle = blue ? 'rgba(80, 130, 255, 0.28)' : hell ? 'rgba(255, 90, 40, 0.28)' : 'rgba(255, 176, 72, 0.26)';
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = hell ? '#e05030' : '#e8a040';
+  ctx.fillStyle = blue ? '#5a8cf0' : hell ? '#e05030' : '#e8a040';
   ctx.beginPath();
   ctx.moveTo(x - 4, y + 2);
   ctx.lineTo(x, y - 14 * flick);

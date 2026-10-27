@@ -428,7 +428,22 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
     assert.equal(groundAt(sanctuary, mid.x, mid.y), 'path', `${path.name} is a continuous cobble lane`);
   }
   assert.equal(groundAt(sanctuary, sanctuary.playerBase.x, sanctuary.playerBase.y), 'town', 'the encampment yard is wood');
-  assert.equal(groundAt(sanctuary, sanctuary.enemyBase.x, sanctuary.enemyBase.y), 'pale', 'the harrogath yard is paved stone');
+  // Item 7: "a similar base, just different colors" - both yards are the same stone.
+  assert.equal(groundAt(sanctuary, sanctuary.enemyBase.x, sanctuary.enemyBase.y), 'town', 'the mirrored yard matches the player yard');
+  // Item 7: "The three roadways are mirrored end to end." 180-degree turn about the map center.
+  {
+    const flip = (p: { x: number; y: number }) => ({ x: sanctuary.width - p.x, y: sanctuary.height - p.y });
+    const near = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y) <= 1;
+    assert.ok(near(flip(sanctuary.playerBase), sanctuary.enemyBase), 'bases mirror');
+    const lanes = (sanctuary.paths ?? []).map((path) => path.lane);
+    for (const lane of lanes) {
+      const mirrored = [...lane].reverse().map(flip);
+      assert.ok(lanes.some((other) => other.length === mirrored.length && other.every((p, i) => near(p, mirrored[i]))), 'each roadway has a mirror');
+    }
+    for (const tower of sanctuary.towers ?? []) {
+      assert.ok((sanctuary.towers ?? []).some((other) => other.team !== tower.team && near(flip(tower), other)), `${tower.name} has a mirrored tower`);
+    }
+  }
   assert.equal(groundAt(sanctuary, 1500, 1100), 'grass', 'open ground between the paths is grass');
   assert.equal(groundAt(sanctuary, 20, 20), 'grass', 'the map edge is grass, not a void');
   for (let y = 0; y < sanctuary.height; y += 80) {
@@ -443,7 +458,8 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   if (tree) assert.equal(walkable(sanctuary, tree.x, tree.y), false, 'a large tree blocks passage');
   const tent = sceneryFor(sanctuary).find((prop) => prop.kind === 'tent' && prop.block > 0);
   assert.ok(tent && !walkable(sanctuary, tent.x, tent.y), 'a tent blocks passage');
-  assert.equal(groundAt(sanctuary, 2418, 1367), 'blend', 'the lane shoulder uses a grass-to-dirt transition');
+  // Item 7 moved the mirrored center lane; same shoulder offset from its new segment.
+  assert.equal(groundAt(sanctuary, 2598, 1372), 'blend', 'the lane shoulder uses a grass-to-dirt transition');
   const decorLimit = sanctuary.laneWidth / 2 + DECOR_MARGIN;
   for (const prop of sceneryFor(sanctuary)) {
     if (prop.kind !== 'tree' && prop.kind !== 'stump' && prop.kind !== 'rock' && prop.kind !== 'fence') continue;
