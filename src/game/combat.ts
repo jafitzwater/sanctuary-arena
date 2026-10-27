@@ -5,7 +5,8 @@ import { comebackMul, xpShare } from './pace';
 import { player } from './query';
 import type { Fx, Sim, Unit } from './types';
 
-export const MAX_LEVEL = 10;
+/** Doc: "The level cap is 15." (item 11). Exp per level is not in the doc; the repo curve below is kept. */
+export const MAX_LEVEL = 15;
 
 export function xpToNext(level: number): number {
   return 60 + (level - 1) * 55;
@@ -119,9 +120,17 @@ export function ring(sim: Sim, x: number, y: number, r: number, color: string): 
   pushFx(sim, { kind: 'ring', x, y, r, color, life: 0.4, t: 0 });
 }
 
-export function manaCost(def: SkillDef, rank: number): number {
-  const raw = def.mana + def.manaPerRank * Math.max(0, rank - 1);
-  return Math.max(def.minMana, Math.round(raw));
+/**
+ * Gap-list item 13. Doc: "At skill level 1 the mana cost is 10%, level 2 is 15%, level 3 is 20%, and so on."
+ * -> 10/15/20/25/30% [DERIVED]. [TEMP, numbers-table: percent of maximum mana; the doc does not say of what.]
+ * Excluded: the sorceress/necromancer 2% step (no kits for those classes yet).
+ */
+export function manaPct(rank: number): number {
+  return 0.1 + 0.05 * (Math.max(1, rank) - 1);
+}
+
+export function manaCost(_def: SkillDef, rank: number, maxMana: number): number {
+  return Math.round(maxMana * manaPct(rank));
 }
 
 export function grantXp(sim: Sim, amount: number): void {
