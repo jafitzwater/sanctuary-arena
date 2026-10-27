@@ -1110,3 +1110,17 @@ function campSpeed(gait: 'idle' | 'walk' | 'run'): number {
 }
 
 console.log('match tests passed');
+
+{
+  // Item 14. Doc: "The worldstone can be attacked while support towers on that side are still standing."
+  const sim = createMatch(sanctuary, barbarian, 1);
+  const base = findBase(sim, 'enemy');
+  if (!base) throw new Error('no enemy Worldstone');
+  const standing = sim.units.filter((unit) => unit.kind === 'tower' && unit.team === 'enemy' && unit.alive);
+  assert.ok(standing.length > 0);
+  const hp = base.hp;
+  damageUnit(sim, base, 50, player(sim));
+  assert.ok(base.hp < hp, 'the Worldstone takes damage with every enemy tower standing');
+  assert.equal(standing.every((unit) => unit.alive), true);
+}
+console.log('worldstone open ok');
