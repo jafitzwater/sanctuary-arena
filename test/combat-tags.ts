@@ -17,7 +17,7 @@ function match(): Sim {
 }
 
 function enemyOf(sim: Sim): Unit {
-  const enemy = sim.units.find((unit) => unit.id === sim.enemyChampionId);
+  const enemy = sim.units.find((unit) => unit.kind === 'champion' && unit.team === 'enemy');
   assert.ok(enemy);
   return enemy;
 }

@@ -105,7 +105,7 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
   spawnBase(sim, 'enemy');
   for (const tower of map.towers) spawnTower(sim, tower);
   sim.playerId = spawnPlayer(sim).id;
-  sim.enemyChampionId = spawnEnemyChampion(sim).id;
+  if (map.enemyChampion) sim.enemyChampionId = spawnEnemyChampion(sim, map.enemyChampion).id;
   for (const den of map.dens ?? []) {
     spawnDen(sim, den);
     sim.denIn[den.id] = den.respawn;
@@ -330,8 +330,7 @@ function spawnPlayer(sim: Sim): Unit {
   });
 }
 
-function spawnEnemyChampion(sim: Sim): Unit {
-  const spec = sim.map.enemyChampion;
+function spawnEnemyChampion(sim: Sim, spec: NonNullable<Sim['map']['enemyChampion']>): Unit {
   const base = sim.map.enemyBase;
   return blankUnit(sim, {
     defId: 'blood-raven',
