@@ -198,9 +198,20 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
   unit.whirlT = 0;
   unit.targetId = null;
   if (unit.kind === 'minion') unit.corpse = 4.5;
+  let goldMul = 1;
   if (unit.kind === 'champion') {
-    unit.respawn = unit.id === sim.playerId ? 5 + sim.level * 1.35 : 14;
+    // Doc: "The first death takes 5 seconds. Each death after that adds 5 seconds."
+    unit.deathCount += 1;
+    unit.respawn = respawnSeconds(unit.deathCount);
+    unit.streak = 0;
+    if (killer && killer.kind === 'champion' && killer.team !== unit.team) {
+      killer.streak += 1;
+      goldMul = killGoldMul(!sim.firstKillPaid, killer.streak);
+      sim.firstKillPaid = true;
+    }
     if (unit.id === sim.playerId) {
+      // Doc: "They lose 25% of the gold they have."
+      sim.gold -= deathGoldLoss(sim.gold);
       sim.deaths += 1;
       banner(sim, 'You have been slain');
       sfx(sim, 'death');
@@ -244,7 +255,7 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
   const playerKill = killer?.id === sim.playerId;
   const structure = unit.kind === 'tower' || unit.kind === 'base' || unit.kind === 'seal';
   if (playerKill) {
-    awardGold(sim, unit);
+    awardGold(sim, unit, goldMul);
     if (unit.kind === 'minion') sim.cs += 1;
     if (unit.kind === 'champion') sim.kills += 1;
   } else if (structure && killer && killer.team === 'ally') {
@@ -268,9 +279,32 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
   grantXp(sim, xp);
 }
 
-function awardGold(sim: Sim, unit: Unit): void {
+/**
+ * Gap-list items 8 and 9 (refined doc, "Death" and "Premise").
+ * Doc: "The first death takes 5 seconds. Each death after that adds 5 seconds." -> 5 s x death count.
+ * Doc: "They lose 25% of the gold they have." -> 25% of current gold (rounded down).
+ * Doc: "The first character kill of the match pays 50% more gold." -> x1.5.
+ * Doc: "A streak is 3 kills in a row, and that kill also pays 50% more gold." -> x1.5 on the 3rd kill.
+ * Excluded (NEEDS JOSEPH): timer cap, base kill gold/exp, whether the streak bonus repeats.
+ */
+export function respawnSeconds(deathCount: number): number {
+  return 5 * Math.max(1, deathCount);
+}
+
+export function deathGoldLoss(gold: number): number {
+  return Math.floor(Math.max(0, gold) * 0.25);
+}
+
+export function killGoldMul(firstKillOfMatch: boolean, streak: number): number {
+  let mul = 1;
+  if (firstKillOfMatch) mul *= 1.5;
+  if (streak === 3) mul *= 1.5;
+  return mul;
+}
+
+function awardGold(sim: Sim, unit: Unit, mul = 1): void {
   const hero = player(sim);
-  let gold = unit.gold;
+  let gold = Math.round(unit.gold * mul);
   if (hero.findGold > 0 && unit.kind === 'minion') {
     gold += hero.findGold;
     hero.findGold = 0;
