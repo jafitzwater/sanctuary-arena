@@ -46,3 +46,7 @@ Battle Orders still uses the project's own `src/assets/art/icons/battle-orders.p
 Flare's run cycle is also the walk cycle. Playback still uses this game's clocks: idle 1 Hz, walk 4 Hz, run 6.25 Hz, and the attack sheet follows the existing windup and backswing.
 
 These units stay procedural (`src/game/art/figures.ts`, `src/game/art/d2look.ts`): Blood Raven, rogue, rogue archer, willowisp, mummy, demon, towers, bases, and seals.
+
+## Base floor (batch 3 item 7)
+
+`public/env/stone_path_128x64.png` is the stone path sheet from [Isometric ground tiles](https://opengameart.org/content/isometric-ground-tiles) by rubberduck, [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Attribution is not required. Both mirrored base yards use the first 16 full-diamond variants, darkened. See `public/env/LICENSE-stone_path.txt`.

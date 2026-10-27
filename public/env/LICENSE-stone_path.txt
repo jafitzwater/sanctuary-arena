@@ -1,0 +1,4 @@
+Source: https://opengameart.org/content/isometric-ground-tiles
+License: CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/), as stated on the source page (verified 2026-10-27).
+Author: rubberduck
+Attribution not required.

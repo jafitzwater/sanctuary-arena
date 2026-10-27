@@ -3,8 +3,12 @@ import type { ActDef, PathDef, PathId, TowerSpawn } from './types';
 
 
 /**
- * Sanctuary. Three paths join the Rogue Encampment to Harrogath.
- * A diagonal river crosses the wilderness and blocks movement off the fords.
+ * Sanctuary. Three paths join two mirrored Rogue Encampments (batch 3 item 7).
+ * Doc: "Bases mirror the different towns in the different acts. Example: rogue encampment on one side,
+ * and on the other side a similar base, just different colors. Red is one side's primary glow. Blue is
+ * the other. The three roadways are mirrored end to end."
+ * Mirror = 180-degree turn about the map center: (x, y) -> (W - x, H - y), lane order reversed.
+ * The river is ground paint only (item 23).
  * Doc: "Each roadway has 2 support towers, spread apart. A gap of ground exists between
  * the sides where no towers exist." Read per side: each side has an inner and an outer
  * tower on each path, and no towers stand between the two outer towers.
@@ -32,6 +36,25 @@ function along(lane: { x: number; y: number }[], t: number): { x: number; y: num
     dist -= lengths[i];
   }
   return lane[lane.length - 1];
+}
+
+const MAP_W = 4400;
+const MAP_H = 2800;
+
+/** Doc: "The three roadways are mirrored end to end." 180-degree turn about the map center. */
+export function mirrorPoint(p: { x: number; y: number }): { x: number; y: number } {
+  return { x: MAP_W - p.x, y: MAP_H - p.y };
+}
+
+/** The mirrored copy of a lane, walked from the same (ally) end. */
+export function mirrorLane(lane: { x: number; y: number }[]): { x: number; y: number }[] {
+  return [...lane].reverse().map(mirrorPoint);
+}
+
+/** Average a lane with its own mirror, so it maps onto itself end to end. */
+function symmetric(lane: { x: number; y: number }[]): { x: number; y: number }[] {
+  const flip = mirrorLane(lane);
+  return lane.map((p, i) => ({ x: Math.round((p.x + flip[i].x) / 2), y: Math.round((p.y + flip[i].y) / 2) }));
 }
 
 const north: PathDef = {
@@ -63,13 +86,13 @@ const center: PathDef = {
   name: 'Blood Moor',
   road: '#6a4e38',
   edge: '#3a2b22',
-  lane: [
+  lane: symmetric([
     { x: 980, y: 1960 },
     { x: 1680, y: 1560 },
     { x: 2360, y: 1240 },
     { x: 3040, y: 940 },
     { x: 3560, y: 760 },
-  ],
+  ]),
   ally: [
     { unit: 'rogue', count: 1 },
     { unit: 'rogue-archer', count: 1 },
@@ -95,13 +118,7 @@ const south: PathDef = {
   name: 'Kurast',
   road: '#3d6a45',
   edge: '#1c3324',
-  lane: [
-    { x: 1100, y: 2280 },
-    { x: 1900, y: 2480 },
-    { x: 2780, y: 2260 },
-    { x: 3400, y: 1680 },
-    { x: 3680, y: 1040 },
-  ],
+  lane: mirrorLane(north.lane),
   ally: [{ unit: 'rogue', count: 1 }],
   enemy: [
     { unit: 'quillrat', count: 1 },
@@ -121,12 +138,13 @@ const south: PathDef = {
 
 function laneTowers(path: PathDef): TowerSpawn[] {
   const seats: { team: 'ally' | 'enemy'; role: 'inner' | 'outer'; t: number; tier: 1 | 2 }[] = [
-    { team: 'ally', role: 'inner', t: 0.34, tier: 1 },
-    { team: 'ally', role: 'outer', t: 0.48, tier: 2 },
-    { team: 'enemy', role: 'outer', t: 0.56, tier: 2 },
-    { team: 'enemy', role: 'inner', t: 0.7, tier: 1 },
+    // Item 7: mirrored seats (t and 1 - t). The 0.08 gap between the outer towers is kept.
+    { team: 'ally', role: 'inner', t: 0.32, tier: 1 },
+    { team: 'ally', role: 'outer', t: 0.46, tier: 2 },
+    { team: 'enemy', role: 'outer', t: 0.54, tier: 2 },
+    { team: 'enemy', role: 'inner', t: 0.68, tier: 1 },
   ];
-  const side = (team: 'ally' | 'enemy') => (team === 'ally' ? 'Encampment' : 'Harrogath');
+  const side = (team: 'ally' | 'enemy') => (team === 'ally' ? 'Blue Encampment' : 'Red Encampment');
   return seats.map((seat) => {
     const at = along(path.lane, seat.t);
     return {
@@ -153,8 +171,8 @@ function beside(lane: { x: number; y: number }[], t: number, side: number): { x:
 
 const seals = [north, center, south].flatMap((path) =>
   (['ally', 'enemy'] as const).map((team) => {
-    const at = beside(path.lane, team === 'ally' ? 0.12 : 0.9, team === 'ally' ? 120 : -120);
-    const side = team === 'ally' ? 'Encampment' : 'Harrogath';
+    const at = beside(path.lane, team === 'ally' ? 0.1 : 0.9, team === 'ally' ? 120 : -120);
+    const side = team === 'ally' ? 'Blue Encampment' : 'Red Encampment';
     return {
       team,
       path: path.id,
@@ -170,18 +188,19 @@ export const sanctuary: ActDef = {
   id: 'sanctuary',
   actNumber: 1,
   name: 'Sanctuary',
-  subtitle: 'Rogue Encampment to Harrogath',
-  width: 4400,
-  height: 2800,
+  subtitle: 'Rogue Encampment, mirrored',
+  width: MAP_W,
+  height: MAP_H,
   laneWidth: 168,
   jungle: 110,
   plaza: 340,
   shopRadius: 320,
   fountainRadius: 240,
   roam: true,
-  towns: { ally: 'Rogue Encampment', enemy: 'Harrogath' },
-  victory: 'The Harrogath Worldstone is silent.',
-  defeat: 'The Encampment Worldstone has fallen.',
+  // [TEMP] Which side is blue and which is red is not set in the doc (NEEDS JOSEPH).
+  towns: { ally: 'Rogue Encampment', enemy: 'Rogue Encampment' },
+  victory: 'The Red Worldstone is silent.',
+  defeat: 'The Blue Worldstone has fallen.',
   march: 'Minions leave both Worldstones.',
   lane: center.lane,
   paths: [north, center, south],
@@ -204,14 +223,16 @@ export const sanctuary: ActDef = {
     { id: 5, x: 2920, y: 1680, unit: 'goatman', count: 2, respawn: 24, boss: 'Rakanishu' },
     { id: 6, x: 1400, y: 2050, unit: 'mummy', count: 2, respawn: 26 },
   ],
+  // Mirrored with the roadways (paint only, item 23).
   river: [
     { x: 180, y: 160 },
     { x: 1500, y: 860 },
-    { x: 2500, y: 1560 },
+    { x: 2200, y: 1400 },
+    { x: 2900, y: 1940 },
     { x: 4220, y: 2640 },
   ],
   playerBase: {
-    name: 'Encampment Worldstone',
+    name: 'Blue Worldstone',
     x: 520,
     y: 2100,
     hp: 1108,
@@ -224,14 +245,15 @@ export const sanctuary: ActDef = {
     xp: 180,
   },
   enemyBase: {
-    name: 'Harrogath Worldstone',
+    // Item 7: mirror of the player base (520, 2100). Combat values copy the player base.
+    name: 'Red Worldstone',
     x: 3880,
-    y: 620,
+    y: 700,
     hp: 1108,
-    ad: 18,
+    ad: 16,
     armor: 20,
-    attackRange: 250,
-    attackInterval: 1.1,
+    attackRange: 240,
+    attackInterval: 1.15,
     radius: 74,
     gold: 280,
     xp: 180,
