@@ -1,3 +1,4 @@
+import { waveMob, waveStrength, WAVE_SIZE } from './data/waves';
 import { itemById } from './data/items';
 import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
@@ -34,6 +35,7 @@ import {
   tryPotion,
   trySpendAttribute,
   tryUpgrade,
+  TELEPORT_SECONDS,
 } from './combat';
 import { byId, findBase, inRange, isStructure, nearestEnemy, player } from './query';
 import { SKILLS } from './skills';
@@ -75,6 +77,7 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     loadout: { weapon: null, offhand: null, armor: null, helm: null, belt: null },
     phase: 'playing',
     waveIn: map.waves.first,
+    waveNo: 0,
     announcedWave: false,
     pace: 'Normal',
     denIn: [],
@@ -89,6 +92,7 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     cs: 0,
     kills: 0,
     deaths: 0,
+    firstKillPaid: false,
     assists: 0,
     allyKills: 0,
     enemyKills: 0,
@@ -234,6 +238,8 @@ function blankUnit(sim: Sim, partial: Pick<Unit, 'defId' | 'kind' | 'team' | 'na
     findGold: 0,
     combat: 0,
     respawn: 0,
+    deathCount: 0,
+    streak: 0,
     corpse: 0,
     diedAt: 0,
     threats: [],
@@ -359,11 +365,11 @@ function spawnEnemyChampion(sim: Sim, spec: NonNullable<Sim['map']['enemyChampio
   });
 }
 
-export function spawnMinion(sim: Sim, defId: string, team: Team, x: number, y: number, path = 0): Unit {
+export function spawnMinion(sim: Sim, defId: string, team: Team, x: number, y: number, path = 0, strength?: number): Unit {
   const def = unitDef(defId);
   const spot = clampToPlayable(sim.map, x, y);
   const lane = laneAt(sim, path);
-  const scaled = paceOf(sim.time);
+  const scaled = strength == null ? paceOf(sim.time) : { hp: strength, ad: strength };
   const hp = Math.max(1, Math.round(def.hp * scaled.hp));
   const ad = Math.max(1, Math.round(def.ad * scaled.ad));
   return blankUnit(sim, {
@@ -605,7 +611,7 @@ function playerPace(sim: Sim, hero: Unit, direct = false): number {
 
 function updatePlayer(sim: Sim, hero: Unit, input: FrameInput, dt: number): void {
   if (input.recall && hero.recall <= 0 && hero.stun <= 0 && !hero.leap && hero.whirlT <= 0) {
-    hero.recall = 2.6;
+    hero.recall = TELEPORT_SECONDS;
     banner(sim, 'Returning to the fountain…');
     return;
   }
@@ -1101,6 +1107,7 @@ function waves(sim: Sim, dt: number): void {
   }
   sim.waveIn -= dt;
   if (sim.waveIn > 0) return;
+  sim.waveNo += 1;
   spawnWave(sim, 'ally');
   spawnWave(sim, 'enemy');
   sim.waveIn = sim.map.waves.interval;
@@ -1144,6 +1151,12 @@ function laneAt(sim: Sim, path: number): { x: number; y: number }[] {
 }
 
 function spawnWave(sim: Sim, team: Team): void {
+  if (sim.map.waves.rotation && sim.map.paths?.length) {
+    // Items 2 and 6: 5 of the rotating doc mob on every roadway, both sides, wave-number strength.
+    const groups = [{ unit: waveMob(sim.waveNo), count: WAVE_SIZE }];
+    sim.map.paths.forEach((path, index) => spawnOnLane(sim, team, path.lane, index, groups, waveStrength(sim.waveNo)));
+    return;
+  }
   const alive = sim.units.filter((unit) => unit.alive && unit.kind === 'minion' && unit.team === team).length;
   if (alive >= 18) return;
   const extra = team === 'enemy' ? paceOf(sim.time).extra : 0;
@@ -1315,6 +1328,7 @@ function spawnOnLane(
   lane: { x: number; y: number }[],
   path: number,
   groups: { unit: string; count: number }[],
+  strength?: number,
 ): void {
   const origin = team === 'ally' ? lane[0] : lane[lane.length - 1];
   const next = team === 'ally' ? lane[1] : lane[lane.length - 2];
@@ -1337,6 +1351,7 @@ function spawnOnLane(
         origin.x + fx * (78 + row * 36) + px * col * 30,
         origin.y + fy * (78 + row * 36) + py * col * 30,
         path,
+        strength,
       );
       index += 1;
     }
@@ -1502,7 +1517,7 @@ function tryCast(sim: Sim, input: FrameInput): void {
   const hero = player(sim);
   if (!hero.alive || hero.stun > 0 || hero.leap || hero.whirlT > 0) return;
   if ((sim.cooldowns[id] ?? 0) > 0) return;
-  const cost = manaCost(def, rank);
+  const cost = manaCost(def, rank, hero.maxMana);
   if (hero.mana < cost) {
     banner(sim, 'Not enough mana.');
     return;

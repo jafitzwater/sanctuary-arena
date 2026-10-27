@@ -6,7 +6,8 @@ import { comebackMul, xpShare } from './pace';
 import { player } from './query';
 import type { Fx, Sim, Unit } from './types';
 
-export const MAX_LEVEL = 10;
+/** Doc: "The level cap is 15." (item 11). Exp per level is not in the doc; the repo curve below is kept. */
+export const MAX_LEVEL = 15;
 
 export function xpToNext(level: number): number {
   return 60 + (level - 1) * 55;
@@ -120,9 +121,17 @@ export function ring(sim: Sim, x: number, y: number, r: number, color: string): 
   pushFx(sim, { kind: 'ring', x, y, r, color, life: 0.4, t: 0 });
 }
 
-export function manaCost(def: SkillDef, rank: number): number {
-  const raw = def.mana + def.manaPerRank * Math.max(0, rank - 1);
-  return Math.max(def.minMana, Math.round(raw));
+/**
+ * Gap-list item 13. Doc: "At skill level 1 the mana cost is 10%, level 2 is 15%, level 3 is 20%, and so on."
+ * -> 10/15/20/25/30% [DERIVED]. [TEMP, numbers-table: percent of maximum mana; the doc does not say of what.]
+ * Excluded: the sorceress/necromancer 2% step (no kits for those classes yet).
+ */
+export function manaPct(rank: number): number {
+  return 0.1 + 0.05 * (Math.max(1, rank) - 1);
+}
+
+export function manaCost(_def: SkillDef, rank: number, maxMana: number): number {
+  return Math.round(maxMana * manaPct(rank));
 }
 
 export function grantXp(sim: Sim, amount: number): void {
@@ -202,9 +211,20 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
   unit.whirlT = 0;
   unit.targetId = null;
   if (unit.kind === 'minion') unit.corpse = 4.5;
+  let goldMul = 1;
   if (unit.kind === 'champion') {
-    unit.respawn = unit.id === sim.playerId ? 5 + sim.level * 1.35 : 14;
+    // Doc: "The first death takes 5 seconds. Each death after that adds 5 seconds."
+    unit.deathCount += 1;
+    unit.respawn = respawnSeconds(unit.deathCount);
+    unit.streak = 0;
+    if (killer && killer.kind === 'champion' && killer.team !== unit.team) {
+      killer.streak += 1;
+      goldMul = killGoldMul(!sim.firstKillPaid, killer.streak);
+      sim.firstKillPaid = true;
+    }
     if (unit.id === sim.playerId) {
+      // Doc: "They lose 25% of the gold they have."
+      sim.gold -= deathGoldLoss(sim.gold);
       sim.deaths += 1;
       banner(sim, 'You have been slain');
       sfx(sim, 'death');
@@ -248,7 +268,7 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
   const playerKill = killer?.id === sim.playerId;
   const structure = unit.kind === 'tower' || unit.kind === 'base' || unit.kind === 'seal';
   if (playerKill) {
-    awardGold(sim, unit);
+    awardGold(sim, unit, goldMul);
     if (unit.kind === 'minion') sim.cs += 1;
     if (unit.kind === 'champion') sim.kills += 1;
   } else if (structure && killer && killer.team === 'ally') {
@@ -272,9 +292,32 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
   grantXp(sim, xp);
 }
 
-function awardGold(sim: Sim, unit: Unit): void {
+/**
+ * Gap-list items 8 and 9 (refined doc, "Death" and "Premise").
+ * Doc: "The first death takes 5 seconds. Each death after that adds 5 seconds." -> 5 s x death count.
+ * Doc: "They lose 25% of the gold they have." -> 25% of current gold (rounded down).
+ * Doc: "The first character kill of the match pays 50% more gold." -> x1.5.
+ * Doc: "A streak is 3 kills in a row, and that kill also pays 50% more gold." -> x1.5 on the 3rd kill.
+ * Excluded (NEEDS JOSEPH): timer cap, base kill gold/exp, whether the streak bonus repeats.
+ */
+export function respawnSeconds(deathCount: number): number {
+  return 5 * Math.max(1, deathCount);
+}
+
+export function deathGoldLoss(gold: number): number {
+  return Math.floor(Math.max(0, gold) * 0.25);
+}
+
+export function killGoldMul(firstKillOfMatch: boolean, streak: number): number {
+  let mul = 1;
+  if (firstKillOfMatch) mul *= 1.5;
+  if (streak === 3) mul *= 1.5;
+  return mul;
+}
+
+function awardGold(sim: Sim, unit: Unit, mul = 1): void {
   const hero = player(sim);
-  let gold = unit.gold;
+  let gold = Math.round(unit.gold * mul);
   if (hero.findGold > 0 && unit.kind === 'minion') {
     gold += hero.findGold;
     hero.findGold = 0;
@@ -438,6 +481,20 @@ export function tryBuy(sim: Sim, id: string): void {
   banner(sim, refund > 0 ? `Bought ${item.name}. Akara returned ${refund} gold.` : `Bought ${item.name}.`);
 }
 
+/**
+ * Gap-list items 20 and 21.
+ * Doc: "Both add 1/5th the size of the health or mana of the character, depending on the potion used."
+ *   -> 1/5 of maximum health or mana (numbers-table: "size" read as maximum [DERIVED]).
+ * Doc: "The teleport takes 3 seconds." -> TELEPORT_SECONDS.
+ * Excluded (NEEDS JOSEPH): potion price/limits/cooldown, teleport interruption/cooldown
+ * (the repo's existing move/hit interruption is kept unchanged).
+ */
+export const TELEPORT_SECONDS = 3;
+
+export function potionAmount(max: number): number {
+  return Math.round(max / 5);
+}
+
 export function tryPotion(sim: Sim, kind: PotionKind): void {
   const hero = player(sim);
   if (!hero.alive) return;
@@ -445,21 +502,22 @@ export function tryPotion(sim: Sim, kind: PotionKind): void {
     banner(sim, kind === 'health' ? 'No health potions.' : 'No mana potions.');
     return;
   }
-  const item = potionItem(kind);
   if (kind === 'health') {
     if (hero.hp >= hero.maxHp - 0.5) {
       banner(sim, 'Already at full life.');
       return;
     }
-    hero.hp = Math.min(hero.maxHp, hero.hp + (item.heal ?? 0));
-    floater(sim, hero.x, hero.y - 30, `+${item.heal ?? 0}`, '#8dce86');
+    const heal = potionAmount(hero.maxHp);
+    hero.hp = Math.min(hero.maxHp, hero.hp + heal);
+    floater(sim, hero.x, hero.y - 30, `+${heal}`, '#8dce86');
   } else {
     if (hero.mana >= hero.maxMana - 0.5) {
       banner(sim, 'Already at full mana.');
       return;
     }
-    hero.mana = Math.min(hero.maxMana, hero.mana + (item.restoreMana ?? 0));
-    floater(sim, hero.x, hero.y - 30, `+${item.restoreMana ?? 0}`, '#8eb7e8');
+    const restore = potionAmount(hero.maxMana);
+    hero.mana = Math.min(hero.maxMana, hero.mana + restore);
+    floater(sim, hero.x, hero.y - 30, `+${restore}`, '#8eb7e8');
   }
   sim.potions[kind] -= 1;
   sfx(sim, 'potion');

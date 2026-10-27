@@ -286,7 +286,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   const sim = createMatch(act1, barbarian, 1);
   assert.equal(tryUpgrade(sim, 'shout'), false);
   sim.skillPoints = 1;
-  sim.level = 2;
+  sim.level = 3; // Doc: "Skills unlock at level 1, level 3, level 5, and level 7."
   assert.equal(tryUpgrade(sim, 'shout'), true);
   assert.equal(sim.skillRanks.shout, 1);
   grantXp(sim, 100000);
@@ -304,6 +304,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.equal(heroBefore.hp, heroBefore.maxHp, 'level-up restores life');
   assert.equal(heroBefore.mana, heroBefore.maxMana, 'level-up restores mana');
   assert.ok(sim.sfx.includes('level'));
+  grantXp(sim, 115); // Doc: Shout (2nd skill) unlocks at level 3
   assert.ok(sim.fx.some((fx) => fx.kind === 'text' && fx.text === 'Level 2'));
   assert.equal(sim.belt[1], '', 'Shout is not equipped until it is learned');
   tryAssignBelt(sim, 'shout', 1);
@@ -754,13 +755,13 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   step(sim, emptyInput(), first.respawn + 0.25);
   assert.ok(sim.units.some((unit) => unit.pack === first.id && unit.alive), 'a cleared den respawns');
 
+  // Items 2, 6: "two waves each, then loop: rogues, valkyries, Act 2 mercenaries, Act 3 mercenaries."
   const night = pastOpening(createMatch(sanctuary, barbarian, 1));
-  night.time = 90;
+  night.waveNo = 2;
   night.waveIn = 0.05;
   updateSim(night, emptyInput(), 0.1);
   const foes = night.units.filter((unit) => unit.kind === 'minion' && unit.team === 'enemy' && unit.alive);
-  const ids = new Set(foes.map((unit) => unit.defId));
-  assert.ok(ids.has('skeleton') && ids.has('hungry-dead') && ids.has('willowisp'), [...ids].join(','));
+  assert.ok(foes.some((unit) => unit.defId === 'valkyrie'), 'wave 3 sends valkyries');
 }
 
 {
@@ -809,7 +810,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   hero.invuln = 10;
   const recall = emptyInput();
   recall.recall = true;
-  step(home, recall, 3);
+  step(home, recall, 3.4); // Doc: "The teleport takes 3 seconds."
   assert.ok(
     Math.hypot(hero.x - home.map.playerBase.x, hero.y - home.map.playerBase.y) < 160,
     `recall left the hero at ${hero.x.toFixed(0)},${hero.y.toFixed(0)} recall=${hero.recall.toFixed(2)}`,

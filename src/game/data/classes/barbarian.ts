@@ -28,7 +28,14 @@ function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' |
   };
 }
 
-/** Six match skills. Names follow the 1.13c tree; unlocks and ranks are for this match. */
+/**
+ * Gap-list items 11 and 12 (kits-final.md, Barbarian).
+ * Doc: "One path. Top tier skill is whirlwind. In order: bash, shout, leap attack, battle orders, whirlwind."
+ * Doc: "Skills unlock at level 1, level 3, level 5, and level 7. More than 4 skills use the remaining points after level 7."
+ * Doc: "Skills max at level 5." -> maxRank 5.
+ * Whirlwind's unlock level is not set by the doc ("after level 7"); the repo's existing 10 is kept (NEEDS JOSEPH).
+ * Skill effects and cooldowns are unset in the doc ([U]); the repo's existing handlers are kept.
+ */
 const skillList: SkillDef[] = [
   skill({
     id: 'bash',
@@ -47,7 +54,7 @@ const skillList: SkillDef[] = [
     id: 'shout',
     name: 'Shout',
     short: 'Shout',
-    unlockLevel: 2,
+    unlockLevel: 3,
     mana: 12,
     manaPerRank: 0,
     cooldown: 14,
@@ -57,26 +64,14 @@ const skillList: SkillDef[] = [
     description: 'Raises your defense and nearby allies for 6 seconds. +10 armor, then +6 per rank.',
   }),
   skill({
-    id: 'stun',
-    name: 'Stun',
-    short: 'Stun',
-    unlockLevel: 4,
-    mana: 10,
-    manaPerRank: 0,
-    cooldown: 7,
-    row: 3,
-    d2Id: 139,
-    description: 'Hits a little harder than a basic attack and stuns. Stun lasts 0.6s and grows by 0.25s per rank.',
-  }),
-  skill({
     id: 'leap-attack',
     name: 'Leap Attack',
     short: 'Leap',
-    unlockLevel: 6,
+    unlockLevel: 5,
     mana: 14,
     manaPerRank: 2,
     cooldown: 9,
-    row: 4,
+    row: 3,
     d2Id: 132,
     description: 'Jump to the aim point and strike on landing. Rank 1 deals 135% damage, and each rank adds 15%.',
   }),
@@ -84,11 +79,11 @@ const skillList: SkillDef[] = [
     id: 'battle-orders',
     name: 'Battle Orders',
     short: 'Orders',
-    unlockLevel: 8,
+    unlockLevel: 7,
     mana: 18,
     manaPerRank: 0,
     cooldown: 16,
-    row: 5,
+    row: 4,
     d2Id: 149,
     anim: 'S1',
     description: 'Raises maximum life by 6% per rank for 8 seconds.',
@@ -101,7 +96,7 @@ const skillList: SkillDef[] = [
     mana: 22,
     manaPerRank: 4,
     cooldown: 11,
-    row: 6,
+    row: 5,
     d2Id: 152,
     description: 'Spin and hit everyone nearby. Each hit is 32% of attack damage at rank 1 and rises by 4% per rank.',
   }),
@@ -133,7 +128,7 @@ export const barbarian: ClassDef = {
   title: 'Warrior of Mount Arreat',
   role: 'melee',
   blurb:
-    'Bash, Shout, Stun, Leap Attack, Battle Orders, and Whirlwind. Four of them sit on Q W E R. Press T to spend points and swap skills.',
+    'Bash, Shout, Leap Attack, Battle Orders, and Whirlwind. Four of them sit on Q W E R. Press T to spend points and swap skills.',
   token: row.token || 'BA',
   startingBelt: ['bash', '', '', ''],
   stats: {

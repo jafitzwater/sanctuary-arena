@@ -160,6 +160,8 @@ export interface ActDef {
     first: number;
     ally: WaveGroup[];
     enemy: WaveGroup[];
+    /** When set, every roadway spawns WAVE_SIZE of the rotating doc mob for both sides (data/waves.ts). */
+    rotation?: boolean;
   };
   /** Legacy single-lane opponent. Absent in the 4v4 Sanctuary match. */
   enemyChampion?: EnemyChampionDef;

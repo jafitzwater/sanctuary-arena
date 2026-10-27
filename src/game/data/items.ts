@@ -56,8 +56,7 @@ const POTIONS: ItemDef[] = [
     cost: 45,
     slot: 'consumable',
     consumable: 'health',
-    heal: 105,
-    description: 'Drink to restore 105 life.',
+    description: 'Drink to restore 1/5 of your life.',
   },
   {
     id: 'mana-potion',
@@ -65,8 +64,7 @@ const POTIONS: ItemDef[] = [
     cost: 30,
     slot: 'consumable',
     consumable: 'mana',
-    restoreMana: 130,
-    description: 'Drink to restore 130 mana.',
+    description: 'Drink to restore 1/5 of your mana.',
   },
 ];
 

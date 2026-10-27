@@ -418,7 +418,7 @@ export class Hud {
       const skill = sim.classDef.skills.find((entry) => entry.id === id);
       const rank = skill ? (sim.skillRanks[skill.id] ?? 0) : 0;
       const cd = skill ? (sim.cooldowns[skill.id] ?? 0) : 0;
-      const cost = skill && rank > 0 ? manaCost(skill, rank) : 0;
+      const cost = skill && rank > 0 ? manaCost(skill, rank, hero.maxMana) : 0;
       const dry = !!skill && rank > 0 && hero.mana < cost;
       const ready = !!skill && rank > 0 && cd <= 0.05 && !dry;
       const fraction = skill && cd > 0.05 && rank > 0 ? cd / Math.max(0.1, skill.cooldown) : 0;
