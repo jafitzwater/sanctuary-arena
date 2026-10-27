@@ -383,9 +383,20 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.equal(sim.map.paths?.length, 3);
   assert.equal(sim.map.roam, true);
   const towers = sim.units.filter((unit) => unit.kind === 'tower');
-  assert.equal(towers.length, 22);
-  const laneTowers = sanctuary.towers.filter((tower) => tower.role !== 'guardian');
-  assert.equal(laneTowers.length, 18);
+  // Doc: "Each roadway has 2 support towers, spread apart. A gap of ground exists between the sides where no towers exist."
+  assert.equal(towers.length, 12, '2 towers per side on each of 3 roadways');
+  const laneTowers = sanctuary.towers;
+  for (const path of sanctuary.paths ?? []) {
+    for (const team of ['ally', 'enemy'] as const) {
+      assert.equal(laneTowers.filter((tower) => tower.path === path.id && tower.team === team).length, 2, `${team} ${path.name}`);
+    }
+    const [a, b] = (['ally', 'enemy'] as const).map((team) => {
+      const own = laneTowers.filter((tower) => tower.path === path.id && tower.team === team);
+      const base = team === 'ally' ? sanctuary.playerBase : sanctuary.enemyBase;
+      return own.reduce((far, tower) => (Math.hypot(tower.x - base.x, tower.y - base.y) > Math.hypot(far.x - base.x, far.y - base.y) ? tower : far));
+    });
+    assert.ok(Math.hypot(a.x - b.x, a.y - b.y) > 100, `${path.name} keeps a tower-free gap between the sides`);
+  }
   for (const spec of laneTowers) {
     const path = sanctuary.paths?.find((entry) => entry.id === spec.path);
     if (!path) throw new Error(`${spec.name} has no path`);

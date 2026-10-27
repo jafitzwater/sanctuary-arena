@@ -4,8 +4,11 @@ import type { ActDef, PathDef, PathId, TowerSpawn } from './types';
 /**
  * Sanctuary. Three paths join the Rogue Encampment to Harrogath.
  * A diagonal river crosses the wilderness and blocks movement off the fords.
- * Each path has an outer tower,
- * an inner tower, and a seal tower. Two guardians stand at each Worldstone.
+ * Doc: "Each roadway has 2 support towers, spread apart. A gap of ground exists between
+ * the sides where no towers exist." Read per side: each side has an inner and an outer
+ * tower on each path, and no towers stand between the two outer towers.
+ * Doc: "Those rogue towers and fire towers are the same towers as the roadway support towers."
+ * So there are no extra Worldstone guardian towers.
  * The seal behind the third tower is scenery until the seal rules land.
  */
 function along(lane: { x: number; y: number }[], t: number): { x: number; y: number } {
@@ -116,13 +119,11 @@ const south: PathDef = {
 };
 
 function laneTowers(path: PathDef): TowerSpawn[] {
-  const seats: { team: 'ally' | 'enemy'; role: 'seal' | 'inner' | 'outer'; t: number; tier: 1 | 2 }[] = [
-    { team: 'ally', role: 'seal', t: 0.2, tier: 1 },
+  const seats: { team: 'ally' | 'enemy'; role: 'inner' | 'outer'; t: number; tier: 1 | 2 }[] = [
     { team: 'ally', role: 'inner', t: 0.34, tier: 1 },
     { team: 'ally', role: 'outer', t: 0.48, tier: 2 },
     { team: 'enemy', role: 'outer', t: 0.56, tier: 2 },
     { team: 'enemy', role: 'inner', t: 0.7, tier: 1 },
-    { team: 'enemy', role: 'seal', t: 0.84, tier: 1 },
   ];
   const side = (team: 'ally' | 'enemy') => (team === 'ally' ? 'Encampment' : 'Harrogath');
   return seats.map((seat) => {
@@ -163,12 +164,6 @@ const seals = [north, center, south].flatMap((path) =>
   }),
 );
 
-const guardians: TowerSpawn[] = [
-  { team: 'ally', tier: 3, role: 'guardian', x: 400, y: 1960, name: 'Encampment Guardian' },
-  { team: 'ally', tier: 3, role: 'guardian', x: 760, y: 2280, name: 'Encampment Warden' },
-  { team: 'enemy', tier: 3, role: 'guardian', x: 4000, y: 480, name: 'Harrogath Guardian' },
-  { team: 'enemy', tier: 3, role: 'guardian', x: 3640, y: 860, name: 'Harrogath Warden' },
-];
 
 export const sanctuary: ActDef = {
   id: 'sanctuary',
@@ -240,7 +235,7 @@ export const sanctuary: ActDef = {
     gold: 280,
     xp: 180,
   },
-  towers: [...laneTowers(north), ...laneTowers(center), ...laneTowers(south), ...guardians],
+  towers: [...laneTowers(north), ...laneTowers(center), ...laneTowers(south)],
   // Doc: "There is a 15 second wait to start. Players are blocked in base until those 15 seconds pass."
   openingWait: 15,
   waves: {
