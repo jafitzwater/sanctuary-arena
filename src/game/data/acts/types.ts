@@ -147,6 +147,11 @@ export interface ActDef {
   fountainRadius: number;
   playerBase: BaseSpawn;
   enemyBase: BaseSpawn;
+  /**
+   * Seconds every hero is held inside its own base at the start, with potion-only buying.
+   * Doc: "There is a 15 second wait to start. Players are blocked in base until those 15 seconds pass."
+   */
+  openingWait?: number;
   towers: TowerSpawn[];
   waves: {
     /** Seconds between waves after the first. */
@@ -156,7 +161,8 @@ export interface ActDef {
     ally: WaveGroup[];
     enemy: WaveGroup[];
   };
-  enemyChampion: EnemyChampionDef;
+  /** Legacy single-lane opponent. Absent in the 4v4 Sanctuary match. */
+  enemyChampion?: EnemyChampionDef;
   theme: ActTheme;
 }
 
