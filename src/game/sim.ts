@@ -206,8 +206,6 @@ function blankUnit(sim: Sim, partial: Pick<Unit, 'defId' | 'kind' | 'team' | 'na
     haste: 0,
     recall: 0,
     bot: partial.bot ?? false,
-    merc: partial.merc ?? false,
-    mercT: partial.mercT ?? 0,
     targetId: null,
     facing: partial.facing ?? 0,
     swing: 0,
@@ -440,8 +438,7 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
   }
   for (const unit of sim.units) {
     if (unit.kind !== 'minion') continue;
-    if (unit.merc) updateMerc(sim, unit, step);
-    else if (unit.team === 'wild') updateCamp(sim, unit, step);
+    if (unit.team === 'wild') updateCamp(sim, unit, step);
     else updateMinion(sim, unit, step);
   }
 
@@ -453,8 +450,7 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
 
   if (input.cast) tryCast(sim, input);
   if (input.upgrade) tryUpgrade(sim, input.upgrade);
-  if (input.buy === 'hire-rogue') hireMerc(sim);
-  else if (input.buy) tryBuy(sim, input.buy);
+  if (input.buy) tryBuy(sim, input.buy);
   if (input.potion) tryPotion(sim, input.potion);
   if (input.attribute) trySpendAttribute(sim, input.attribute);
   if (input.assignSkill) tryAssignBelt(sim, input.assignSkill, input.assignSlot);
@@ -664,52 +660,6 @@ function updatePlayer(sim: Sim, hero: Unit, input: FrameInput, dt: number): void
   if (input.destX != null && input.destY != null) {
     moveToward(hero, input.destX, input.destY, dt, pace);
   }
-}
-
-function hireMerc(sim: Sim): void {
-  const hero = player(sim);
-  if (hero.alive && !inShopRange(sim, hero)) {
-    banner(sim, 'Akara hires only inside the Rogue Encampment.');
-    return;
-  }
-  if (sim.units.some((unit) => unit.alive && unit.merc)) {
-    banner(sim, 'A rogue is already with you.');
-    return;
-  }
-  const cost = 80;
-  if (sim.gold < cost) {
-    banner(sim, 'Not enough gold.');
-    return;
-  }
-  sim.gold -= cost;
-  const unit = spawnMinion(sim, 'rogue', 'ally', hero.x + 36, hero.y + 18);
-  unit.merc = true;
-  unit.mercT = 45;
-  unit.name = 'Hired Rogue';
-  banner(sim, 'A rogue takes your coin.');
-  sfx(sim, 'coin');
-}
-
-function updateMerc(sim: Sim, unit: Unit, dt: number): void {
-  if (!unit.alive) return;
-  unit.mercT -= dt;
-  if (unit.mercT <= 0) {
-    unit.hp = 0;
-    unit.alive = false;
-    unit.corpse = 4.5;
-    return;
-  }
-  if (unit.stun > 0) return;
-  const hero = player(sim);
-  const gap = Math.hypot(unit.x - hero.x, unit.y - hero.y);
-  const foe = nearestEnemy(sim, unit, 220, (other) => other.kind !== 'base');
-  if (foe) {
-    unit.targetId = foe.id;
-    if (!inRange(unit, foe)) moveToward(unit, foe.x, foe.y, dt);
-    return;
-  }
-  unit.targetId = null;
-  if (gap > 64) moveToward(unit, hero.x, hero.y, dt);
 }
 
 function updateCamp(sim: Sim, unit: Unit, dt: number): void {
