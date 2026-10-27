@@ -303,6 +303,7 @@ export class Renderer {
       ctx.drawImage(this.mapCanvas, srcX, srcY, srcW, srcH, 0, 0, cssW, cssH);
     }
     this.drawMist(sim, cssW, cssH);
+    this.drawOrbs(sim);
 
     this.tickFx();
     this.syncRecall(sim);
@@ -967,6 +968,25 @@ export class Renderer {
   private stampAt(ctx: CanvasRenderingContext2D, unit: Unit, radius: number): void {
     const p = projectIso(unit.x, unit.y, BAKE_HW, this.ox, this.oy);
     stampBloodPool(ctx, p.x, p.y, radius, bleedsIchor(unit));
+  }
+
+  /** Item 16: ready health orbs (red) and pools (red-blue); consumed ones are hidden until refill. */
+  private drawOrbs(sim: Sim): void {
+    const ctx = this.ctx;
+    for (const orb of sim.orbs ?? []) {
+      if (orb.refill > 0) continue;
+      const p = this.project(orb.x, orb.y);
+      const edge = this.project(orb.x + (orb.kind === 'pool' ? 70 : 16), orb.y);
+      const r = Math.max(3, Math.hypot(edge.x - p.x, edge.y - p.y));
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, r, r * 0.5, 0, 0, Math.PI * 2);
+      ctx.fillStyle = orb.kind === 'pool' ? 'rgba(90, 60, 150, 0.45)' : 'rgba(200, 30, 30, 0.85)';
+      ctx.fill();
+      ctx.strokeStyle = orb.kind === 'pool' ? 'rgba(200, 60, 60, 0.8)' : 'rgba(255, 170, 150, 0.9)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      this.lights.push({ screenX: p.x, screenY: p.y, radius: orb.kind === 'pool' ? 60 : 30, intensity: 0.6, color: '#c03030' });
+    }
   }
 
   private drawMist(sim: Sim, cssW: number, cssH: number): void {
