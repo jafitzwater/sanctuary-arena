@@ -172,6 +172,8 @@ export interface Sim {
   loadout: Loadout;
   phase: Phase;
   waveIn: number;
+  /** Waves spawned so far (item 2). */
+  waveNo: number;
   announcedWave: boolean;
   pace: 'Normal' | 'Nightmare' | 'Hell';
   /** Seconds until each wilderness den respawns. Indexed by den id. */

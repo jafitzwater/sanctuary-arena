@@ -1,3 +1,4 @@
+import { WAVE_INTERVAL } from '../waves';
 import type { ActDef, PathDef, PathId, TowerSpawn } from './types';
 
 
@@ -239,7 +240,9 @@ export const sanctuary: ActDef = {
   // Doc: "There is a 15 second wait to start. Players are blocked in base until those 15 seconds pass."
   openingWait: 15,
   waves: {
-    interval: 22,
+    // Doc: "After the first wave, a new wave spawns every 60 seconds."
+    interval: WAVE_INTERVAL,
+    rotation: true,
     // Doc: "The first wave of support mobs from each side comes 15 seconds after that." (15 + 15)
     first: 30,
     ally: [{ unit: 'rogue', count: 1 }],

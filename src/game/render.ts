@@ -1091,6 +1091,9 @@ export class Renderer {
         return 120;
       case 'rogue':
       case 'rogue-archer':
+      case 'valkyrie':
+      case 'act2-mercenary':
+      case 'act3-mercenary':
         return 100;
       case 'tower':
         return unit.alive ? 128 : 70;
@@ -1439,6 +1442,9 @@ function bleedsIchor(unit: Unit): boolean {
 function tokenLook(unit: Unit): TokenLook {
   const ally = unit.team === 'ally';
   if (unit.defId === 'rogue' || unit.defId === 'rogue-archer') return { mark: 'rogue', scale: 1 };
+  // Item 6 wave mobs use the existing procedural marks until the sprite sheets are wired in.
+  if (unit.defId === 'valkyrie') return { mark: 'valkyrie', scale: 1.08 };
+  if (unit.defId === 'act2-mercenary' || unit.defId === 'act3-mercenary') return { mark: 'guard', scale: 1.05 };
   if (ally && (unit.defId === 'skeleton' || unit.defId === 'hungry-dead')) return { mark: 'valkyrie', scale: 1.08 };
   if (ally && (unit.defId === 'goatman' || unit.defId === 'demon' || unit.defId === 'mummy')) return { mark: 'guard', scale: 1.05 };
   switch (unit.defId) {

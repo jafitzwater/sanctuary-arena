@@ -1,3 +1,4 @@
+import { waveMob, waveStrength, WAVE_SIZE } from './data/waves';
 import { itemById } from './data/items';
 import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
@@ -75,6 +76,7 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     loadout: { weapon: null, offhand: null, armor: null, helm: null, belt: null },
     phase: 'playing',
     waveIn: map.waves.first,
+    waveNo: 0,
     announcedWave: false,
     pace: 'Normal',
     denIn: [],
@@ -359,11 +361,11 @@ function spawnEnemyChampion(sim: Sim, spec: NonNullable<Sim['map']['enemyChampio
   });
 }
 
-export function spawnMinion(sim: Sim, defId: string, team: Team, x: number, y: number, path = 0): Unit {
+export function spawnMinion(sim: Sim, defId: string, team: Team, x: number, y: number, path = 0, strength?: number): Unit {
   const def = unitDef(defId);
   const spot = clampToPlayable(sim.map, x, y);
   const lane = laneAt(sim, path);
-  const scaled = paceOf(sim.time);
+  const scaled = strength == null ? paceOf(sim.time) : { hp: strength, ad: strength };
   const hp = Math.max(1, Math.round(def.hp * scaled.hp));
   const ad = Math.max(1, Math.round(def.ad * scaled.ad));
   return blankUnit(sim, {
@@ -1101,6 +1103,7 @@ function waves(sim: Sim, dt: number): void {
   }
   sim.waveIn -= dt;
   if (sim.waveIn > 0) return;
+  sim.waveNo += 1;
   spawnWave(sim, 'ally');
   spawnWave(sim, 'enemy');
   sim.waveIn = sim.map.waves.interval;
@@ -1144,6 +1147,12 @@ function laneAt(sim: Sim, path: number): { x: number; y: number }[] {
 }
 
 function spawnWave(sim: Sim, team: Team): void {
+  if (sim.map.waves.rotation && sim.map.paths?.length) {
+    // Items 2 and 6: 5 of the rotating doc mob on every roadway, both sides, wave-number strength.
+    const groups = [{ unit: waveMob(sim.waveNo), count: WAVE_SIZE }];
+    sim.map.paths.forEach((path, index) => spawnOnLane(sim, team, path.lane, index, groups, waveStrength(sim.waveNo)));
+    return;
+  }
   const alive = sim.units.filter((unit) => unit.alive && unit.kind === 'minion' && unit.team === team).length;
   if (alive >= 18) return;
   const extra = team === 'enemy' ? paceOf(sim.time).extra : 0;
@@ -1315,6 +1324,7 @@ function spawnOnLane(
   lane: { x: number; y: number }[],
   path: number,
   groups: { unit: string; count: number }[],
+  strength?: number,
 ): void {
   const origin = team === 'ally' ? lane[0] : lane[lane.length - 1];
   const next = team === 'ally' ? lane[1] : lane[lane.length - 2];
@@ -1337,6 +1347,7 @@ function spawnOnLane(
         origin.x + fx * (78 + row * 36) + px * col * 30,
         origin.y + fy * (78 + row * 36) + py * col * 30,
         path,
+        strength,
       );
       index += 1;
     }
