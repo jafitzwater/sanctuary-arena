@@ -1,5 +1,5 @@
 import { STAT_GROWTH } from './data/classes/statGrowth';
-import { itemById, potionCap, potionItem, type ItemDef, type PotionKind } from './data/items';
+import { itemById, potionCap, type ItemDef, type PotionKind } from './data/items';
 import type { SkillDef } from './data/classes/types';
 import { dist } from './math';
 import { comebackMul, xpShare } from './pace';
