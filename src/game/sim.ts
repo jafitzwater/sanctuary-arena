@@ -1506,7 +1506,7 @@ function tryCast(sim: Sim, input: FrameInput): void {
   const hero = player(sim);
   if (!hero.alive || hero.stun > 0 || hero.leap || hero.whirlT > 0) return;
   if ((sim.cooldowns[id] ?? 0) > 0) return;
-  const cost = manaCost(def, rank);
+  const cost = manaCost(def, rank, hero.maxMana);
   if (hero.mana < cost) {
     banner(sim, 'Not enough mana.');
     return;

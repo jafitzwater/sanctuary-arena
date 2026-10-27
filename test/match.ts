@@ -286,7 +286,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   const sim = createMatch(act1, barbarian, 1);
   assert.equal(tryUpgrade(sim, 'shout'), false);
   sim.skillPoints = 1;
-  sim.level = 2;
+  sim.level = 3; // Doc: "Skills unlock at level 1, level 3, level 5, and level 7."
   assert.equal(tryUpgrade(sim, 'shout'), true);
   assert.equal(sim.skillRanks.shout, 1);
   grantXp(sim, 100000);
@@ -304,6 +304,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.equal(heroBefore.hp, heroBefore.maxHp, 'level-up restores life');
   assert.equal(heroBefore.mana, heroBefore.maxMana, 'level-up restores mana');
   assert.ok(sim.sfx.includes('level'));
+  grantXp(sim, 115); // Doc: Shout (2nd skill) unlocks at level 3
   assert.ok(sim.fx.some((fx) => fx.kind === 'text' && fx.text === 'Level 2'));
   assert.equal(sim.belt[1], '', 'Shout is not equipped until it is learned');
   tryAssignBelt(sim, 'shout', 1);

@@ -70,19 +70,6 @@ export const shout: SkillHandler = (ctx) => {
   return true;
 };
 
-export const stun: SkillHandler = (ctx) => {
-  const foe = foeFor(ctx, ctx.hero.attackRange + 16);
-  if (!foe) {
-    banner(ctx.sim, 'Nobody in reach to stun.');
-    return false;
-  }
-  const mult = 1.15 + (ctx.rank - 1) * 0.05;
-  const seconds = 0.6 + (ctx.rank - 1) * 0.25;
-  smack(ctx, foe, ctx.hero.ad * mult, seconds);
-  sfx(ctx.sim, 'bash');
-  return true;
-};
-
 export const leapAttack: SkillHandler = (ctx) => {
   const { sim, hero, aimX, aimY } = ctx;
   const maxR = 220 + ctx.rank * 16;
@@ -126,7 +113,6 @@ export const whirlwind: SkillHandler = (ctx) => {
 export const HANDLERS: Record<string, SkillHandler> = {
   bash,
   shout,
-  stun,
   'leap-attack': leapAttack,
   'battle-orders': battleOrders,
   whirlwind,

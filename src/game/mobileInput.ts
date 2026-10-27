@@ -34,17 +34,16 @@ export const MOBILE_ZONE: TouchZoneConfig = { maxRadius: 45, dragSlop: 12 };
 
 export type SkillAim = 'single' | 'ground' | 'self';
 
-/** Existing barbarian skills only. Leap is the ground cast; bash and stun lock a unit. */
+/** Existing barbarian skills only. Leap is the ground cast; bash locks a unit. */
 export function skillAimKind(id: string): SkillAim {
   if (id === 'leap-attack') return 'ground';
-  if (id === 'bash' || id === 'stun') return 'single';
+  if (id === 'bash') return 'single';
   return 'self';
 }
 
 /** Reach used by the single-target skills, matching their handlers. */
 export function skillReach(id: string, attackRange: number): number {
   if (id === 'bash') return attackRange + 18;
-  if (id === 'stun') return attackRange + 16;
   return attackRange;
 }
 
