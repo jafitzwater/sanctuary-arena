@@ -1,3 +1,4 @@
+import { STAT_GROWTH } from './data/classes/statGrowth';
 import { itemById, potionCap, potionItem, type ItemDef, type PotionKind } from './data/items';
 import type { SkillDef } from './data/classes/types';
 import { dist } from './math';
@@ -133,7 +134,10 @@ export function grantXp(sim: Sim, amount: number): void {
     sim.xp -= xpToNext(sim.level);
     sim.level += 1;
     sim.skillPoints += 1;
-    sim.statPoints += stats.statPointsPerLevel;
+    // Doc: "Stat points always auto-populate." (item 10)
+    const growth = STAT_GROWTH[sim.classDef.id];
+    if (growth) for (const key of ['str', 'dex', 'vit', 'energy'] as const) sim.attributes[key] += growth[key];
+    else sim.statPoints += stats.statPointsPerLevel;
     gained = true;
   }
   if (sim.level >= MAX_LEVEL) sim.xp = 0;
