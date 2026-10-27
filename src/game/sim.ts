@@ -1,3 +1,4 @@
+import { itemById } from './data/items';
 import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
 import { dealTeams } from './teams';
@@ -438,6 +439,7 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
     if (!unit.bot || unit.kind !== 'champion') continue;
     updateHeroAi(sim, unit, step);
   }
+  holdInBase(sim);
   for (const unit of sim.units) {
     if (unit.kind !== 'minion') continue;
     if (unit.merc) updateMerc(sim, unit, step);
@@ -453,7 +455,9 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
 
   if (input.cast) tryCast(sim, input);
   if (input.upgrade) tryUpgrade(sim, input.upgrade);
-  if (input.buy === 'hire-rogue') hireMerc(sim);
+  if (input.buy && inOpeningWait(sim) && !itemById(input.buy)?.consumable) {
+    banner(sim, 'Only health and mana potions can be bought before the gates open.');
+  } else if (input.buy === 'hire-rogue') hireMerc(sim);
   else if (input.buy) tryBuy(sim, input.buy);
   if (input.potion) tryPotion(sim, input.potion);
   if (input.attribute) trySpendAttribute(sim, input.attribute);
@@ -663,6 +667,30 @@ function updatePlayer(sim: Sim, hero: Unit, input: FrameInput, dt: number): void
   }
   if (input.destX != null && input.destY != null) {
     moveToward(hero, input.destX, input.destY, dt, pace);
+  }
+}
+
+/**
+ * Doc: "There is a 15 second wait to start. Players are blocked in base until those 15 seconds pass.
+ * ... During that opening wait, players can only purchase potions of health and mana."
+ */
+export function inOpeningWait(sim: Sim): boolean {
+  return sim.time < (sim.map.openingWait ?? 0);
+}
+
+/** Keep every hero inside its own base (the shop radius, so potions stay buyable) during the opening wait. */
+function holdInBase(sim: Sim): void {
+  if (!inOpeningWait(sim)) return;
+  const room = sim.map.shopRadius;
+  for (const unit of sim.units) {
+    if (!unit.alive || unit.kind !== 'champion') continue;
+    const home = unit.team === 'ally' ? sim.map.playerBase : sim.map.enemyBase;
+    const dx = unit.x - home.x;
+    const dy = unit.y - home.y;
+    const gap = Math.hypot(dx, dy);
+    if (gap <= room) continue;
+    unit.x = home.x + (dx / gap) * room;
+    unit.y = home.y + (dy / gap) * room;
   }
 }
 

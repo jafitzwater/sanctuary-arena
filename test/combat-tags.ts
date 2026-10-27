@@ -12,8 +12,14 @@ import { createMatch, spawnHero, updateSim } from '../src/game/sim';
 import { player } from '../src/game/query';
 import { emptyInput, type Sim, type Unit } from '../src/game/types';
 
+/** Skip the 15 s opening wait (item 3) so older tests can move heroes out of base. */
+function pastOpening<T extends { time: number; map: { openingWait?: number } }>(sim: T): T {
+  sim.time = Math.max(sim.time, sim.map.openingWait ?? 0);
+  return sim;
+}
+
 function match(): Sim {
-  return createMatch(sanctuary, barbarian, 3);
+  return pastOpening(createMatch(sanctuary, barbarian, 3));
 }
 
 function enemyOf(sim: Sim): Unit {
@@ -75,7 +81,7 @@ marked.armor = 0;
 marked.hp = 5000;
 marked.maxHp = 5000;
 damageUnit(stale, marked, 20, late);
-stale.time = 11;
+stale.time += 11;
 const finisher = spawnHero(stale, 'ally', marked.x, marked.y, 'Finisher');
 damageUnit(stale, marked, 100000, finisher);
 assert.equal(stale.assists, 0);
