@@ -1,4 +1,4 @@
-import { playableIds } from './data/classes/roster';
+import { ROSTER } from './data/classes/roster';
 import { Rng } from './math';
 
 export interface Seat {
@@ -13,25 +13,25 @@ const ENEMY_NAMES = ['Korlic', 'Madawc', 'Talic', 'Bartuc', 'Toorc'];
 const TINTS = ['#c4a574', '#8aa0b8', '#7d9a6a', '#b88898', '#d0b070', '#a07058', '#6a8a9a', '#c47858', '#9a7a4a'];
 
 /**
- * Four allied heroes and five enemies. Classes are drawn from the playable
- * roster with no duplicates until the roster runs out. Today only the
- * Barbarian is playable, so empty seats reuse that kit under another name.
+ * Doc: "4 players on each side. No duplicate character on a side."
+ * The player plus 3 AI allies, and 4 AI enemies. Each side draws distinct
+ * classes from the doc roster. Until the other kits land, every AI seat
+ * fights with the Barbarian body (stand-in, see NEEDS JOSEPH in the status file).
  */
+export const SIDE_SIZE = 4;
+
 export function dealTeams(seed: number, playerClass: string): { allies: Seat[]; enemies: Seat[] } {
   const rng = new Rng(seed);
-  const enabled = playableIds();
-  const pool = enabled.length ? enabled : ['barbarian'];
+  const pool = ROSTER.map((entry) => entry.id);
   return {
-    allies: seats(4, pool.filter((id) => id !== playerClass), pool, ALLY_NAMES, [0, 1, 2, 1], rng),
-    enemies: seats(5, pool, pool, ENEMY_NAMES, [0, 1, 2, 0, 2], rng),
+    allies: seats(SIDE_SIZE - 1, pool.filter((id) => id !== playerClass), ALLY_NAMES, [0, 1, 2], rng),
+    enemies: seats(SIDE_SIZE, pool, ENEMY_NAMES, [0, 1, 2, 0], rng),
   };
 }
 
-function seats(count: number, preferred: string[], fallback: string[], names: string[], lanes: number[], rng: Rng): Seat[] {
-  const source = preferred.length ? preferred : fallback;
-  const order = shuffle(source, rng);
-  const picked: string[] = [];
-  for (let i = 0; i < count; i++) picked.push(order[i] ?? source[i % source.length]);
+function seats(count: number, source: string[], names: string[], lanes: number[], rng: Rng): Seat[] {
+  const picked = shuffle(source, rng).slice(0, count);
+  if (picked.length < count) throw new Error('not enough classes for a side without duplicates');
   return picked.map((classId, index) => ({
     classId,
     name: names[index] ?? `Hero ${index + 1}`,

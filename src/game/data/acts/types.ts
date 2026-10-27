@@ -156,7 +156,8 @@ export interface ActDef {
     ally: WaveGroup[];
     enemy: WaveGroup[];
   };
-  enemyChampion: EnemyChampionDef;
+  /** Legacy single-lane opponent. Absent in the 4v4 Sanctuary match. */
+  enemyChampion?: EnemyChampionDef;
   theme: ActTheme;
 }
 

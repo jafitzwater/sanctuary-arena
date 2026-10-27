@@ -1,8 +1,5 @@
-import monsters from '../d2/monsters-act1.json';
 import type { ActDef, PathDef, PathId, TowerSpawn } from './types';
 
-const raven = monsters.find((entry) => entry.monId === 'bloodraven');
-if (!raven) throw new Error('Blood Raven missing from MonStats import');
 
 /**
  * Sanctuary. Three paths join the Rogue Encampment to Harrogath.
@@ -249,22 +246,6 @@ export const sanctuary: ActDef = {
     first: 8,
     ally: [{ unit: 'rogue', count: 1 }],
     enemy: [{ unit: 'fallen', count: 1 }],
-  },
-  enemyChampion: {
-    name: 'Blood Raven',
-    title: 'The Corrupted Sister',
-    hp: 298,
-    ad: 13,
-    armor: raven.moba.armor,
-    moveSpeed: 93,
-    attackRange: raven.moba.attackRange,
-    attackInterval: raven.moba.attackInterval,
-    projectileSpeed: raven.moba.projectileSpeed,
-    radius: 20,
-    gold: raven.moba.gold,
-    xp: raven.moba.xp,
-    color: '#6e2430',
-    accent: '#e0c07a',
   },
   theme: {
     decor: 'sanctuary',

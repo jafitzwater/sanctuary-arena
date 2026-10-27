@@ -816,19 +816,26 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
     ROSTER.filter((entry) => entry.playable).map((entry) => entry.id),
     ['barbarian'],
   );
-  const dealt = dealTeams(3, 'barbarian');
-  assert.equal(dealt.allies.length, 4);
-  assert.equal(dealt.enemies.length, 5);
-  assert.equal(new Set(dealt.allies.map((seat) => seat.name)).size, 4);
-  assert.equal(new Set(dealt.enemies.map((seat) => seat.name)).size, 5);
-  assert.ok(dealt.allies.every((seat) => seat.classId === 'barbarian'));
-  assert.ok(dealt.enemies.every((seat) => seat.classId === 'barbarian'));
+  // Doc: "4 players on each side. No duplicate character on a side."
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const dealt = dealTeams(seed, 'barbarian');
+    assert.equal(dealt.allies.length, 3, 'the player plus 3 AI allies');
+    assert.equal(dealt.enemies.length, 4);
+    const allyClasses = ['barbarian', ...dealt.allies.map((seat) => seat.classId)];
+    assert.equal(new Set(allyClasses).size, 4, 'no duplicate class on the player side');
+    assert.equal(new Set(dealt.enemies.map((seat) => seat.classId)).size, 4, 'no duplicate class on the enemy side');
+  }
+  const four = createMatch(sanctuary, barbarian, 1);
+  const champs = (team: string) => four.units.filter((unit) => unit.kind === 'champion' && unit.team === team);
+  assert.equal(champs('ally').length, 4);
+  assert.equal(champs('enemy').length, 4);
+  assert.equal(four.units.some((unit) => unit.defId === 'blood-raven'), false, 'no Blood Raven in the 4v4 match');
 
   const sim = createMatch(sanctuary, barbarian, 3);
   const allies = sim.units.filter((unit) => unit.bot && unit.team === 'ally');
   const enemies = sim.units.filter((unit) => unit.bot && unit.team === 'enemy' && unit.defId === 'barbarian');
-  assert.equal(allies.length, 4);
-  assert.equal(enemies.length, 5);
+  assert.equal(allies.length, 3);
+  assert.equal(enemies.length, 4);
   const lanes = new Set(allies.map((unit) => unit.path));
   assert.ok(lanes.size >= 2, 'allied heroes do not all take the same path');
 
