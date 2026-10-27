@@ -1,5 +1,5 @@
 import { STAT_GROWTH } from './data/classes/statGrowth';
-import { itemById, potionCap, type ItemDef, type PotionKind } from './data/items';
+import { isBetterGear, itemById, potionCap, type ItemDef, type PotionKind } from './data/items';
 import type { SkillDef } from './data/classes/types';
 import { dist } from './math';
 import { comebackMul, xpShare } from './pace';
@@ -468,8 +468,13 @@ export function tryBuy(sim: Sim, id: string): void {
   }
   if (!meetsReq(sim, item)) return;
   const old = sim.loadout[slot] ? itemById(sim.loadout[slot] as string) : undefined;
-  const refund = old ? Math.floor(old.cost * 0.5) : 0;
-  const price = Math.max(0, item.cost - refund);
+  // Item 19 [JOSEPH]/doc: "An item cannot be sold. It can only be overwritten for a better item."
+  // No sell-back refund; a slot only takes a better item (isBetterGear).
+  if (!isBetterGear(item, old)) {
+    banner(sim, `${item.name} is not better than your ${old?.name ?? 'gear'}.`);
+    return;
+  }
+  const price = item.cost;
   if (sim.gold < price) {
     banner(sim, 'Not enough gold.');
     return;
@@ -478,7 +483,7 @@ export function tryBuy(sim: Sim, id: string): void {
   sim.loadout[slot] = item.id;
   recomputeHero(sim);
   sfx(sim, 'coin');
-  banner(sim, refund > 0 ? `Bought ${item.name}. Akara returned ${refund} gold.` : `Bought ${item.name}.`);
+  banner(sim, `Bought ${item.name}.`);
 }
 
 /**
