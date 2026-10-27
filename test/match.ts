@@ -810,7 +810,8 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
 }
 
 {
-  assert.equal(ROSTER.length, 7);
+  // Doc: "The characters to choose are barbarian, paladin, sorceress, amazon, and necromancer."
+  assert.deepEqual(ROSTER.map((entry) => entry.id).sort(), ['amazon', 'barbarian', 'necromancer', 'paladin', 'sorceress']);
   assert.deepEqual(
     ROSTER.filter((entry) => entry.playable).map((entry) => entry.id),
     ['barbarian'],
