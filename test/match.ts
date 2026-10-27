@@ -396,7 +396,13 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   updateSim(sim, emptyInput(), 0.1);
   assert.ok(Math.hypot(hero.x - 1500, hero.y - 1100) > 40, 'ground between the paths blocks movement');
   assert.ok(walkable(sanctuary, 1680, 160), 'a den clearing stays open');
-  assert.equal(walkable(sanctuary, 1500, 860), false, 'the river stays shut off the roads');
+  // Item 23: the river no longer blocks movement; walkability is the same with or without it.
+  const dry = { ...sanctuary, river: undefined };
+  for (let x = 0; x <= sanctuary.width; x += 40) {
+    for (let y = 0; y <= sanctuary.height; y += 40) {
+      assert.equal(walkable(sanctuary, x, y), walkable(dry, x, y), `river blocks ${x},${y}`);
+    }
+  }
   assert.ok(walkable(sanctuary, sanctuary.playerBase.x + 150, sanctuary.playerBase.y), 'camp spawn stays open');
   assert.equal(groundAt(sanctuary, 2360, 1240), 'path', 'the blood moor cobbles stay a path');
   for (const path of sanctuary.paths ?? []) {
