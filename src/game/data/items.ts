@@ -68,14 +68,6 @@ const POTIONS: ItemDef[] = [
     restoreMana: 130,
     description: 'Drink to restore 130 mana.',
   },
-  {
-    id: 'hire-rogue',
-    name: 'Hire Rogue',
-    cost: 80,
-    slot: 'consumable',
-    tier: 'base',
-    description: 'A rogue follows you for 45 seconds. Only one at a time.',
-  },
 ];
 
 /**

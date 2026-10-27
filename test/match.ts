@@ -892,33 +892,8 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.ok(FUTURE_ITEMS.some((item) => item.charm));
   assert.ok(ITEMS.every(isShopItem));
   assert.equal(FUTURE_ITEMS.some(isShopItem), false);
-  assert.ok(ITEMS.some((item) => item.id === 'hire-rogue'));
-
-  const sim = createMatch(act1, barbarian, 1);
-  const hero = player(sim);
-  hero.x = sim.map.playerBase.x;
-  hero.y = sim.map.playerBase.y;
-  sim.gold = 200;
-  const hire = emptyInput();
-  hire.buy = 'hire-rogue';
-  updateSim(sim, hire, 0.05);
-  const merc = sim.units.find((unit) => unit.merc && unit.alive);
-  assert.ok(merc, 'Akara should hire a rogue in camp');
-  assert.ok(sim.gold < 130 && sim.gold > 100, `gold after hire ${sim.gold}`);
-  updateSim(sim, hire, 0.05);
-  assert.equal(sim.units.filter((unit) => unit.merc && unit.alive).length, 1);
-  if (!merc) throw new Error('missing merc');
-  merc.mercT = 0.05;
-  step(sim, emptyInput(), 0.2);
-  assert.equal(sim.units.some((unit) => unit.merc && unit.alive), false);
-
-  const away = createMatch(act1, barbarian, 1);
-  const far = player(away);
-  far.x = 2000;
-  far.y = 800;
-  away.gold = 200;
-  updateSim(away, hire, 0.05);
-  assert.equal(away.units.some((unit) => unit.merc), false);
+  // Item 22: the doc has no mercenary hire.
+  assert.equal(ITEMS.some((item) => item.id === 'hire-rogue'), false);
 }
 
 {
@@ -1172,7 +1147,7 @@ console.log('worldstone open ok');
   hero.x = home.x;
   hero.y = home.y;
   sim.gold = 5000;
-  const gear = ITEMS.find((item) => !item.consumable && item.id !== 'hire-rogue');
+  const gear = ITEMS.find((item) => !item.consumable);
   if (!gear) throw new Error('no gear item');
   const goldBefore = sim.gold;
   const buyGear = emptyInput();
@@ -1183,7 +1158,7 @@ console.log('worldstone open ok');
   buyPotion.buy = 'health-potion';
   updateSim(sim, buyPotion, 0.05);
   assert.equal(sim.potions.health, 1, 'potions are for sale during the wait');
-  assert.equal(sim.units.some((unit) => unit.kind === 'minion' && unit.team !== 'wild' && !unit.merc), false);
+  assert.equal(sim.units.some((unit) => unit.kind === 'minion' && unit.team !== 'wild'), false);
   step(sim, emptyInput(), 29.5 - sim.time);
   assert.equal(sim.units.some((unit) => unit.kind === 'minion' && unit.team === 'ally'), false, 'no wave before 30s');
   step(sim, emptyInput(), 1);
