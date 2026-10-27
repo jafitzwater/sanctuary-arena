@@ -1,4 +1,4 @@
-import { itemById, potionCap, potionItem, type ItemDef, type PotionKind } from './data/items';
+import { itemById, potionCap, type ItemDef, type PotionKind } from './data/items';
 import type { SkillDef } from './data/classes/types';
 import { dist } from './math';
 import { comebackMul, xpShare } from './pace';
@@ -434,6 +434,20 @@ export function tryBuy(sim: Sim, id: string): void {
   banner(sim, refund > 0 ? `Bought ${item.name}. Akara returned ${refund} gold.` : `Bought ${item.name}.`);
 }
 
+/**
+ * Gap-list items 20 and 21.
+ * Doc: "Both add 1/5th the size of the health or mana of the character, depending on the potion used."
+ *   -> 1/5 of maximum health or mana (numbers-table: "size" read as maximum [DERIVED]).
+ * Doc: "The teleport takes 3 seconds." -> TELEPORT_SECONDS.
+ * Excluded (NEEDS JOSEPH): potion price/limits/cooldown, teleport interruption/cooldown
+ * (the repo's existing move/hit interruption is kept unchanged).
+ */
+export const TELEPORT_SECONDS = 3;
+
+export function potionAmount(max: number): number {
+  return Math.round(max / 5);
+}
+
 export function tryPotion(sim: Sim, kind: PotionKind): void {
   const hero = player(sim);
   if (!hero.alive) return;
@@ -441,21 +455,22 @@ export function tryPotion(sim: Sim, kind: PotionKind): void {
     banner(sim, kind === 'health' ? 'No health potions.' : 'No mana potions.');
     return;
   }
-  const item = potionItem(kind);
   if (kind === 'health') {
     if (hero.hp >= hero.maxHp - 0.5) {
       banner(sim, 'Already at full life.');
       return;
     }
-    hero.hp = Math.min(hero.maxHp, hero.hp + (item.heal ?? 0));
-    floater(sim, hero.x, hero.y - 30, `+${item.heal ?? 0}`, '#8dce86');
+    const heal = potionAmount(hero.maxHp);
+    hero.hp = Math.min(hero.maxHp, hero.hp + heal);
+    floater(sim, hero.x, hero.y - 30, `+${heal}`, '#8dce86');
   } else {
     if (hero.mana >= hero.maxMana - 0.5) {
       banner(sim, 'Already at full mana.');
       return;
     }
-    hero.mana = Math.min(hero.maxMana, hero.mana + (item.restoreMana ?? 0));
-    floater(sim, hero.x, hero.y - 30, `+${item.restoreMana ?? 0}`, '#8eb7e8');
+    const restore = potionAmount(hero.maxMana);
+    hero.mana = Math.min(hero.maxMana, hero.mana + restore);
+    floater(sim, hero.x, hero.y - 30, `+${restore}`, '#8eb7e8');
   }
   sim.potions[kind] -= 1;
   sfx(sim, 'potion');

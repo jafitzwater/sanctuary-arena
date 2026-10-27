@@ -34,6 +34,7 @@ import {
   tryPotion,
   trySpendAttribute,
   tryUpgrade,
+  TELEPORT_SECONDS,
 } from './combat';
 import { byId, findBase, inRange, isStructure, nearestEnemy, player } from './query';
 import { SKILLS } from './skills';
@@ -605,7 +606,7 @@ function playerPace(sim: Sim, hero: Unit, direct = false): number {
 
 function updatePlayer(sim: Sim, hero: Unit, input: FrameInput, dt: number): void {
   if (input.recall && hero.recall <= 0 && hero.stun <= 0 && !hero.leap && hero.whirlT <= 0) {
-    hero.recall = 2.6;
+    hero.recall = TELEPORT_SECONDS;
     banner(sim, 'Returning to the fountain…');
     return;
   }

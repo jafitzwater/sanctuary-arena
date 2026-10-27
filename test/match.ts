@@ -809,7 +809,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   hero.invuln = 10;
   const recall = emptyInput();
   recall.recall = true;
-  step(home, recall, 3);
+  step(home, recall, 3.4); // Doc: "The teleport takes 3 seconds."
   assert.ok(
     Math.hypot(hero.x - home.map.playerBase.x, hero.y - home.map.playerBase.y) < 160,
     `recall left the hero at ${hero.x.toFixed(0)},${hero.y.toFixed(0)} recall=${hero.recall.toFixed(2)}`,
