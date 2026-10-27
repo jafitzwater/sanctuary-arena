@@ -755,13 +755,13 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   step(sim, emptyInput(), first.respawn + 0.25);
   assert.ok(sim.units.some((unit) => unit.pack === first.id && unit.alive), 'a cleared den respawns');
 
+  // Items 2, 6: "two waves each, then loop: rogues, valkyries, Act 2 mercenaries, Act 3 mercenaries."
   const night = pastOpening(createMatch(sanctuary, barbarian, 1));
-  night.time = 90;
+  night.waveNo = 2;
   night.waveIn = 0.05;
   updateSim(night, emptyInput(), 0.1);
   const foes = night.units.filter((unit) => unit.kind === 'minion' && unit.team === 'enemy' && unit.alive);
-  const ids = new Set(foes.map((unit) => unit.defId));
-  assert.ok(ids.has('skeleton') && ids.has('hungry-dead') && ids.has('willowisp'), [...ids].join(','));
+  assert.ok(foes.some((unit) => unit.defId === 'valkyrie'), 'wave 3 sends valkyries');
 }
 
 {

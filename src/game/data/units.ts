@@ -55,8 +55,7 @@ function fromMon(id: string): UnitDef {
  * (240/780) so they match the Barbarian's new life. Speeds stay under the
  * hero's run of 120.
  */
-export const UNIT_DEFS: Record<string, UnitDef> = {
-  rogue: {
+const ROGUE: UnitDef = {
     id: 'rogue',
     name: 'Rogue',
     hp: 105,
@@ -73,7 +72,10 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
     aggro: 200,
     color: '#3e5e78',
     accent: '#d4b46a',
-  },
+};
+
+export const UNIT_DEFS: Record<string, UnitDef> = {
+  rogue: ROGUE,
   'rogue-archer': {
     id: 'rogue-archer',
     name: 'Rogue Archer',
@@ -92,6 +94,10 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
     color: '#35506a',
     accent: '#e6d3a1',
   },
+  // Item 6 wave mobs. [TEMP: the doc gives no mob base stats; these copy the repo's Rogue until Joseph sets them.]
+  valkyrie: { ...ROGUE, id: 'valkyrie', name: 'Valkyrie' },
+  'act2-mercenary': { ...ROGUE, id: 'act2-mercenary', name: 'Act 2 Mercenary' },
+  'act3-mercenary': { ...ROGUE, id: 'act3-mercenary', name: 'Act 3 Mercenary' },
   fallen: { ...fromMon('fallen'), hp: 76, ad: 6, moveSpeed: 66 },
   zombie: { ...fromMon('zombie'), hp: 174, ad: 7, moveSpeed: 34 },
   quillrat: { ...fromMon('quillrat'), hp: 94, ad: 6, moveSpeed: 50 },
