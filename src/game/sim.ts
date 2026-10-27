@@ -1252,6 +1252,7 @@ function spawnRoster(sim: Sim, seed: number): void {
     unit.waypoint = 1;
     unit.color = seat.tint;
     unit.accent = seat.tint;
+    unit.look = seat.classId;
   });
   dealt.enemies.forEach((seat, index) => {
     const unit = spawnHero(sim, 'enemy', enemyHome.x - 200 - index * 36, enemyHome.y + 70 - seat.lane * 40, seat.name);
@@ -1259,6 +1260,7 @@ function spawnRoster(sim: Sim, seed: number): void {
     unit.waypoint = Math.max(0, laneAt(sim, seat.lane).length - 2);
     unit.color = seat.tint;
     unit.accent = seat.tint;
+    unit.look = seat.classId;
   });
 }
 

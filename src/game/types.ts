@@ -26,6 +26,8 @@ export interface ThreatMark {
 export interface Unit {
   id: number;
   defId: string;
+  /** Batch 3 item a: class sheet shown for an AI hero seat (visual only; the kit stays Barbarian). */
+  look?: string;
   kind: UnitKind;
   team: Team;
   name: string;
