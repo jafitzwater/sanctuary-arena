@@ -48,6 +48,12 @@ import {
   type HeroArmor,
 } from '../src/game/gait';
 
+/** Skip the 15 s opening wait (item 3) so older tests can move heroes out of base. */
+function pastOpening<T extends { time: number; map: { openingWait?: number } }>(sim: T): T {
+  sim.time = Math.max(sim.time, sim.map.openingWait ?? 0);
+  return sim;
+}
+
 function step(sim: Sim, input: FrameInput, seconds: number, dt = 1 / 30): void {
   const frames = Math.max(1, Math.round(seconds / dt));
   for (let i = 0; i < frames; i++) updateSim(sim, input, dt);
@@ -373,7 +379,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
 }
 
 {
-  const sim = createMatch(sanctuary, barbarian, 1);
+  const sim = pastOpening(createMatch(sanctuary, barbarian, 1));
   assert.equal(sim.map.paths?.length, 3);
   assert.equal(sim.map.roam, true);
   const towers = sim.units.filter((unit) => unit.kind === 'tower');
@@ -496,7 +502,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
     }
     assert.ok(Math.hypot(home.x - gate.x, home.y - gate.y) > 40, `${side} palisade stands off the banner`);
   }
-  const runHome = createMatch(sanctuary, barbarian, 3);
+  const runHome = pastOpening(createMatch(sanctuary, barbarian, 3));
   const runner = player(runHome);
   runner.hp = 100000;
   runner.invuln = 60;
@@ -567,7 +573,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.equal(turned, 2);
   const open = { x: 1760, y: 360 };
   for (let dir = 0; dir < 8; dir++) {
-    const sim = createMatch(sanctuary, barbarian, 20 + dir);
+    const sim = pastOpening(createMatch(sanctuary, barbarian, 20 + dir));
     const hero = player(sim);
     hero.hp = 100000;
     hero.invuln = 30;
@@ -631,7 +637,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
       const moved = Math.hypot(dx, dy);
       if (moved > 1 && walkable(sanctuary, landed.x, landed.y) && (dx < 0.05 || dy < 0.05)) {
         slideCase = true;
-        const simSlide = createMatch(sanctuary, barbarian, 9);
+        const simSlide = pastOpening(createMatch(sanctuary, barbarian, 9));
         const slider = player(simSlide);
         slider.hp = 100000;
         slider.invuln = 60;
@@ -704,7 +710,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
 }
 
 {
-  const sim = createMatch(sanctuary, barbarian, 1);
+  const sim = pastOpening(createMatch(sanctuary, barbarian, 1));
   const dens = sim.map.dens ?? [];
   assert.equal(dens.length, 6);
   const boss = sim.units.find((unit) => unit.name === 'Rakanishu');
@@ -731,7 +737,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   step(sim, emptyInput(), first.respawn + 0.25);
   assert.ok(sim.units.some((unit) => unit.pack === first.id && unit.alive), 'a cleared den respawns');
 
-  const night = createMatch(sanctuary, barbarian, 1);
+  const night = pastOpening(createMatch(sanctuary, barbarian, 1));
   night.time = 90;
   night.waveIn = 0.05;
   updateSim(night, emptyInput(), 0.1);
@@ -741,7 +747,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
 }
 
 {
-  const sim = createMatch(sanctuary, barbarian, 1);
+  const sim = pastOpening(createMatch(sanctuary, barbarian, 1));
   const seals = sim.units.filter((unit) => unit.kind === 'seal');
   assert.equal(seals.length, 6);
   const enemySeal = seals.find((unit) => unit.team === 'enemy' && unit.path === 0);
@@ -768,7 +774,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
     false,
   );
 
-  const pits = createMatch(sanctuary, barbarian, 1);
+  const pits = pastOpening(createMatch(sanctuary, barbarian, 1));
   pits.dragonIn = 0.05;
   updateSim(pits, emptyInput(), 0.1);
   const dragon = pits.units.find((unit) => unit.objective === 'dragon' && unit.alive);
@@ -779,7 +785,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   const buffed = player(pits);
   assert.ok(buffed.mightT > 0 || buffed.guardT > 0 || buffed.haste > 0);
 
-  const home = createMatch(sanctuary, barbarian, 1);
+  const home = pastOpening(createMatch(sanctuary, barbarian, 1));
   const hero = player(home);
   hero.x = 80;
   hero.y = 80;
@@ -792,7 +798,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
     `recall left the hero at ${hero.x.toFixed(0)},${hero.y.toFixed(0)} recall=${hero.recall.toFixed(2)}`,
   );
 
-  const shrines = createMatch(sanctuary, barbarian, 1);
+  const shrines = pastOpening(createMatch(sanctuary, barbarian, 1));
   const shrine = shrines.map.shrines?.[0];
   if (!shrine) throw new Error('missing shrine');
   const pilgrim = player(shrines);
@@ -831,7 +837,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.equal(champs('enemy').length, 4);
   assert.equal(four.units.some((unit) => unit.defId === 'blood-raven'), false, 'no Blood Raven in the 4v4 match');
 
-  const sim = createMatch(sanctuary, barbarian, 3);
+  const sim = pastOpening(createMatch(sanctuary, barbarian, 3));
   const allies = sim.units.filter((unit) => unit.bot && unit.team === 'ally');
   const enemies = sim.units.filter((unit) => unit.bot && unit.team === 'enemy' && unit.defId === 'barbarian');
   assert.equal(allies.length, 3);
@@ -960,7 +966,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
 }
 
 {
-  const sim = createMatch(sanctuary, barbarian, 1);
+  const sim = pastOpening(createMatch(sanctuary, barbarian, 1));
   const hero = player(sim);
   const camp = emptyInput();
   const aimed = screenVectorToWorld(1, 0);
@@ -974,7 +980,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.equal(heroMoveScale(true, true, 144, 216), 1);
   assert.equal(heroMoveScale(true, false, 144, 216), 144 / 216);
 
-  const click = createMatch(sanctuary, barbarian, 1);
+  const click = pastOpening(createMatch(sanctuary, barbarian, 1));
   const walker = player(click);
   const dest = emptyInput();
   dest.destX = walker.x + 200;
@@ -1011,7 +1017,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
 
 function campSpeed(gait: 'idle' | 'walk' | 'run'): number {
   commitStickGait(gait, gait !== 'idle');
-  const sim = createMatch(sanctuary, barbarian, 1);
+  const sim = pastOpening(createMatch(sanctuary, barbarian, 1));
   const hero = player(sim);
   const input = emptyInput();
   if (gait !== 'idle') {
@@ -1118,3 +1124,41 @@ function campSpeed(gait: 'idle' | 'walk' | 'run'): number {
 }
 
 console.log('match tests passed');
+
+{
+  // Item 3. Doc: "There is a 15 second wait to start. Players are blocked in base until those 15 seconds pass.
+  // The first wave of support mobs from each side comes 15 seconds after that. During that opening wait,
+  // players can only purchase potions of health and mana."
+  assert.equal(sanctuary.openingWait, 15);
+  assert.equal(sanctuary.waves.first, 30);
+  const sim = createMatch(sanctuary, barbarian, 1);
+  const hero = player(sim);
+  const home = sim.map.playerBase;
+  const out = emptyInput();
+  out.moveX = 1;
+  out.moveY = -1;
+  step(sim, out, 10);
+  assert.ok(Math.hypot(hero.x - home.x, hero.y - home.y) <= sim.map.shopRadius + 1, 'held in base during the wait');
+  hero.x = home.x;
+  hero.y = home.y;
+  sim.gold = 5000;
+  const gear = ITEMS.find((item) => !item.consumable && item.id !== 'hire-rogue');
+  if (!gear) throw new Error('no gear item');
+  const goldBefore = sim.gold;
+  const buyGear = emptyInput();
+  buyGear.buy = gear.id;
+  updateSim(sim, buyGear, 0.05);
+  assert.ok(sim.gold >= goldBefore, 'gear is not for sale during the wait');
+  const buyPotion = emptyInput();
+  buyPotion.buy = 'health-potion';
+  updateSim(sim, buyPotion, 0.05);
+  assert.equal(sim.potions.health, 1, 'potions are for sale during the wait');
+  assert.equal(sim.units.some((unit) => unit.kind === 'minion' && unit.team !== 'wild' && !unit.merc), false);
+  step(sim, emptyInput(), 29.5 - sim.time);
+  assert.equal(sim.units.some((unit) => unit.kind === 'minion' && unit.team === 'ally'), false, 'no wave before 30s');
+  step(sim, emptyInput(), 1);
+  assert.ok(sim.units.some((unit) => unit.kind === 'minion' && unit.team === 'ally'), 'first wave at 30s');
+  step(sim, out, 6);
+  assert.ok(Math.hypot(hero.x - home.x, hero.y - home.y) > sim.map.shopRadius + 1, 'free to leave after the wait');
+}
+console.log('opening wait ok');

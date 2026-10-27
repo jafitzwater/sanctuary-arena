@@ -15,6 +15,12 @@ import { createMatch, spawnMinion, updateSim } from '../src/game/sim';
 import { player } from '../src/game/query';
 import { emptyInput, type FrameInput, type Sim, type Unit } from '../src/game/types';
 
+/** Skip the 15 s opening wait (item 3) so older tests can move heroes out of base. */
+function pastOpening<T extends { time: number; map: { openingWait?: number } }>(sim: T): T {
+  sim.time = Math.max(sim.time, sim.map.openingWait ?? 0);
+  return sim;
+}
+
 const heroProfile = attackProfile(barbarian.stats.attackInterval, barbarian.stats.attackRange);
 const ravenProfile = attackProfile(1.15, 250, 460);
 const rosterProfile = attackProfile(1, 48);
@@ -206,7 +212,7 @@ function quiet(sim: Sim, keep: number[]): void {
 }
 
 function pit(): { sim: Sim; hero: Unit; foe: Unit } {
-  const sim = createMatch(sanctuary, barbarian, 1);
+  const sim = pastOpening(createMatch(sanctuary, barbarian, 1));
   const hero = player(sim);
   hero.x = 2000;
   hero.y = 1400;
@@ -371,7 +377,7 @@ function attackInput(): FrameInput {
 }
 
 {
-  const sim = createMatch(sanctuary, barbarian, 1);
+  const sim = pastOpening(createMatch(sanctuary, barbarian, 1));
   const hero = player(sim);
   const rival = sim.units.find((unit) => unit.bot && unit.kind === 'champion' && unit.team !== hero.team);
   if (!rival) throw new Error('missing rival champion');

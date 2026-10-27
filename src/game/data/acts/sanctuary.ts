@@ -241,9 +241,12 @@ export const sanctuary: ActDef = {
     xp: 180,
   },
   towers: [...laneTowers(north), ...laneTowers(center), ...laneTowers(south), ...guardians],
+  // Doc: "There is a 15 second wait to start. Players are blocked in base until those 15 seconds pass."
+  openingWait: 15,
   waves: {
     interval: 22,
-    first: 8,
+    // Doc: "The first wave of support mobs from each side comes 15 seconds after that." (15 + 15)
+    first: 30,
     ally: [{ unit: 'rogue', count: 1 }],
     enemy: [{ unit: 'fallen', count: 1 }],
   },
