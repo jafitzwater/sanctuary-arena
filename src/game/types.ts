@@ -184,6 +184,9 @@ export interface Sim {
   pace: 'Normal' | 'Nightmare' | 'Hell';
   /** Seconds until each wilderness den respawns. Indexed by den id. */
   denIn: number[];
+  /** Item 15: seconds since a cave boss pack last lost health, and its last total health. Indexed by den id. */
+  caveQuiet: number[];
+  caveHp: number[];
   dragonIn: number;
   dragonStep: number;
   heraldIn: number;

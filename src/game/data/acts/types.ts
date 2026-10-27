@@ -51,6 +51,8 @@ export interface DenSpawn {
   unique?: string;
   /** A single super unique instead of a pack. */
   boss?: string;
+  /** Item 15: a cave boss. Stats come straight from its UnitDef; drops potions; resets after 60 s quiet. */
+  cave?: boolean;
 }
 
 export interface TowerSpawn {

@@ -1,5 +1,6 @@
 import { waveMob, waveStrength, WAVE_SIZE } from './data/waves';
 import { itemById } from './data/items';
+import { CAVE_RESET } from './data/caves';
 import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
 import { dealTeams } from './teams';
@@ -81,6 +82,8 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     announcedWave: false,
     pace: 'Normal',
     denIn: [],
+    caveQuiet: [],
+    caveHp: [],
     dragonIn: 18,
     dragonStep: 0,
     heraldIn: 22,
@@ -1185,6 +1188,10 @@ function withExtra(groups: { unit: string; count: number }[], extra: number): { 
 }
 
 function spawnDen(sim: Sim, den: DenSpawn): void {
+  if (den.cave) {
+    spawnCave(sim, den);
+    return;
+  }
   const count = den.boss ? 1 : den.count;
   for (let n = 0; n < count; n++) {
     const angle = (n / Math.max(1, count)) * Math.PI * 2;
@@ -1204,17 +1211,53 @@ function spawnDen(sim: Sim, den: DenSpawn): void {
   }
 }
 
+/** Item 15: cave bosses use their UnitDef stats as is ([JOSEPH] answer 2). */
+function spawnCave(sim: Sim, den: DenSpawn): void {
+  for (let n = 0; n < den.count; n++) {
+    const angle = (n / Math.max(1, den.count)) * Math.PI * 2;
+    const r = den.count > 1 ? 30 : 0;
+    const unit = spawnMinion(sim, den.unit, 'wild', den.x + Math.cos(angle) * r, den.y + Math.sin(angle) * r * 0.75, 0, 1);
+    unit.pack = den.id;
+    unit.anchorX = den.x;
+    unit.anchorY = den.y;
+  }
+  sim.caveQuiet[den.id] = 0;
+  sim.caveHp[den.id] = cavePackHp(sim, den.id);
+}
+
+function cavePackHp(sim: Sim, id: number): number {
+  return sim.units.reduce((sum, unit) => (unit.alive && unit.pack === id ? sum + unit.hp : sum), 0);
+}
+
+/**
+ * Item 15. Doc: "If there is no attack for 60 seconds in the cave, that boss's health goes
+ * back to 100%." Any health lost by the pack counts as an attack and restarts the clock.
+ */
+function updateCaveReset(sim: Sim, den: DenSpawn, dt: number): void {
+  const hp = cavePackHp(sim, den.id);
+  if (hp < (sim.caveHp[den.id] ?? hp)) sim.caveQuiet[den.id] = 0;
+  else sim.caveQuiet[den.id] = (sim.caveQuiet[den.id] ?? 0) + dt;
+  if (sim.caveQuiet[den.id] >= CAVE_RESET) {
+    for (const unit of sim.units) if (unit.alive && unit.pack === den.id) unit.hp = unit.maxHp;
+    sim.caveQuiet[den.id] = 0;
+  }
+  sim.caveHp[den.id] = cavePackHp(sim, den.id);
+}
+
 function updateDens(sim: Sim, dt: number): void {
   for (const den of sim.map.dens ?? []) {
     const alive = sim.units.some((unit) => unit.alive && unit.pack === den.id);
     if (alive) {
       sim.denIn[den.id] = den.respawn;
+      if (den.cave) updateCaveReset(sim, den, dt);
       continue;
     }
     sim.denIn[den.id] = (sim.denIn[den.id] ?? den.respawn) - dt;
     if (sim.denIn[den.id] > 0) continue;
     spawnDen(sim, den);
     sim.denIn[den.id] = den.respawn;
+    // Item 15 [DOC]: "A boss is back after 3 minutes, with a notice of respawn."
+    if (den.cave) banner(sim, `${unitDef(den.unit).name} has returned to its cave.`);
   }
 }
 

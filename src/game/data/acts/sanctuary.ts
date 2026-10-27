@@ -1,4 +1,5 @@
 import { WAVE_INTERVAL } from '../waves';
+import { CAVE_RESPAWN } from '../caves';
 import type { ActDef, PathDef, PathId, TowerSpawn } from './types';
 
 
@@ -215,13 +216,13 @@ export const sanctuary: ActDef = {
     { x: 1760, y: 1760, kind: 'haste' },
     { x: 3180, y: 1500, kind: 'mana' },
   ],
+  // Item 15 [DOC]/[JOSEPH]: the 6 wilderness dens are replaced by 4 cave bosses.
+  // Coordinates reuse four of the old den spots, which sit off the roadways [TEMP].
   dens: [
-    { id: 1, x: 1680, y: 160, unit: 'fallen', count: 3, respawn: 22, unique: 'Bishibosh' },
-    { id: 2, x: 2480, y: 860, unit: 'skeleton', count: 3, respawn: 22 },
-    { id: 3, x: 900, y: 1500, unit: 'quillrat', count: 3, respawn: 22 },
-    { id: 4, x: 2060, y: 1960, unit: 'hungry-dead', count: 2, respawn: 24 },
-    { id: 5, x: 2920, y: 1680, unit: 'goatman', count: 2, respawn: 24, boss: 'Rakanishu' },
-    { id: 6, x: 1400, y: 2050, unit: 'mummy', count: 2, respawn: 26 },
+    { id: 1, x: 2480, y: 860, unit: 'countess', count: 1, respawn: CAVE_RESPAWN, cave: true },
+    { id: 2, x: 900, y: 1500, unit: 'radament', count: 1, respawn: CAVE_RESPAWN, cave: true },
+    { id: 3, x: 2920, y: 1680, unit: 'council-member', count: 3, respawn: CAVE_RESPAWN, cave: true },
+    { id: 4, x: 1400, y: 2050, unit: 'izual', count: 1, respawn: CAVE_RESPAWN, cave: true },
   ],
   // Mirrored with the roadways (paint only, item 23).
   river: [
