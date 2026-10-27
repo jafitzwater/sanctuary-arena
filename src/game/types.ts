@@ -100,6 +100,10 @@ export interface Unit {
   findGold: number;
   combat: number;
   respawn: number;
+  /** Champion deaths this match. Doc: "The first death takes 5 seconds. Each death after that adds 5 seconds." */
+  deathCount: number;
+  /** Champion kills since this unit last died. Doc: "A streak is 3 kills in a row". */
+  streak: number;
   corpse: number;
   /** sim.time when this unit died. 0 while alive. */
   diedAt: number;
@@ -187,6 +191,8 @@ export interface Sim {
   cs: number;
   kills: number;
   deaths: number;
+  /** Doc: "The first character kill of the match pays 50% more gold." */
+  firstKillPaid: boolean;
   assists: number;
   /** Champion kills scored by each team. */
   allyKills: number;
