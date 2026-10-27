@@ -94,10 +94,17 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
     color: '#35506a',
     accent: '#e6d3a1',
   },
-  // Item 6 wave mobs. [TEMP: the doc gives no mob base stats; these copy the repo's Rogue until Joseph sets them.]
-  valkyrie: { ...ROGUE, id: 'valkyrie', name: 'Valkyrie' },
-  'act2-mercenary': { ...ROGUE, id: 'act2-mercenary', name: 'Act 2 Mercenary' },
-  'act3-mercenary': { ...ROGUE, id: 'act3-mercenary', name: 'Act 3 Mercenary' },
+  // Items 2/6 wave mobs, batch 4. Source [JOSEPH] (joseph-answers-oct27.md, answer 5).
+  // UnitDef has one damage number, so a damage range uses its midpoint [DERIVED].
+  // Not implemented (NEEDS JOSEPH, no values given): every aura, Act 3 spell damage.
+  // Fields Joseph did not set (armor, speed, range, gold, xp...) stay the Rogue's [TEMP].
+  // [JOSEPH] "Valkyrie 120HP 15-25 dmg +defense aura." -> hp 120, ad 20 (midpoint).
+  valkyrie: { ...ROGUE, id: 'valkyrie', name: 'Valkyrie', hp: 120, ad: 20 },
+  // [JOSEPH] "Act2 merc 100HP 20-30 dmg poison/cold aura." -> hp 100, ad 25 (midpoint).
+  'act2-mercenary': { ...ROGUE, id: 'act2-mercenary', name: 'Act 2 Mercenary', hp: 100, ad: 25 },
+  // [JOSEPH] "Act3 merc 90HP low melee, strong spell dmg, lightning/fire aura." -> hp 90.
+  // "low melee" has no number, so it keeps the Rogue's ad 7 [TEMP].
+  'act3-mercenary': { ...ROGUE, id: 'act3-mercenary', name: 'Act 3 Mercenary', hp: 90 },
   fallen: { ...fromMon('fallen'), hp: 76, ad: 6, moveSpeed: 66 },
   zombie: { ...fromMon('zombie'), hp: 174, ad: 7, moveSpeed: 34 },
   quillrat: { ...fromMon('quillrat'), hp: 94, ad: 6, moveSpeed: 50 },
