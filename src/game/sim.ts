@@ -1,5 +1,6 @@
 import { waveMob, waveStrength, WAVE_SIZE } from './data/waves';
 import { itemById } from './data/items';
+import { grassPatches, hiddenUnits } from './data/grass';
 import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
 import { dealTeams } from './teams';
@@ -86,6 +87,7 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     heraldIn: 22,
     heraldCount: 0,
     shrineIn: (map.shrines ?? []).map(() => 0),
+    grass: grassPatches(map.paths ?? []),
     banner: null,
     tip: 'Last-hit Fallen for gold. Points spends skills and stats. Shop at the Encampment.',
     tipT: 9,
@@ -434,7 +436,10 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
     banner(sim, pace.name === 'Nightmare' ? 'The wilds turn to Nightmare.' : 'Hell walks the roads.');
   }
 
+  updateGrass(sim);
   const hero = player(sim);
+  const lockedOn = byId(sim, input.targetId);
+  if (lockedOn?.hidden && lockedOn.team !== hero.team) input = { ...input, targetId: null };
   if (hero.alive) updatePlayer(sim, hero, input, step);
   const raven = byId(sim, sim.enemyChampionId);
   if (raven) updateEnemyChampion(sim, raven, step);
@@ -450,6 +455,8 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
   }
 
   resolveBodies(sim, started);
+  updateGrass(sim);
+  dropHiddenTargets(sim);
   strikes(sim, input, step);
   updateProjectiles(sim, step);
   regen(sim, step);
@@ -1483,6 +1490,22 @@ function spawnHerald(sim: Sim, x: number, y: number, baron: boolean): void {
   unit.moveSpeed = baron ? 43 : 36;
   unit.color = baron ? '#6a2040' : '#8a7040';
   unit.accent = '#e6c864';
+}
+
+/** Item 17 [DOC]/[JOSEPH]: mark units hidden in grass; leaving the grass reveals them. */
+function updateGrass(sim: Sim): void {
+  if (!sim.grass.length) return;
+  const hidden = hiddenUnits(sim.grass, sim.units);
+  for (const unit of sim.units) unit.hidden = hidden.has(unit.id);
+}
+
+/** Item 17: enemies lose a target that has become hidden ("invisible unless an enemy is inside"). */
+function dropHiddenTargets(sim: Sim): void {
+  for (const unit of sim.units) {
+    if (unit.id === sim.playerId) continue;
+    const target = byId(sim, unit.targetId);
+    if (target?.hidden && target.team !== unit.team) unit.targetId = null;
+  }
 }
 
 function updateShrines(sim: Sim, dt: number): void {

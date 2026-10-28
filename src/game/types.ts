@@ -28,6 +28,8 @@ export interface Unit {
   defId: string;
   /** Batch 3 item a: class sheet shown for an AI hero seat (visual only; the kit stays Barbarian). */
   look?: string;
+  /** Item 17: inside grass and unseen by every other team this tick. */
+  hidden?: boolean;
   kind: UnitKind;
   team: Team;
   name: string;
@@ -189,6 +191,8 @@ export interface Sim {
   heraldIn: number;
   heraldCount: number;
   shrineIn: number[];
+  /** Item 17: hiding grass patches. */
+  grass: { x: number; y: number; r: number }[];
   banner: { text: string; t: number } | null;
   tip: string;
   tipT: number;
