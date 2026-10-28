@@ -35,10 +35,10 @@ const frameProbe = [-3, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 15];
 // Every class sheet: 8 directions x 4 states x any frame lands inside 1152x512.
 for (const id of CLASS_SHEET_IDS) {
   const [w, h] = pngSize(`public/sprites/classes/${id}-full-sheet-64.png`);
-  // Barbarian sheet has 8 extra run columns (18-25, unwired art): 26 cols = 1664 wide. Others stay 18 cols = 1152.
-  const expectedW = id === 'barbarian' ? 1664 : CLASS_SHEET.cols * CLASS_SHEET.cell;
+  // Barbarian sheet: run 18-25, walk12 26-37, run12 38-49, attack12 50-61 (unwired art): 62 cols = 3968 wide. Others stay 18 cols = 1152.
+  const expectedW = id === 'barbarian' ? 3968 : CLASS_SHEET.cols * CLASS_SHEET.cell;
   assert.deepEqual([w, h], [expectedW, CLASS_SHEET.rows * CLASS_SHEET.cell]);
-  assert.deepEqual([w, h], [id === 'barbarian' ? 1664 : 1152, 512]);
+  assert.deepEqual([w, h], [id === 'barbarian' ? 3968 : 1152, 512]);
   for (let c = 0; c < 8; c++) for (const a of anims) for (const f of frameProbe) {
     const row = classSheetRow(c);
     const col = classSheetCol(a, f);
