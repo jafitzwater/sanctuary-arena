@@ -17,6 +17,7 @@
  * Excluded (NEEDS JOSEPH): the "temp buff" option, the pool's "stronger effect" (the doc says
  * both do 50%), exact coordinates. TEMP: stand time, pickup radii, side offsets.
  */
+import { mapLen } from './mapScale';
 import type { PathDef } from './acts/types';
 
 export const ORB_REFILL = 180; // [DOC] "refill after 3 minutes" / [JOSEPH] "180s refill"
@@ -24,9 +25,9 @@ export const ORB_SHARE = 0.5; // [DOC] "50% of what that character currently has
 export const ORB_COUNT = 5; // [JOSEPH] "4-6 orbs on primary path"
 export const ORB_SPACING = 250; // [JOSEPH] "every ~200-300 units"
 export const ORB_RADIUS = 30; // [TEMP] pickup radius ("small pickups")
-export const ORB_SIDE = 60; // [TEMP] "off to the side", near the road edge (road half-width 84)
+export const ORB_SIDE = mapLen(60); // [TEMP] "off to the side", near the road edge; follows MAP_SCALE (pass 2 item 1)
 export const POOL_RADIUS = 70; // [TEMP] "larger"
-export const POOL_SIDE = 200; // [TEMP] beside the roadway ("off-road areas")
+export const POOL_SIDE = mapLen(200); // [TEMP] beside the roadway ("off-road areas"); follows MAP_SCALE (pass 2 item 1)
 export const POOL_STAND = 1; // [TEMP] seconds ("stand in them briefly")
 
 export type OrbKind = 'orb' | 'pool';

@@ -291,13 +291,13 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
   letter-spacing: 0.06em;
 }
 
-/* WILD RIFT VIEW: width = --mini-w (view.ts MINIMAP default 150 / min 110 / max 220 css px [TEMP]);
+/* WILD RIFT VIEW: width = --mini-w (view.ts MINIMAP default 180 / min 120 / max 240 css px [TEMP]);
    height follows the 4400 x 2800 map (11:7). */
 #minimap-toggle {
   position: absolute;
   top: 4px;
   right: 8px;
-  width: var(--mini-w, 150px);
+  width: var(--mini-w, 180px);
   max-width: calc((100vh - 170px) * 11 / 7);
   aspect-ratio: 11 / 7;
   height: auto;
@@ -945,23 +945,27 @@ body.touch .hero-plate .portrait,
 body.touch #vitals,
 body.touch .hero-plate .stat { display: none; }
 body.touch #telemetry { gap: 8px; font-size: 12px; }
+/* Wild Rift pass 2 item 6 [TEMP]: gold sits in the top bar, right after the clock / score / K-D group
+   (flex order 3; telemetry is order 2), instead of floating under it. */
+body.touch #telemetry { order: 2; }
 body.touch #gold-badge {
-  position: absolute;
-  top: 42px;
-  left: max(4px, env(safe-area-inset-left));
+  position: static;
+  order: 3;
   z-index: 5;
+  flex: none;
   flex-direction: row;
   align-items: center;
   gap: 4px;
   min-width: 0;
-  margin: 0;
-  padding: 2px 8px 3px;
+  margin: 0 0 0 4px;
+  padding: 1px 8px 2px;
   border-radius: 999px;
   background: rgba(12, 8, 6, 0.55);
   border: 1px solid rgba(199, 179, 119, 0.75);
   box-shadow: 0 0 8px rgba(199, 179, 119, 0.28);
   pointer-events: auto;
 }
+body.touch .top-actions { order: 4; }
 body.touch #gold-badge b { font-size: 13px; }
 body.touch #gold-badge small { font-size: 10px; letter-spacing: 0.08em; }
 body.touch .hero-plate { display: flex; align-items: center; gap: 6px; }
@@ -1011,14 +1015,16 @@ body.touch #orb-mp {
 }
 body.touch .orb em { font-size: 8px; bottom: 18%; }
 
-/* WILD RIFT VIEW: touch placement on the left side, directly above the joystick (stick: bottom 16px, 90px). */
+/* WILD RIFT VIEW: touch placement on the left side, above the joystick (stick: bottom 16px, 90px).
+   Wild Rift pass 2 item 5 [TEMP]: view.ts MINIMAP touchBottom 132 (was 116), touchLeft 8, topClear 44,
+   default width 180 (was 150). max-width keeps the whole card between the top bar and the stick. */
 body.touch #minimap-toggle {
   top: auto;
-  bottom: calc(116px + env(safe-area-inset-bottom));
+  bottom: calc(132px + env(safe-area-inset-bottom));
   left: max(8px, env(safe-area-inset-left));
   right: auto;
-  width: var(--mini-w, 150px);
-  max-width: calc((100vh - 170px) * 11 / 7);
+  width: var(--mini-w, 180px);
+  max-width: calc((100vh - 176px - env(safe-area-inset-bottom)) * 11 / 7);
   height: auto;
   background: rgba(12, 8, 6, 0.72);
   border-color: rgba(199, 179, 119, 0.8);
@@ -1102,11 +1108,14 @@ body.touch .skill .key { display: none; }
 body.touch .skill .sname { font-size: 9px; line-height: 1.05; }
 body.touch .skill.locked .sname { font-size: 16px; color: var(--gold); }
 body.touch .skill .rank { font-size: 9px; }
-/* Petals around the 72px attack. Offsets are nudged from 86/8, 78/64, 44/94, -6/86 so the circles clear each other and the screen edge. */
-body.touch .skill:nth-child(1) { right: 86px; bottom: 8px; }
-body.touch .skill:nth-child(2) { right: 78px; bottom: 64px; }
-body.touch .skill:nth-child(3) { right: 40px; bottom: 130px; }
-body.touch .skill:nth-child(4) { right: 8px; bottom: 78px; }
+/* Wild Rift pass 2 item 6 [TEMP]: the four 48px petals sit on one even arc around the 72px attack button
+   (attack center 36/36 in the belt; arc radius 106 px; 0, 30, 60, 90 degrees from west to straight up), so every
+   petal is the same thumb distance from attack with an equal ~7 px gap between petals. Sizes and functions unchanged.
+   right/bottom = 36 + 106*cos|sin(a) - 24. Checked in test/wild-rift-pass2.ts. */
+body.touch .skill:nth-child(1) { right: 118px; bottom: 12px; }
+body.touch .skill:nth-child(2) { right: 104px; bottom: 65px; }
+body.touch .skill:nth-child(3) { right: 65px; bottom: 104px; }
+body.touch .skill:nth-child(4) { right: 12px; bottom: 118px; }
 body.touch #attack-btn {
   position: absolute;
   right: 0;
@@ -1125,10 +1134,12 @@ body.touch #attack-btn {
     inset 0 1px 0 rgba(255, 220, 170, 0.28);
 }
 body.touch #attack-btn .sword { width: 34px; height: 34px; }
+/* Wild Rift pass 2 item 6 [TEMP]: recall on the attack button's vertical axis, 12 px above the top petal
+   (positioned against the screen, not #belt: belt right/bottom 8 + 36 - 20 = 24; 8 + 118 + 48 + 12 = 186). */
 body.touch #recall-btn {
   position: absolute;
-  right: 46px;
-  bottom: 196px;
+  right: 24px;
+  bottom: 186px;
   width: 40px;
   height: 40px;
   min-width: 0;
@@ -1142,9 +1153,10 @@ body.touch #recall-btn {
 }
 body.touch #recall-btn .recall-icon { display: block; margin: 0 auto; }
 body.touch #recall-btn .recall-label { display: none; }
+/* Wild Rift pass 2 item 6 [TEMP]: consumables column 10 px left of the west petal (was right 154). */
 body.touch #potions {
   position: absolute;
-  right: 154px;
+  right: 176px;
   bottom: 8px;
   flex-direction: column;
   gap: 6px;

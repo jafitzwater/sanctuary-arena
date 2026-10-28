@@ -20,6 +20,8 @@ import type { ClassDef } from './data/classes/types';
 import { unitDef } from './data/units';
 import { Rng } from './math';
 import { baseMSFor, totalMS } from './data/moveSpeed';
+// Wild Rift pass 2 item 1: spawn seats are map layout and follow MAP_SCALE.
+import { mapLen } from './data/mapScale';
 import { clampToPlayable } from './lane';
 import { FOOTPRINT } from './terrain';
 import {
@@ -321,7 +323,7 @@ function spawnPlayer(sim: Sim): Unit {
     kind: 'champion',
     team: 'ally',
     name: sim.classDef.name,
-    x: base.x + 150,
+    x: base.x + mapLen(150),
     y: base.y,
     radius: stats.radius,
     hp: built.hp,
@@ -352,7 +354,7 @@ function spawnEnemyChampion(sim: Sim, spec: NonNullable<Sim['map']['enemyChampio
     kind: 'champion',
     team: 'enemy',
     name: spec.name,
-    x: base.x - 170,
+    x: base.x - mapLen(170),
     y: base.y,
     radius: spec.radius,
     hp: spec.hp,
@@ -793,7 +795,7 @@ function updateEnemyChampion(sim: Sim, unit: Unit, dt: number): void {
   if (!unit.alive || unit.stun > 0) return;
   const home = sim.map.enemyBase;
   if (unit.hp / unit.maxHp < 0.28) {
-    moveToward(unit, home.x - 120, home.y, dt);
+    moveToward(unit, home.x - mapLen(120), home.y, dt);
     const threat = nearestEnemy(sim, unit, unit.attackRange);
     unit.targetId = threat ? threat.id : null;
     return;
@@ -940,7 +942,10 @@ function strikes(sim: Sim, input: FrameInput, dt: number): void {
   for (const unit of sim.units) {
     if (unit.kind === 'champion' || !unit.alive || unit.stun > 0) continue;
     if (unit.kind === 'tower' || unit.kind === 'base') {
-      const pool = enemiesIn(sim, unit, unit.attackRange).filter((other) => other.kind !== 'base');
+      // [JOSEPH] Wild Rift pass 2 item 1: at MAP_SCALE 0.75 with tower range unchanged (300), the Countess cave sits
+      // 283 px from the enemy Blood Moor inner tower, so the tower would farm the camp. On the design map no camp was
+      // ever in tower range; skipping wild units keeps that (Wild Rift turrets never shoot jungle camps either).
+      const pool = enemiesIn(sim, unit, unit.attackRange).filter((other) => other.kind !== 'base' && other.team !== 'wild');
       const minions = pool.filter((other) => other.kind === 'minion');
       const choice = closest(unit, minions.length ? minions : pool);
       unit.targetId = choice ? choice.id : null;
@@ -1149,7 +1154,7 @@ function waves(sim: Sim, dt: number): void {
 
 function reviveChampion(sim: Sim, unit: Unit): void {
   const home = unit.team === 'ally' ? sim.map.playerBase : sim.map.enemyBase;
-  const spot = clampToPlayable(sim.map, unit.team === 'ally' ? home.x + 150 : home.x - 170, home.y);
+  const spot = clampToPlayable(sim.map, unit.team === 'ally' ? home.x + mapLen(150) : home.x - mapLen(170), home.y);
   unit.alive = true;
   unit.hp = unit.maxHp;
   unit.mana = unit.maxMana;
@@ -1320,7 +1325,7 @@ function spawnRoster(sim: Sim, seed: number): void {
   const allyHome = sim.map.playerBase;
   const enemyHome = sim.map.enemyBase;
   dealt.allies.forEach((seat, index) => {
-    const unit = spawnHero(sim, 'ally', allyHome.x + 200 + index * 36, allyHome.y - 90 + seat.lane * 48, seat.name);
+    const unit = spawnHero(sim, 'ally', allyHome.x + mapLen(200 + index * 36), allyHome.y + mapLen(-90 + seat.lane * 48), seat.name);
     unit.path = seat.lane;
     unit.waypoint = 1;
     unit.color = seat.tint;
@@ -1330,7 +1335,7 @@ function spawnRoster(sim: Sim, seed: number): void {
     unit.moveSpeed = totalMS(unit.msBase);
   });
   dealt.enemies.forEach((seat, index) => {
-    const unit = spawnHero(sim, 'enemy', enemyHome.x - 200 - index * 36, enemyHome.y + 70 - seat.lane * 40, seat.name);
+    const unit = spawnHero(sim, 'enemy', enemyHome.x - mapLen(200 + index * 36), enemyHome.y + mapLen(70 - seat.lane * 40), seat.name);
     unit.path = seat.lane;
     unit.waypoint = Math.max(0, laneAt(sim, seat.lane).length - 2);
     unit.color = seat.tint;

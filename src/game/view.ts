@@ -106,13 +106,39 @@ export function characterScale(cssH: number): number {
 }
 
 // ---- Minimap ---------------------------------------------------------------------------------------------
+/**
+ * Wild Rift pass 2 item 5 [JOSEPH]: "Minimap: raise it so it is fully visible above the stick area; adjustable
+ * size with a phone-readable default." Values [TEMP]; style.css body.touch #minimap-toggle mirrors touchBottom,
+ * touchLeft and topClear (test/wild-rift-pass2.ts checks the css matches).
+ */
 export const MINIMAP = {
-  /** [TEMP] Width in css px; height follows the map aspect (4400 x 2800). */
-  defaultW: 150,
-  minW: 110,
-  maxW: 220,
-  storageKey: 'sa.minimapW',
+  /** [TEMP] Width in css px; height follows the map aspect (11:7, 3300 x 2100 at MAP_SCALE 0.75). Was 150. */
+  defaultW: 180,
+  minW: 120,
+  maxW: 240,
+  /** New key so the old 150 px saved width does not hide the new default. */
+  storageKey: 'sa.minimapW2',
+  /** Touch: card bottom edge above the screen bottom (the resting stick is bottom 16 + 90 = 106 px). */
+  touchBottom: 132,
+  touchLeft: 8,
+  /** Touch: the card's top edge never rises above this (top bar is 32 px). */
+  topClear: 44,
+  /** The resting stick's top edge (style.css body.touch #stick: bottom 16px, height 90px). */
+  stickTop: 106,
 } as const;
+
+/**
+ * Pure: the touch map card for a viewport height. Width is the chosen width clamped so the card fits between the
+ * top bar and the stick; it is anchored bottom-left at (touchLeft, touchBottom).
+ */
+export function minimapTouchBox(viewH: number, wantW: number, mapW: number, mapH: number, safeBottom = 0) {
+  const room = viewH - MINIMAP.touchBottom - safeBottom - MINIMAP.topClear;
+  const fitW = Math.floor((room * mapW) / mapH);
+  const w = Math.min(clampMinimapW(wantW), fitW);
+  const h = minimapH(w, mapW, mapH);
+  const bottom = MINIMAP.touchBottom + safeBottom;
+  return { left: MINIMAP.touchLeft, bottom, w, h, top: viewH - bottom - h };
+}
 
 export function clampMinimapW(w: number): number {
   if (!Number.isFinite(w)) return MINIMAP.defaultW;

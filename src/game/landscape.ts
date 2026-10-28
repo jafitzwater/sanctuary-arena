@@ -1,3 +1,4 @@
+import { mapLen } from './data/mapScale';
 import type { ActDef } from './data/acts/types';
 import { distToPolyline, type Vec } from './math';
 
@@ -23,14 +24,18 @@ export function propForm(kind: Prop['kind']): 'pillar' | 'rock' | 'posts' | 'ten
 
 /** World size of one baked floor diamond. */
 export const FLOOR_STEP = 80 / 0.85;
-/** Half of the 5-tile collision-free lane corridor. */
-export const LANE_CLEAR_HALF = FLOOR_STEP * 2.5;
+/**
+ * Wild Rift pass 2 item 1: corridor, gate and decor margin are map layout (walls), so they follow MAP_SCALE.
+ * FLOOR_STEP is the art tile and stays fixed. Half of the 5-tile (design scale) collision-free lane corridor.
+ */
+export const LANE_CLEAR_HALF = mapLen(FLOOR_STEP * 2.5);
 /** Half of a straight 6-tile base gate. */
-export const GATE_HALF = FLOOR_STEP * 3;
+export const GATE_HALF = mapLen(FLOOR_STEP * 3);
 /** Decorative props stay this far past the cobble edge. */
-export const DECOR_MARGIN = FLOOR_STEP * 2;
+export const DECOR_MARGIN = mapLen(FLOOR_STEP * 2);
 
-const OPENING = 150;
+/** Wild Rift pass 2 item 1: clearing radius is map layout, so it follows MAP_SCALE. */
+const OPENING = mapLen(150);
 /** Decorative props stop here so total clutter is half of the old 407. */
 const DECOR_BUDGET = 196;
 
@@ -120,7 +125,7 @@ function makeGate(map: ActDef, base: Vec, ally: boolean): Gate {
   const flank = GATE_HALF + 26 * 0.3;
   const plazaRoom = Math.sqrt(Math.max(0, map.plaza * map.plaza - flank * flank));
   const minDist = Math.min(...mouths.map((mouth) => Math.hypot(mouth.x - base.x, mouth.y - base.y)));
-  let wall = Math.min(plazaRoom - 6, minDist - 40);
+  let wall = Math.min(plazaRoom - mapLen(6), minDist - mapLen(40)); // pass 2 item 1: layout offsets follow MAP_SCALE
   const span = hi - lo;
   const postsClear = (dist: number) => {
     const gx = base.x + axisX * dist;
@@ -132,7 +137,7 @@ function makeGate(map: ActDef, base: Vec, ally: boolean): Gate {
     }
     return true;
   };
-  while (wall > 72 && (2 * wall * Math.sin(span / 2) > GATE_HALF * 2 - 20 || !postsClear(wall))) wall -= 2;
+  while (wall > mapLen(72) && (2 * wall * Math.sin(span / 2) > GATE_HALF * 2 - mapLen(20) || !postsClear(wall))) wall -= 2;
   const x = base.x + axisX * wall;
   const y = base.y + axisY * wall;
   const reach = Math.max(
@@ -189,9 +194,9 @@ function placeBoulders(props: Prop[], map: ActDef): void {
   let count = 0;
   for (const lane of lanesOf(map)) {
     for (const spot of samplePolyline(lane, 176)) {
-      if (Math.hypot(spot.x - lane[0].x, spot.y - lane[0].y) < 220) continue;
+      if (Math.hypot(spot.x - lane[0].x, spot.y - lane[0].y) < mapLen(220)) continue;
       const end = lane[lane.length - 1];
-      if (Math.hypot(spot.x - end.x, spot.y - end.y) < 220) continue;
+      if (Math.hypot(spot.x - end.x, spot.y - end.y) < mapLen(220)) continue;
       for (const sign of [-1, 1]) {
         if (count >= cap) return;
         const x = spot.x + spot.nx * sign * offset;
@@ -241,7 +246,7 @@ function boulderSite(map: ActDef, props: Prop[], x: number, y: number): boolean 
 function placePalisade(props: Prop[], map: ActDef, gate: Gate): void {
   const foot = 26 * 0.3;
   const inner = GATE_HALF + foot;
-  const spacing = 46;
+  const spacing = mapLen(46); // pass 2 item 1: base wall post spacing follows MAP_SCALE
   for (const sign of [-1, 1]) {
     for (let i = 0; i < 4; i++) {
       const off = inner + i * spacing;

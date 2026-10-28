@@ -1,3 +1,4 @@
+import { mapLen } from './data/mapScale';
 import type { ActDef } from './data/acts/types';
 import { FLOOR_STEP, inGateSlot, LANE_CLEAR_HALF, sceneryFor } from './landscape';
 import { clamp, distToPolyline, nearestOnPolyline, type Vec } from './math';
@@ -5,7 +6,8 @@ import { clamp, distToPolyline, nearestOnPolyline, type Vec } from './math';
 /** Outer cliff. Inside this margin the ground is open only on roads and clearings. */
 const EDGE = 48;
 /** Half-width of the impassable channel. Fords are where a road crosses it. */
-const OPENING = 150;
+/** Wild Rift pass 2 item 1: clearing radius is map layout, so it follows MAP_SCALE. */
+const OPENING = mapLen(150);
 const CORRIDOR = 64;
 /** Bottom 30% of a sprite. Units, towers, and boulders share this band. */
 export const FOOTPRINT = 0.3;
@@ -136,7 +138,7 @@ function anchor(map: ActDef, x: number, y: number): Vec {
     }
   }
   if (walkable(map, best.x, best.y)) return best;
-  return { x: map.playerBase.x + 150, y: map.playerBase.y };
+  return { x: map.playerBase.x + mapLen(150), y: map.playerBase.y };
 }
 
 /** Last walkable point from `from` toward `to`. `from` itself must be walkable. */
@@ -235,6 +237,6 @@ export function groundAt(map: ActDef, x: number, y: number): GroundKind {
   if (camp <= yard) return 'town';
   // Item 7: "a similar base, just different colors" - both yards are the same stone.
   if (lair <= yard) return 'town';
-  if (road <= cobble + FLOOR_STEP) return 'blend';
+  if (road <= cobble + mapLen(FLOOR_STEP)) return 'blend'; // pass 2 item 1: shoulder band follows MAP_SCALE
   return 'grass';
 }

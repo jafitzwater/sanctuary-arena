@@ -10,6 +10,7 @@ import {
 } from '../src/game/combat/attackCycle';
 import { barbarian } from '../src/game/data/classes/barbarian';
 import { sanctuary } from '../src/game/data/acts/sanctuary';
+import { MAP_SCALE } from '../src/game/data/mapScale';
 import { mitigated } from '../src/game/combat';
 import { createMatch, spawnMinion, updateSim } from '../src/game/sim';
 import { player } from '../src/game/query';
@@ -214,8 +215,8 @@ function quiet(sim: Sim, keep: number[]): void {
 function pit(): { sim: Sim; hero: Unit; foe: Unit } {
   const sim = pastOpening(createMatch(sanctuary, barbarian, 1));
   const hero = player(sim);
-  hero.x = 2000;
-  hero.y = 1400;
+  hero.x = 2000 * MAP_SCALE; // pass 2 item 1: same open spot on the scaled map
+  hero.y = 1400 * MAP_SCALE;
   const foe = spawnMinion(sim, 'fallen', 'enemy', hero.x + 40, hero.y, 0);
   foe.armor = 0;
   foe.hp = 5000;
@@ -381,8 +382,8 @@ function attackInput(): FrameInput {
   const hero = player(sim);
   const rival = sim.units.find((unit) => unit.bot && unit.kind === 'champion' && unit.team !== hero.team);
   if (!rival) throw new Error('missing rival champion');
-  hero.x = 2000;
-  hero.y = 1400;
+  hero.x = 2000 * MAP_SCALE; // pass 2 item 1: same open spot on the scaled map
+  hero.y = 1400 * MAP_SCALE;
   rival.x = hero.x + 20;
   rival.y = hero.y;
   hero.armor = 0;
