@@ -1,3 +1,4 @@
+import { totalMS } from './data/moveSpeed';
 import { STAT_GROWTH } from './data/classes/statGrowth';
 import { isBetterGear, itemById, potionCap, type ItemDef, type PotionKind } from './data/items';
 import type { SkillDef } from './data/classes/types';
@@ -399,7 +400,8 @@ export function heroNumbers(sim: Sim, timers: { bo: boolean; berserk: boolean })
     mana: Math.max(0, Math.round(mana)),
     ad: Math.max(1, Math.round(ad)),
     armor: Math.round(armor),
-    moveSpeed: move,
+    // [JOSEPH] world px/s of the base MS with no modifiers; live modifiers apply in sim championMS().
+    moveSpeed: totalMS(move),
     attackInterval: Math.min(1.2, Math.max(0.4, interval)),
     attackRange: range,
     wclass,

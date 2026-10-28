@@ -1,3 +1,4 @@
+import { totalMS } from './data/moveSpeed';
 import {
   drawBolt,
   drawFire,
@@ -771,9 +772,9 @@ export class Renderer {
   }
 
   /**
-   * WORK ORDER "Code engineer - WIRE BARBARIAN MOTION": walk12/run12/attack12 for the barbarian only.
-   * Walk/run frame comes from distance travelled, so the loop rate follows actual move speed. Run uses the
-   * existing run gait (pose.state 'run', stick tilt / gait hold); no new gameplay. Attack follows the
+   * WORK ORDER "Code engineer - WIRE BARBARIAN MOTION": walk12/attack12 for the barbarian only.
+   * [JOSEPH] LoL-style single MS: the barbarian always plays walk12 (cols 26-37); run12 (cols 38-49) stays in
+   * the sheet unused. Frame comes from distance travelled, so the loop rate follows the current MS. Attack follows the
    * existing attack cycle with impact frame 7 at the hit. Returns null (old columns) for idle, death, or
    * when the loaded sheet is the old narrow one.
    */
@@ -784,9 +785,8 @@ export class Renderer {
       return barbarianMotionCol('attack', barbarianAttackFrame(phase, unit.attackCycle.phaseElapsedMs, unit.attackInterval));
     }
     if (anim !== 'walk' && anim !== 'run') return null;
-    const stats = barbarianClass.stats;
-    const dist = barbarianCycleDistance(anim, anim === 'run' ? stats.runSpeed : stats.walkSpeed);
-    return barbarianMotionCol(anim, barbarianStrideFrame(pose.travel, dist));
+    const dist = barbarianCycleDistance('walk', totalMS(barbarianClass.stats.moveSpeed));
+    return barbarianMotionCol('walk', barbarianStrideFrame(pose.travel, dist));
   }
 
   /** Frame within a sheet animation: attack follows the attack cycle, death plays once over 0.8 s and holds. */
@@ -1207,13 +1207,14 @@ export class Renderer {
     let state: HeroPose;
     let elapsed: number;
     if (directed && motion) {
-      state = motion.gait === 'run' ? 'run' : motion.gait === 'walk' ? 'walk' : 'idle';
+      state = motion.gait === 'walk' ? 'walk' : 'idle';
       const moving = state !== 'idle';
       elapsed = (prev?.elapsed ?? 0) + (moving && this.frameDt > 0 ? this.frameDt * 1000 : 0);
     } else {
       const stepped = heroGaitStep(prev?.elapsed ?? 0, step, this.frameDt);
       elapsed = stepped.elapsed;
-      state = !stepped.moving ? 'idle' : stepped.running ? 'run' : 'walk';
+      // [JOSEPH] one movement speed: moving is always the walk cycle.
+      state = !stepped.moving ? 'idle' : 'walk';
     }
     const phase = advanceHeroPhase(prev?.phase ?? 0, state, this.frameDt);
     const compass = heroHoldCompass(prev?.compass ?? null, unit.facing);
@@ -1229,7 +1230,7 @@ export class Renderer {
       if (!trace.__locoLog) trace.__locoLog = [];
       trace.__locoLog.push({
         state: state === 'idle' ? 'IDLE' : state === 'walk' ? 'WALK' : 'RUN',
-        frame: state === 'idle' ? 0 : Math.floor(phase * (state === 'run' ? 12 : 8)) % (state === 'run' ? 12 : 8),
+        frame: state === 'idle' ? 0 : Math.floor(phase * 8) % 8,
         speed,
         x: unit.x,
         y: unit.y,
