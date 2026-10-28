@@ -1,4 +1,5 @@
 import portraitUrl from '../assets/art/d2/portrait.webp';
+import { clampMinimapW, MINIMAP } from './view';
 import { ROSTER } from './data/classes/roster';
 import { itemIcon, plateIcons, skillIcon } from './art/icons';
 import { isBetterGear, isShopItem, itemById, ITEMS, potionCap, type ItemDef } from './data/items';
@@ -72,9 +73,57 @@ export class Hud {
     set('#potion-mp img', plateIcons.mana);
   }
 
+  /**
+   * WILD RIFT VIEW: "Minimap ... size adjustable (default big enough to read on a phone, not blocking play)."
+   * Drag the corner grip to resize between MINIMAP.minW and MINIMAP.maxW; the width is remembered.
+   */
+  private bindMinimapSize(): void {
+    const box = this.root.querySelector<HTMLElement>('#minimap-toggle');
+    const grip = this.root.querySelector<HTMLElement>('#minimap-grip');
+    if (!box || !grip) return;
+    let saved: number = MINIMAP.defaultW;
+    try {
+      saved = clampMinimapW(Number(localStorage.getItem(MINIMAP.storageKey) ?? MINIMAP.defaultW));
+    } catch {
+      saved = MINIMAP.defaultW;
+    }
+    box.style.setProperty('--mini-w', `${saved}px`);
+    grip.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const startW = box.getBoundingClientRect().width;
+      const left = box.getBoundingClientRect().left < window.innerWidth / 2;
+      const move = (e: PointerEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const dx = (e.clientX - startX) * (left ? 1 : -1);
+        const dy = startY - e.clientY;
+        saved = clampMinimapW(startW + Math.max(dx, dy));
+        box.style.setProperty('--mini-w', `${saved}px`);
+      };
+      const up = (e: PointerEvent) => {
+        e.stopPropagation();
+        window.removeEventListener('pointermove', move, true);
+        window.removeEventListener('pointerup', up, true);
+        window.removeEventListener('pointercancel', up, true);
+        try {
+          localStorage.setItem(MINIMAP.storageKey, String(saved));
+        } catch {
+          /* storage unavailable */
+        }
+      };
+      window.addEventListener('pointermove', move, true);
+      window.addEventListener('pointerup', up, true);
+      window.addEventListener('pointercancel', up, true);
+    });
+  }
+
   bind(): void {
     const portrait = this.root.querySelector<HTMLImageElement>('#portrait-img');
     if (portrait) portrait.src = portraitUrl;
+    this.bindMinimapSize();
     this.root.querySelector('#minimap-toggle')?.addEventListener('pointerdown', (event) => {
       event.preventDefault();
       event.stopPropagation();

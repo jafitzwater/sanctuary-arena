@@ -30,7 +30,7 @@ import { AttackPhase } from './combat/attackCycle';
 import { damageColor } from './combat';
 import { attackSheetFrame, cycleFrame } from './art/flare-frames';
 import { drawFlare, flareFrameCount, flareReady, type FlareAnim } from './art/flare';
-import { classSheetCols, classSheetReady, drawClassSheet, drawMobSheet, mobSheetReady } from './art/director-sheets';
+import { classSheetCols, classSheetReady, drawClassPortrait, drawClassSheet, drawMobSheet, mobSheetReady } from './art/director-sheets';
 import {
   CLASS_COLS,
   MOB_ROWS,
@@ -51,7 +51,23 @@ import { stampBloodPool } from './decals';
 import { heroGaitStep, heroHoldCompass, readStickMotion } from './gait';
 import type { ActDef } from './data/acts/types';
 import { barbarian as barbarianClass } from './data/classes/barbarian';
-import { projectIso, unprojectIso } from './iso';
+import { projectIso as isoProject, unprojectIso as isoUnproject } from './iso';
+import {
+  activeView,
+  CAMERA,
+  cameraZoom,
+  characterScale,
+  facingToView,
+  fromView,
+  ICONS,
+  toView,
+  viewOriginX,
+  viewTurnsFor,
+  towerIconSize,
+  viewportFootprint,
+  worldToMinimap,
+  type ViewTurns,
+} from './view';
 import { TEAM_GLOW, baseFloorReady, onBaseFloor, paintBaseFloor, paintTeamGlow } from './art/base-ground';
 import { drawItemBeam, drawItemNameplate, ITEM_LABEL_CLASS, type GroundDrop } from './itemBeam';
 import { FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, mirroredBases, propForm, sceneryFor, type Prop } from './landscape';
@@ -71,8 +87,22 @@ export interface DrawOpts {
 
 const BAKE_HW = 0.85;
 const PAD = 64;
-/** World units visible across the screen. Larger means a wider, smaller-sprite view. */
-const WORLD_ACROSS = 1040;
+/** World units visible across the screen. WILD RIFT VIEW: CAMERA.worldAcross [TEMP] (was 1040). */
+const WORLD_ACROSS = CAMERA.worldAcross;
+/** Map size for the view rotation; set when the map bakes. */
+let viewW = 4400;
+let viewH = 2800;
+
+/** WILD RIFT VIEW: every world -> screen projection rotates into view space first (activeView.turns). */
+function projectIso(x: number, y: number, hw: number, ox: number, oy: number): { x: number; y: number } {
+  const v = toView(x, y, activeView.turns, viewW, viewH);
+  return isoProject(v.x, v.y, hw, ox, oy);
+}
+
+function unprojectIso(sx: number, sy: number, hw: number, ox: number, oy: number): { x: number; y: number } {
+  const v = isoUnproject(sx, sy, hw, ox, oy);
+  return fromView(v.x, v.y, activeView.turns, viewW, viewH);
+}
 
 type ArmorTier = 'light' | 'medium' | 'heavy';
 
@@ -224,6 +254,7 @@ export class Renderer {
   private miniW = 0;
   private miniH = 0;
   private miniView = '';
+  private miniCss = -1;
   /** Empty until a future drop system fills it. Rendering only. */
   private readonly groundDrops: GroundDrop[] = [];
 
@@ -247,7 +278,7 @@ export class Renderer {
     this.camera.cssW = cssW;
     this.camera.cssH = cssH;
     this.camera.dpr = dpr;
-    const hw = cssW / WORLD_ACROSS;
+    const hw = cameraZoom(cssW);
     this.camera.viewW = WORLD_ACROSS;
     this.camera.viewH = cssH / (hw * 0.5);
     this.camera.zoom = hw;
@@ -278,7 +309,7 @@ export class Renderer {
       this.focusY = focus.y;
       this.snapped = true;
     } else {
-      const t = 1 - Math.exp(-dt * 6);
+      const t = 1 - Math.exp(-dt * CAMERA.followRate);
       this.focusX += (focus.x - this.focusX) * t;
       this.focusY += (focus.y - this.focusY) * t;
     }
@@ -289,18 +320,18 @@ export class Renderer {
       fy += Math.cos(time * 37) * sim.shake * 0.6;
     }
     const hw = BAKE_HW;
-    this.ox = sim.map.height * hw + PAD;
+    this.ox = viewOriginX(activeView.turns, sim.map.width, sim.map.height, hw, PAD);
     this.oy = PAD;
     const projected = projectIso(fx, fy, hw, this.ox, this.oy);
     this.scale = this.camera.zoom / hw;
     this.camBakeX = projected.x - this.camera.cssW / 2 / this.scale;
-    this.camBakeY = projected.y - this.camera.cssH * 0.56 / this.scale;
+    this.camBakeY = projected.y - this.camera.cssH * CAMERA.focusY / this.scale;
     this.camera.x = fx - this.camera.viewW / 2;
     this.camera.y = fy - this.camera.viewH / 2;
   }
 
   draw(sim: Sim, opts: DrawOpts): void {
-    this.ensureMap(sim.map);
+    this.ensureMap(sim.map, sim);
     const ctx = this.ctx;
     const { dpr, cssW, cssH } = this.camera;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -336,7 +367,7 @@ export class Renderer {
     );
     for (const unit of units) {
       layers.push({
-        depth: unit.x + unit.y,
+        depth: this.project(unit.x, unit.y).y,
         paint: () => {
           // Item 17: own side's hidden units are drawn faded so the player can tell they are in grass.
           if (unit.hidden) ctx.globalAlpha = 0.6;
@@ -412,9 +443,9 @@ export class Renderer {
     this.drawMinimap(sim, opts.targetId);
   }
 
+  /** WILD RIFT VIEW: character scale vs the view (view.ts CHARACTER, hero = 11% of screen height [TEMP]). */
   private spriteScale(): number {
-    const { cssW, cssH } = this.camera;
-    return Math.max(0.58, Math.min(1.15, Math.min(cssW, cssH * 1.85) / 980));
+    return characterScale(this.camera.cssH);
   }
 
   private project(x: number, y: number): Vec {
@@ -441,10 +472,15 @@ export class Renderer {
     };
   }
 
-  private ensureMap(map: ActDef): void {
+  private ensureMap(map: ActDef, sim?: Sim): void {
+    const team = sim?.units.find((unit) => unit.id === sim.playerId)?.team;
+    const turns: ViewTurns = viewTurnsFor(team);
+    activeView.turns = turns;
+    viewW = map.width;
+    viewH = map.height;
     const mirrored = mirroredBases(map);
     const floor = mirrored && baseFloorReady();
-    const key = `${map.id}${floor ? ':floor' : ''}`;
+    const key = `${map.id}${floor ? ':floor' : ''}:t${turns}`;
     if (this.mapCanvas && this.mapKey === key) return;
     if (mirrored && !floor) onBaseFloor(() => { this.mapKey = ''; });
     this.floorArt = floor;
@@ -457,7 +493,7 @@ export class Renderer {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     this.mapCtx = ctx;
-    const ox = map.height * hw + PAD;
+    const ox = viewOriginX(turns, map.width, map.height, hw, PAD);
     const oy = PAD;
     crisp(ctx);
     ctx.fillStyle = tilePaint(GROUND_BASE).fill;
@@ -518,8 +554,10 @@ export class Renderer {
         const wx = i * step;
         const wy = j * step;
         const kind = groundAt(map, wx, wy);
-        const sx = Math.round((i - j) * 80 + ox);
-        const sy = Math.round((i + j) * 40 + oy);
+        // WILD RIFT VIEW: tile centers go through the view rotation (same 80 x 40 diamond lattice).
+        const at = projectIso(wx, wy, hw, ox, oy);
+        const sx = Math.round(at.x);
+        const sy = Math.round(at.y);
         const overlay = kind !== GROUND_BASE;
         const wild = kind === 'grass' || kind === 'edge' || kind === 'bank' || kind === 'dark' || kind === 'river';
         const decor = wild && !walkable(map, wx, wy);
@@ -1217,8 +1255,9 @@ export class Renderer {
       state = !stepped.moving ? 'idle' : 'walk';
     }
     const phase = advanceHeroPhase(prev?.phase ?? 0, state, this.frameDt);
-    const compass = heroHoldCompass(prev?.compass ?? null, unit.facing);
-    const target = compass * (Math.PI / 4);
+    // WILD RIFT VIEW: the sheet row follows the on-screen facing; `shown` stays a world angle.
+    const compass = heroHoldCompass(prev?.compass ?? null, facingToView(unit.facing, activeView.turns));
+    const target = compass * (Math.PI / 4) - facingToView(0, activeView.turns);
     const shown = prev ? smoothFacing(prev.shown, target, this.frameDt) : target;
     const stepped = state !== 'idle' && step < MAX_STRIDE_STEP ? step : 0;
     const travel = (prev?.travel ?? 0) + stepped;
@@ -1397,16 +1436,29 @@ export class Renderer {
     ctx.restore();
   }
 
+  /**
+   * WILD RIFT VIEW minimap. Order: "Show: alive champion positions as small portrait icons; standing defense towers
+   * (hide the icon when destroyed); the main base/Nexus as the clearest, largest icon; base guard towers; minions as
+   * small dots; major objectives (cave bosses) and jungle camps as small icons; current camera viewport as an outline
+   * rectangle; base walls as thin light lines." Sizes: view.ts ICONS.
+   */
   private drawMinimap(sim: Sim, targetId: number | null): void {
     const mini = document.querySelector<HTMLCanvasElement>('#minimap');
     if (!mini) return;
     const toggle = mini.closest('#minimap-toggle');
     if (toggle?.classList.contains('off')) return;
+    const cssW = mini.clientWidth;
+    if (cssW !== this.miniCss) {
+      // WILD RIFT VIEW: the map card was resized (grip drag); re-measure the backing store.
+      this.miniCss = cssW;
+      this.miniW = 0;
+      this.miniH = 0;
+    }
     let w = this.miniW;
     let h = this.miniH;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     if (w < 2 || h < 2) {
       const rect = mini.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       w = Math.max(1, Math.round(rect.width * dpr));
       h = Math.max(1, Math.round(rect.height * dpr));
       if (w < 2 || h < 2) return;
@@ -1422,68 +1474,18 @@ export class Renderer {
     if (!ctx) return;
     crisp(ctx);
     const map = sim.map;
-    const plate = this.ensureMiniStatic(map, w, h);
+    const myTeam = sim.units.find((unit) => unit.id === sim.playerId)?.team;
+    const plate = this.ensureMiniStatic(map, w, h, myTeam, dpr);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (plate) ctx.drawImage(plate, 0, 0);
     else {
       ctx.fillStyle = '#120e0b';
       ctx.fillRect(0, 0, w, h);
     }
-    const sx = w / map.width;
-    const sy = h / map.height;
-    const myTeam = sim.units.find((unit) => unit.id === sim.playerId)?.team;
-    for (const unit of sim.units) {
-      if (!unit.alive && unit.kind === 'minion') continue;
-      if (unit.alive && unit.hidden && unit.team !== myTeam) continue; // Item 17
-      const x = unit.x * sx;
-      const y = unit.y * sy;
-      ctx.fillStyle = unit.team === 'ally' ? '#e6d3a1' : unit.team === 'wild' ? '#c49a3a' : '#e15a4a';
-      const r = unit.kind === 'minion' ? 2 : unit.kind === 'champion' ? 4 : 3;
-      ctx.globalAlpha = unit.alive ? 1 : 0.4;
-      ctx.fillRect(x - r / 2, y - r / 2, r, r);
-      ctx.globalAlpha = 1;
-      if (unit.id === targetId) {
-        ctx.strokeStyle = '#fff';
-        ctx.strokeRect(x - 3, y - 3, 6, 6);
-      }
-    }
-    ctx.strokeStyle = 'rgba(240, 226, 188, 0.85)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(this.camera.x * sx, this.camera.y * sy, this.camera.viewW * sx, this.camera.viewH * sy);
-  }
-
-  /** Lanes, camps, and Worldstones. Rebuilt only when the map card changes size. */
-  private ensureMiniStatic(map: Sim['map'], w: number, h: number): HTMLCanvasElement | null {
-    const key = `${map.id}:${w}x${h}`;
-    if (this.miniStatic && this.miniStaticKey === key) return this.miniStatic;
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-    const sx = w / map.width;
-    const sy = h / map.height;
-    ctx.fillStyle = '#120e0b';
-    ctx.fillRect(0, 0, w, h);
-    const strokeLane = (points: Vec[], color: string, width: number) => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = width;
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      points.forEach((point, index) => {
-        const x = point.x * sx;
-        const y = point.y * sy;
-        if (index === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-    };
-    if (map.river && map.river.length > 1) strokeLane(map.river, '#c44a3a', 4);
-    const paths = map.paths?.length ? map.paths : null;
-    const roads = paths ? paths.map((path) => roadPoints(map, path.lane)) : [map.lane];
-    for (const road of roads) strokeLane(road, '#3a2c22', 5);
-    for (const road of roads) strokeLane(road, '#e6d3a1', 2);
-    const diamond = (x: number, y: number, r: number, fill: string, stroke: string) => {
+    const at = (x: number, y: number) => worldToMinimap(x, y, map.width, map.height, w, h, myTeam);
+    const ink = (team: Unit['team']) => (team === 'ally' ? '#6aa7ff' : team === 'wild' ? '#c49a3a' : '#e15a4a');
+    const diamondAt = (x: number, y: number, size: number, fill: string) => {
+      const r = (size * dpr) / 2;
       ctx.beginPath();
       ctx.moveTo(x, y - r);
       ctx.lineTo(x + r, y);
@@ -1492,13 +1494,146 @@ export class Renderer {
       ctx.closePath();
       ctx.fillStyle = fill;
       ctx.fill();
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#1a120c';
+      ctx.lineWidth = Math.max(1, dpr * 0.75);
       ctx.stroke();
     };
-    for (const den of map.dens ?? []) diamond(den.x * sx, den.y * sy, 3.5, '#c49a3a', '#1a120c');
-    diamond(map.playerBase.x * sx, map.playerBase.y * sy, 5, '#e6d3a1', '#1a120c');
-    diamond(map.enemyBase.x * sx, map.enemyBase.y * sy, 5, '#e4553c', '#1a120c');
+    // Camera viewport: the four screen corners unprojected onto the ground.
+    const corners = viewportFootprint((sx, sy) => this.screenToWorld(sx, sy), this.camera.cssW, this.camera.cssH)
+      .map((p) => at(p.x, p.y));
+    ctx.strokeStyle = 'rgba(240, 226, 188, 0.9)';
+    ctx.lineWidth = ICONS.viewportLine * dpr;
+    ctx.beginPath();
+    corners.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+    ctx.closePath();
+    ctx.stroke();
+    const order = (unit: Unit) => (unit.kind === 'minion' ? 0 : unit.kind === 'seal' ? 1 : unit.kind === 'tower' ? 2 : unit.kind === 'base' ? 3 : 4);
+    const shown = sim.units
+      .filter((unit) => {
+        if (unit.kind === 'minion' || unit.kind === 'champion' || unit.kind === 'tower') {
+          if (!unit.alive) return false; // dead minions, dead champions and destroyed towers are hidden
+        }
+        if (unit.alive && unit.hidden && unit.team !== myTeam) return false; // Item 17
+        return true;
+      })
+      .sort((a, b) => order(a) - order(b));
+    for (const unit of shown) {
+      const p = at(unit.x, unit.y);
+      if (unit.kind === 'base') {
+        diamondAt(p.x, p.y, ICONS.nexus, ink(unit.team));
+        ctx.strokeStyle = 'rgba(240, 226, 188, 0.9)';
+        ctx.lineWidth = dpr;
+        ctx.stroke();
+      } else if (unit.kind === 'tower') {
+        const size = towerIconSize(this.towerRole(map, unit)) * dpr;
+        ctx.fillStyle = ink(unit.team);
+        ctx.fillRect(p.x - size / 2, p.y - size / 2, size, size);
+        ctx.strokeStyle = '#1a120c';
+        ctx.lineWidth = Math.max(1, dpr * 0.75);
+        ctx.strokeRect(p.x - size / 2, p.y - size / 2, size, size);
+      } else if (unit.kind === 'champion') {
+        const r = (ICONS.champion * dpr) / 2;
+        ctx.fillStyle = '#120e0b';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        if (!drawClassPortrait(ctx, unit.defId, p.x, p.y, r - dpr)) {
+          ctx.fillStyle = ink(unit.team);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r - dpr, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.strokeStyle = unit.id === sim.playerId ? '#f4e7c3' : ink(unit.team);
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        const size = (unit.kind === 'minion' ? ICONS.minion : ICONS.seal) * dpr;
+        ctx.fillStyle = ink(unit.team);
+        ctx.globalAlpha = unit.alive ? 1 : 0.4;
+        ctx.fillRect(p.x - size / 2, p.y - size / 2, size, size);
+        ctx.globalAlpha = 1;
+      }
+      if (unit.id === targetId) {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = dpr;
+        ctx.strokeRect(p.x - 3 * dpr, p.y - 3 * dpr, 6 * dpr, 6 * dpr);
+      }
+    }
+  }
+
+  /** Role of a standing tower from the map's tower seats (inner = base guard, outer = lane). */
+  private towerRole(map: ActDef, unit: Unit): 'inner' | 'outer' | undefined {
+    const seat = map.towers.find((spec) => spec.x === unit.x && spec.y === unit.y && spec.team === unit.team);
+    return seat?.role as 'inner' | 'outer' | undefined;
+  }
+
+  /** Lanes, river, base walls, cave bosses and camps. Rebuilt only when the map card changes size or side. */
+  private ensureMiniStatic(map: Sim['map'], w: number, h: number, team: Unit['team'] | undefined, dpr: number): HTMLCanvasElement | null {
+    const key = `${map.id}:${w}x${h}:${team}`;
+    if (this.miniStatic && this.miniStaticKey === key) return this.miniStatic;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const at = (x: number, y: number) => worldToMinimap(x, y, map.width, map.height, w, h, team);
+    ctx.fillStyle = '#120e0b';
+    ctx.fillRect(0, 0, w, h);
+    const strokeLane = (points: Vec[], color: string, width: number) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      points.forEach((point, index) => {
+        const p = at(point.x, point.y);
+        if (index === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.stroke();
+    };
+    const lw = w / 160;
+    if (map.river && map.river.length > 1) strokeLane(map.river, '#c44a3a', 4 * lw);
+    const paths = map.paths?.length ? map.paths : null;
+    const roads = paths ? paths.map((path) => roadPoints(map, path.lane)) : [map.lane];
+    for (const road of roads) strokeLane(road, '#3a2c22', 5 * lw);
+    for (const road of roads) strokeLane(road, '#e6d3a1', 2 * lw);
+    // Base walls: the palisade fence posts at each camp gate, joined as thin light lines.
+    const posts = sceneryFor(map).filter((prop) => prop.kind === 'fence');
+    ctx.strokeStyle = 'rgba(240, 226, 188, 0.6)';
+    ctx.lineWidth = ICONS.wallLine * dpr;
+    for (let i = 1; i < posts.length; i++) {
+      const a = posts[i - 1];
+      const b = posts[i];
+      if (Math.hypot(a.x - b.x, a.y - b.y) > 90) continue;
+      const pa = at(a.x, a.y);
+      const pb = at(b.x, b.y);
+      ctx.beginPath();
+      ctx.moveTo(pa.x, pa.y);
+      ctx.lineTo(pb.x, pb.y);
+      ctx.stroke();
+    }
+    // Cave bosses (major objectives) and jungle camps.
+    for (const den of map.dens ?? []) {
+      const p = at(den.x, den.y);
+      const r = ((den.cave ? ICONS.caveBoss : ICONS.jungleCamp) * dpr) / 2;
+      ctx.beginPath();
+      if (den.cave) {
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      } else {
+        ctx.moveTo(p.x, p.y - r);
+        ctx.lineTo(p.x + r, p.y);
+        ctx.lineTo(p.x, p.y + r);
+        ctx.lineTo(p.x - r, p.y);
+        ctx.closePath();
+      }
+      ctx.fillStyle = den.cave ? '#c47a2a' : '#c49a3a';
+      ctx.fill();
+      ctx.strokeStyle = '#1a120c';
+      ctx.lineWidth = Math.max(1, dpr * 0.75);
+      ctx.stroke();
+    }
     this.miniStatic = canvas;
     this.miniStaticKey = key;
     return canvas;

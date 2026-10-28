@@ -1,6 +1,7 @@
 import { attackProfile } from './combat/attackCycle';
 import { commitStickGait, stepStickGait, type StickGaitMemory } from './gait';
 import { screenVectorToWorld } from './iso';
+import { activeView, directionFromView } from './view';
 import { getAutoTarget, MobileInputManager, skillAimKind, skillReach } from './mobileInput';
 import { byId, inRange, player } from './query';
 import type { FrameInput, Sim } from './types';
@@ -228,7 +229,9 @@ export class InputController {
     let x = 0;
     let y = 0;
     if (directing && (sx !== 0 || sy !== 0)) {
-      const worldDir = screenVectorToWorld(sx, sy);
+      // WILD RIFT VIEW: the stick reads screen directions; undo the view rotation so "up" stays "up" on screen.
+      const viewDir = screenVectorToWorld(sx, sy);
+      const worldDir = directionFromView(viewDir.x, viewDir.y, activeView.turns);
       const mag = Math.hypot(worldDir.x, worldDir.y);
       if (mag > 1e-6) {
         x = worldDir.x / mag;
