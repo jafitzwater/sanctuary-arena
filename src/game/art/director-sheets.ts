@@ -1,7 +1,9 @@
 /**
- * Draws the Sprite Director class and wave-mob sheets (batch 3 item a).
- * Implements: blit of one cell, feet at (x, y), scaled so the figure matches the caller's body height.
- * Excluded: any frame the manifest does not list. Callers fall back to the existing Flare/procedural art.
+ * Draws the Sprite Director full 8-direction class and wave-mob sheets (manifest "Full 8-direction sheets").
+ * Implements: blit of one cell, feet at (x, y) (anchor 32,64), scaled so the figure matches the caller's body height.
+ * Derived frames in these sheets are [TEMP/art direction] (see sheet-frames.ts).
+ * Excluded: any frame the manifest does not list. Callers fall back to the existing Flare/procedural art
+ * only while a sheet image is still loading.
  */
 import { CLASS_SHEET, MOB_SHEET } from './sheet-frames';
 
@@ -19,17 +21,17 @@ function imageOf(path: string): HTMLImageElement | null {
 }
 
 export function classSheetReady(classId: string): boolean {
-  return !!imageOf(`classes/${classId}-sheet-64.png`);
+  return !!imageOf(`classes/${classId}-full-sheet-64.png`);
 }
 
 export function mobSheetReady(sheetId: string): boolean {
-  return !!imageOf(`mobs/${sheetId}-sheet-64.png`);
+  return !!imageOf(`mobs/${sheetId}-full-sheet-64.png`);
 }
 
 export function drawClassSheet(
   ctx: CanvasRenderingContext2D, classId: string, row: number, col: number, x: number, y: number, height: number,
 ): boolean {
-  const image = imageOf(`classes/${classId}-sheet-64.png`);
+  const image = imageOf(`classes/${classId}-full-sheet-64.png`);
   if (!image) return false;
   const s = CLASS_SHEET;
   const scale = height / s.body;
@@ -38,16 +40,13 @@ export function drawClassSheet(
 }
 
 export function drawMobSheet(
-  ctx: CanvasRenderingContext2D, sheetId: string, row: number, col: number, left: boolean, x: number, y: number, height: number,
+  ctx: CanvasRenderingContext2D, sheetId: string, row: number, col: number, x: number, y: number, height: number,
 ): boolean {
-  const image = imageOf(`mobs/${sheetId}-sheet-64.png`);
+  const image = imageOf(`mobs/${sheetId}-full-sheet-64.png`);
   if (!image) return false;
   const s = MOB_SHEET;
   const scale = height / s.body;
-  ctx.save();
-  ctx.translate(x, y);
-  if (left) ctx.scale(-1, 1);
-  ctx.drawImage(image, col * s.cell, row * s.cell, s.cell, s.cell, -s.footX * scale, -s.footY * scale, s.cell * scale, s.cell * scale);
-  ctx.restore();
+  // Full sheets carry all 8 directions (w/sw/nw pre-mirrored in the sheet), so no runtime flip.
+  ctx.drawImage(image, col * s.cell, row * s.cell, s.cell, s.cell, x - s.footX * scale, y - s.footY * scale, s.cell * scale, s.cell * scale);
   return true;
 }
