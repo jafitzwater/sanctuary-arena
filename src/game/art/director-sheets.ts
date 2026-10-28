@@ -56,3 +56,21 @@ export function drawMobSheet(
   ctx.drawImage(image, col * s.cell, row * s.cell, s.cell, s.cell, x - s.footX * scale, y - s.footY * scale, s.cell * scale, s.cell * scale);
   return true;
 }
+
+/**
+ * WILD RIFT VIEW minimap portrait: head-and-shoulders crop of the idle, south-facing class cell
+ * (row 4 = 's', col 0 = idle), clipped to a circle. False while the sheet is still loading.
+ */
+export function drawClassPortrait(ctx: CanvasRenderingContext2D, classId: string, cx: number, cy: number, r: number): boolean {
+  const image = imageOf(`classes/${classId}-full-sheet-64.png`);
+  if (!image) return false;
+  const s = CLASS_SHEET;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.clip();
+  // [TEMP/art direction] crop 28x28 px around the head (cell x 18-46, y 6-34).
+  ctx.drawImage(image, 18, 4 * s.cell + 6, 28, 28, cx - r, cy - r, r * 2, r * 2);
+  ctx.restore();
+  return true;
+}

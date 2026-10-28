@@ -291,12 +291,16 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
   letter-spacing: 0.06em;
 }
 
+/* WILD RIFT VIEW: width = --mini-w (view.ts MINIMAP default 150 / min 110 / max 220 css px [TEMP]);
+   height follows the 4400 x 2800 map (11:7). */
 #minimap-toggle {
   position: absolute;
   top: 4px;
   right: 8px;
-  width: min(160px, 22vw);
-  height: 72px;
+  width: var(--mini-w, 150px);
+  max-width: calc((100vh - 170px) * 11 / 7);
+  aspect-ratio: 11 / 7;
+  height: auto;
   padding: 0;
   border: 1px solid var(--line);
   background: #120e0b;
@@ -316,7 +320,18 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
   pointer-events: none;
 }
 #minimap-toggle .map-label { display: none; font-size: 12px; letter-spacing: 0.06em; }
-#minimap-toggle.off { width: 52px; height: 28px; }
+#minimap-toggle.off { width: 52px; height: 28px; max-width: none; aspect-ratio: auto; }
+#minimap-grip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  pointer-events: auto;
+  touch-action: none;
+  background: linear-gradient(225deg, rgba(230, 211, 161, 0.75) 0 3px, transparent 3px 6px, rgba(230, 211, 161, 0.55) 6px 8px, transparent 8px);
+}
+#minimap-toggle.off #minimap-grip { display: none; }
 #minimap-toggle.off canvas { display: none; }
 #minimap-toggle.off .map-label { display: block; }
 
@@ -892,7 +907,7 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
 @media (max-width: 900px) {
   .stat.slim:last-of-type { display: none; }
   .top-actions button { padding: 4px 8px; min-width: 52px; }
-  #minimap-toggle { width: min(140px, 24vw); height: 56px; }
+  /* WILD RIFT VIEW: minimap size comes from --mini-w (no narrow-screen override). */
   #orb-hp, #orb-mp { width: 78px; height: 78px; }
   body:not(.touch) #belt { max-width: calc(100% - 170px); gap: 4px; }
   .skill { width: 48px; height: 48px; }
@@ -996,12 +1011,15 @@ body.touch #orb-mp {
 }
 body.touch .orb em { font-size: 8px; bottom: 18%; }
 
+/* WILD RIFT VIEW: touch placement on the left side, directly above the joystick (stick: bottom 16px, 90px). */
 body.touch #minimap-toggle {
-  top: 0;
-  left: 0;
+  top: auto;
+  bottom: calc(116px + env(safe-area-inset-bottom));
+  left: max(8px, env(safe-area-inset-left));
   right: auto;
-  width: min(112px, 16vw);
-  height: 40px;
+  width: var(--mini-w, 150px);
+  max-width: calc((100vh - 170px) * 11 / 7);
+  height: auto;
   background: rgba(12, 8, 6, 0.72);
   border-color: rgba(199, 179, 119, 0.8);
   box-shadow: 0 0 8px rgba(199, 179, 119, 0.22);
