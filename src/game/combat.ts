@@ -152,6 +152,7 @@ export function grantXp(sim: Sim, amount: number): void {
   }
   if (sim.level >= MAX_LEVEL) sim.xp = 0;
   if (gained) {
+    autoLearnUnlocked(sim);
     fillEmptyBelt(sim);
     recomputeHero(sim);
     const hero = player(sim);
@@ -164,6 +165,29 @@ export function grantXp(sim: Sim, amount: number): void {
     floater(sim, hero.x, hero.y - hero.radius - 28, `Level ${sim.level}`, '#e6c864');
     pushFx(sim, { kind: 'ring', x: hero.x, y: hero.y, r: 54, color: '#e6c864', life: 0.75, t: 0 });
     sfx(sim, 'level');
+  }
+}
+
+/**
+ * [JOSEPH] Pass 3 order item 4: "each skill auto-learned at rank 1 at its suggested level;
+ * extra skill points stay manual; no auto-spending beyond the rank-1 auto-learn."
+ * A skill whose kit unlockLevel is reached (and whose prereqs are learned) goes to rank 1.
+ * Reading used [JOSEPH to confirm]: the rank-1 learn uses that level's skill point when one is
+ * there (the level-1 starter is still free, as before), so total ranks + points per level match
+ * the old manual flow. Ranks 2+ stay manual through tryUpgrade.
+ */
+export function autoLearnUnlocked(sim: Sim): void {
+  let learned = true;
+  while (learned) {
+    learned = false;
+    for (const def of sim.classDef.skills) {
+      if ((sim.skillRanks[def.id] ?? 0) >= 1 || sim.level < def.unlockLevel) continue;
+      if (def.prereqs.some((req) => (sim.skillRanks[req] ?? 0) < 1)) continue;
+      sim.skillRanks[def.id] = 1;
+      if (sim.skillPoints > 0) sim.skillPoints -= 1;
+      banner(sim, `${def.name} learned.`);
+      learned = true;
+    }
   }
 }
 

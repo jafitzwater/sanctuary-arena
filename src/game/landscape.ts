@@ -96,6 +96,30 @@ function wrap(angle: number): number {
   return value;
 }
 
+/**
+ * Pass 3 order item 2: the jungle between the outer roads is open ground. The region is the
+ * polygon traced along the north road and back along the south road. Ground near a base
+ * (plaza + BASE_KEEP) stays out, so the base walls and gates still frame each base. [TEMP]
+ */
+const BASE_KEEP = mapLen(80);
+
+export function inJungleInterior(map: ActDef, x: number, y: number): boolean {
+  const north = map.paths?.find((path) => path.id === 'north')?.lane;
+  const south = map.paths?.find((path) => path.id === 'south')?.lane;
+  if (!north || !south) return false;
+  const keep = map.plaza + BASE_KEEP;
+  if (Math.hypot(x - map.playerBase.x, y - map.playerBase.y) <= keep) return false;
+  if (Math.hypot(x - map.enemyBase.x, y - map.enemyBase.y) <= keep) return false;
+  const ring = [...north, ...[...south].reverse()];
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i];
+    const b = ring[j];
+    if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
 function lanesOf(map: ActDef): Vec[][] {
   if (map.paths?.length) return map.paths.map((path) => path.lane);
   return [map.lane];
@@ -168,6 +192,8 @@ function clearOfWilds(map: ActDef, x: number, y: number, pad: number): boolean {
   if (x < 48 || y < 48 || x > map.width - 48 || y > map.height - 48) return false;
   if (nearLane(map, x, y, decorLimit(map))) return false;
   if (inGateSlot(map, x, y)) return false;
+  // Pass 3 item 2: no blocking trees inside the open jungle.
+  if (inJungleInterior(map, x, y)) return false;
   if (Math.hypot(x - map.playerBase.x, y - map.playerBase.y) < map.plaza) return false;
   if (Math.hypot(x - map.enemyBase.x, y - map.enemyBase.y) < map.plaza) return false;
   if (map.river && distToPolyline({ x, y }, map.river) < 70) return false;
@@ -234,6 +260,8 @@ function boulderSite(map: ActDef, props: Prop[], x: number, y: number): boolean 
   if (x < 80 || y < 80 || x > map.width - 80 || y > map.height - 80) return false;
   if (nearLane(map, x, y, decorLimit(map) - 1)) return false;
   if (inGateSlot(map, x, y)) return false;
+  // Pass 3 item 2: no lane-margin boulders inside the open jungle.
+  if (inJungleInterior(map, x, y)) return false;
   if (Math.hypot(x - map.playerBase.x, y - map.playerBase.y) < map.plaza) return false;
   if (Math.hypot(x - map.enemyBase.x, y - map.enemyBase.y) < map.plaza) return false;
   if (map.river && distToPolyline({ x, y }, map.river) < 80) return false;

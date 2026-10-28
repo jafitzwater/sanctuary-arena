@@ -87,7 +87,12 @@ export class Hud {
     } catch {
       saved = MINIMAP.defaultW;
     }
-    box.style.setProperty('--mini-w', `${saved}px`);
+    // Pass 3: the root copy lets the touch gold counter (a top-bar sibling) sit right under the card.
+    const setW = (w: number) => {
+      box.style.setProperty('--mini-w', `${w}px`);
+      document.documentElement.style.setProperty('--mini-w', `${w}px`);
+    };
+    setW(saved);
     grip.addEventListener('pointerdown', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -99,9 +104,10 @@ export class Hud {
         e.preventDefault();
         e.stopPropagation();
         const dx = (e.clientX - startX) * (left ? 1 : -1);
-        const dy = startY - e.clientY;
+        // Touch card hangs from the top with its grip bottom-right (pass 3): drag down grows it. Desktop unchanged.
+        const dy = document.body.classList.contains('touch') ? e.clientY - startY : startY - e.clientY;
         saved = clampMinimapW(startW + Math.max(dx, dy));
-        box.style.setProperty('--mini-w', `${saved}px`);
+        setW(saved);
       };
       const up = (e: PointerEvent) => {
         e.stopPropagation();

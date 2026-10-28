@@ -102,21 +102,37 @@ for (const turns of [0, 2] as const) {
 const css = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
 const touchMini = css.slice(css.indexOf('body.touch #minimap-toggle {'));
 const block = touchMini.slice(0, touchMini.indexOf('}'));
-assert.ok(block.includes(`bottom: calc(${MINIMAP.touchBottom}px`), 'css bottom mirrors MINIMAP.touchBottom');
+// Pass 3 order item 1 [JOSEPH]: minimap top-left, telemetry centered, gold directly under the minimap.
+assert.ok(block.includes(`top: max(${MINIMAP.touchTop}px`), 'css top mirrors MINIMAP.touchTop');
+assert.ok(block.includes(`left: max(${MINIMAP.touchLeft}px`), 'css left mirrors MINIMAP.touchLeft');
 assert.ok(block.includes(`var(--mini-w, ${MINIMAP.defaultW}px)`), 'css default width mirrors MINIMAP.defaultW');
-assert.ok(block.includes(`100vh - ${MINIMAP.touchBottom + MINIMAP.topClear}px`), 'css max-width mirrors topClear');
-assert.ok(MINIMAP.touchBottom > MINIMAP.stickTop, 'card bottom above the resting stick');
+assert.ok(block.includes(`100vh - ${MINIMAP.touchTop + MINIMAP.belowCard}px`), 'css max-width mirrors belowCard');
+assert.equal(MINIMAP.belowCard, MINIMAP.goldGap + MINIMAP.goldH + MINIMAP.stickGap + MINIMAP.stickTop);
+const goldRule = css.slice(css.indexOf('body.touch #gold-badge {'));
+const goldBlock = goldRule.slice(0, goldRule.indexOf('}'));
+assert.ok(goldBlock.includes('position: absolute') && goldBlock.includes(`left: max(${MINIMAP.touchLeft}px`), 'gold aligned with the card');
+assert.ok(goldBlock.includes(`100vh - ${MINIMAP.touchTop + MINIMAP.belowCard}px`) && goldBlock.includes(`+ ${MINIMAP.goldGap}px)`), 'gold top = card bottom + goldGap');
+const telRule = css.slice(css.indexOf('body.touch #telemetry {\n'));
+const telBlock = telRule.slice(0, telRule.indexOf('}'));
+assert.ok(telBlock.includes('left: 50%') && telBlock.includes('translateX(-50%)'), 'telemetry centered in the top bar');
 const W = S.width;
 const H = S.height;
+for (const want of [MINIMAP.minW, MINIMAP.defaultW, MINIMAP.maxW]) {
+  for (const [vh, st, sb] of [[390, 0, 0], [390, 0, 21], [360, 0, 0], [320, 20, 20]] as const) {
+    const box = minimapTouchBox(vh, want, W, H, st, sb);
+    assert.equal(box.top, MINIMAP.touchTop + st);
+    assert.equal(box.h, minimapH(box.w, W, H));
+    assert.ok(box.goldBottom + MINIMAP.stickGap <= vh - sb - MINIMAP.stickTop + 1, `gold above the stick at ${vh}/${want}`);
+  }
+}
 const phone = minimapTouchBox(390, MINIMAP.defaultW, W, H);
 assert.equal(phone.w, 180);
 assert.equal(phone.h, minimapH(180, W, H));
-assert.ok(phone.bottom >= MINIMAP.stickTop + 20, 'clear gap above the stick');
-assert.ok(phone.top >= MINIMAP.topClear, 'below the top bar');
+assert.equal(phone.goldTop, phone.bottom + MINIMAP.goldGap);
 const big = minimapTouchBox(390, MINIMAP.maxW, W, H);
-assert.ok(big.top >= MINIMAP.topClear && big.w === MINIMAP.maxW);
-const short = minimapTouchBox(320, MINIMAP.maxW, W, H, 20);
-assert.ok(short.top >= MINIMAP.topClear - 1 && short.w < MINIMAP.maxW, 'shrinks to fit a short screen');
+assert.equal(big.w, MINIMAP.maxW, 'max size fits at 844x390');
+const short = minimapTouchBox(300, MINIMAP.maxW, W, H, 20, 20);
+assert.ok(short.w < MINIMAP.maxW, 'shrinks to fit a short screen');
 assert.equal(clampMinimapW(10), MINIMAP.minW);
 assert.equal(clampMinimapW(999), MINIMAP.maxW);
 assert.ok(MINIMAP.defaultW >= MINIMAP.minW && MINIMAP.defaultW <= MINIMAP.maxW);

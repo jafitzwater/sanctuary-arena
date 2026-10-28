@@ -938,26 +938,39 @@ body.touch #topbar {
   height: 32px;
   z-index: 5;
   padding: 0 6px 0 4px;
-  padding-left: calc(min(112px, 16vw) + 8px);
+  /* Pass 3 item 1 [TEMP]: the left end sits under the top-left minimap, so nothing flows there. */
+  padding-left: calc(max(8px, env(safe-area-inset-left)) + min(var(--mini-w, 180px), 240px) + 8px);
   background: linear-gradient(to bottom, rgba(10, 8, 6, 0.72), rgba(10, 8, 6, 0));
 }
 body.touch .hero-plate .portrait,
 body.touch #vitals,
 body.touch .hero-plate .stat { display: none; }
 body.touch #telemetry { gap: 8px; font-size: 12px; }
-/* Wild Rift pass 2 item 6 [TEMP]: gold sits in the top bar, right after the clock / score / K-D group
-   (flex order 3; telemetry is order 2), instead of floating under it. */
-body.touch #telemetry { order: 2; }
+/* Pass 3 order item 1 [JOSEPH]: "game stats/timer centered in the top bar; gold counter directly under the
+   minimap." Telemetry is centered on the screen in the 32px bar; gold sits at the minimap's left edge,
+   MINIMAP.goldGap (6px) under the card. The card height mirrors the minimap's own width clamp (view.ts). */
+body.touch #telemetry {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 5;
+}
 body.touch #gold-badge {
-  position: static;
-  order: 3;
+  position: absolute;
+  left: max(8px, env(safe-area-inset-left));
+  top: calc(max(4px, env(safe-area-inset-top)) + min(var(--mini-w, 180px), (100vh - 156px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 11 / 7) * 7 / 11 + 6px);
   z-index: 5;
   flex: none;
   flex-direction: row;
   align-items: center;
   gap: 4px;
   min-width: 0;
-  margin: 0 0 0 4px;
+  margin: 0;
   padding: 1px 8px 2px;
   border-radius: 999px;
   background: rgba(12, 8, 6, 0.55);
@@ -1015,21 +1028,31 @@ body.touch #orb-mp {
 }
 body.touch .orb em { font-size: 8px; bottom: 18%; }
 
-/* WILD RIFT VIEW: touch placement on the left side, above the joystick (stick: bottom 16px, 90px).
-   Wild Rift pass 2 item 5 [TEMP]: view.ts MINIMAP touchBottom 132 (was 116), touchLeft 8, topClear 44,
-   default width 180 (was 150). max-width keeps the whole card between the top bar and the stick. */
+/* WILD RIFT VIEW: touch placement. Pass 3 order item 1 [JOSEPH] "minimap top-left" [TEMP values]:
+   view.ts MINIMAP touchTop 4, touchLeft 8, default width 180 (min 120 / max 240). max-width keeps the card,
+   the gold counter under it (6px gap + 24px) and a 16px gap clear of the resting stick (top 106px above the
+   bottom): 100vh - 4 - 152. z-index 6 keeps the card above the top bar's gradient. */
 body.touch #minimap-toggle {
-  top: auto;
-  bottom: calc(132px + env(safe-area-inset-bottom));
+  top: max(4px, env(safe-area-inset-top));
+  bottom: auto;
   left: max(8px, env(safe-area-inset-left));
   right: auto;
+  z-index: 6;
   width: var(--mini-w, 180px);
-  max-width: calc((100vh - 176px - env(safe-area-inset-bottom)) * 11 / 7);
+  max-width: calc((100vh - 156px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 11 / 7);
   height: auto;
   background: rgba(12, 8, 6, 0.72);
   border-color: rgba(199, 179, 119, 0.8);
   box-shadow: 0 0 8px rgba(199, 179, 119, 0.22);
 }
+/* Pass 3: the card hangs from the top, so its resize grip is the bottom-right corner (drag out to grow). */
+body.touch #minimap-grip {
+  top: auto;
+  bottom: 0;
+  background: linear-gradient(315deg, rgba(230, 211, 161, 0.75) 0 3px, transparent 3px 6px, rgba(230, 211, 161, 0.55) 6px 8px, transparent 8px);
+}
+/* Map folded to the "Map" chip (18px tall on touch): gold follows it up, same 6px gap. */
+body.touch:has(#minimap-toggle.off) #gold-badge { top: calc(max(4px, env(safe-area-inset-top)) + 24px); }
 body.touch .top-actions {
   position: static;
   margin-left: auto;

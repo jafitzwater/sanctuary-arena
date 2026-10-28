@@ -20,7 +20,7 @@ import { dealTeams } from '../src/game/teams';
 import { FUTURE_ITEMS, isShopItem, ITEMS } from '../src/game/data/items';
 import { UNIT_DEFS } from '../src/game/data/units';
 import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
-import { campGates, DECOR_MARGIN, FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, sceneryFor } from '../src/game/landscape';
+import { campGates, DECOR_MARGIN, FLOOR_STEP, GATE_HALF, inJungleInterior, LANE_CLEAR_HALF, sceneryFor } from '../src/game/landscape';
 import { advanceHeroPhase, heroCycleHz, heroDrawHeight, smoothFacing } from '../src/game/art/figures';
 import { getAutoTarget } from '../src/game/mobileInput';
 import { FOOTPRINT, GROUND_BASE, groundAt, slide, tilePaint, walkable } from '../src/game/terrain';
@@ -305,12 +305,13 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.ok(sim.sfx.includes('level'));
   grantXp(sim, 115); // Doc: Shout (2nd skill) unlocks at level 3
   assert.ok(sim.fx.some((fx) => fx.kind === 'text' && fx.text === 'Level 2'));
-  assert.equal(sim.belt[1], '', 'Shout is not equipped until it is learned');
-  tryAssignBelt(sim, 'shout', 1);
-  assert.equal(sim.belt[1], '');
-  tryUpgrade(sim, 'shout');
-  assert.equal(sim.skillRanks.shout, 1);
+  // Pass 3 item 4 [JOSEPH]: Shout is auto-learned at rank 1 at level 3 with that level's point.
+  assert.equal(sim.skillRanks.shout, 1, 'Shout auto-learned at its kit level');
+  assert.equal(sim.skillPoints, 1, 'the level-2 point stays unspent for manual use');
   assert.equal(sim.belt[1], 'shout', 'Learning Shout fills the first empty slot');
+  assert.equal(sim.skillRanks['leap-attack'], 0);
+  tryAssignBelt(sim, 'leap-attack', 2);
+  assert.equal(sim.belt[2], '', 'Leap Attack is not equipped until it is learned');
   tryAssignBelt(sim, 'shout', 0);
   assert.equal(sim.belt[0], 'shout');
   assert.equal(sim.belt[1], 'bash');
@@ -412,7 +413,9 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   hero.x = 1500 * MAP_SCALE;
   hero.y = 1100 * MAP_SCALE;
   updateSim(sim, emptyInput(), 0.1);
-  assert.ok(Math.hypot(hero.x - 1500 * MAP_SCALE, hero.y - 1100 * MAP_SCALE) > 40, 'ground between the paths blocks movement');
+  // Pass 3 order item 2: the interior jungle between the roads is open ground now.
+  assert.ok(Math.hypot(hero.x - 1500 * MAP_SCALE, hero.y - 1100 * MAP_SCALE) < 40, 'ground between the paths is walkable');
+  assert.equal(walkable(sanctuary, 200, 300), false, 'outer ground beyond the north road still blocks');
   assert.ok(walkable(sanctuary, 1680 * MAP_SCALE, 160 * MAP_SCALE), 'a den clearing stays open');
   // Item 23: the river no longer blocks movement; walkability is the same with or without it.
   const dry = { ...sanctuary, river: undefined };
@@ -564,7 +567,9 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.ok(Math.abs(strideLength(216, RUN_FRAME_MS, RUN_FRAMES) - 103.68) < 0.01, 'run stride at 216 is 103.68px');
   assert.ok(Math.abs(strideLength(144, WALK_FRAME_MS, WALK_FRAMES) - 66.816) < 0.01, 'walk stride at 144 is 66.816px');
   const rocks = sceneryFor(sanctuary).filter((prop) => prop.kind === 'rock');
-  assert.ok(rocks.length > 24, 'boulder walls line the lanes');
+  // Pass 3 item 2: boulders line only the outer side of the roads; the interior jungle is open.
+  assert.ok(rocks.length > 12, 'boulder walls line the outer lanes');
+  assert.ok(rocks.every((rock) => !inJungleInterior(sanctuary, rock.x, rock.y)), 'no boulder inside the open jungle');
   assert.notEqual(animFrame(elapsed, RUN_FRAME_MS, RUN_FRAMES), 0, 'a mid-cycle run is not frame 0');
   const runSeq: number[] = [];
   let clock = 0;
