@@ -28,6 +28,8 @@ export interface Unit {
   defId: string;
   /** Batch 3 item a: class sheet shown for an AI hero seat (visual only; the kit stays Barbarian). */
   look?: string;
+  /** Item 17: inside grass and unseen by every other team this tick. */
+  hidden?: boolean;
   kind: UnitKind;
   team: Team;
   name: string;
@@ -184,6 +186,9 @@ export interface Sim {
   pace: 'Normal' | 'Nightmare' | 'Hell';
   /** Seconds until each wilderness den respawns. Indexed by den id. */
   denIn: number[];
+  /** Item 15: seconds since a cave boss pack last lost health, and its last total health. Indexed by den id. */
+  caveQuiet: number[];
+  caveHp: number[];
   dragonIn: number;
   dragonStep: number;
   heraldIn: number;
@@ -191,6 +196,8 @@ export interface Sim {
   shrineIn: number[];
   /** Item 16: health orbs and pools. refill > 0 means consumed and waiting; stand is seconds inside per unit id. */
   orbs: { kind: 'orb' | 'pool'; x: number; y: number; refill: number; stand: Record<number, number> }[];
+  /** Item 17: hiding grass patches. */
+  grass: { x: number; y: number; r: number }[];
   banner: { text: string; t: number } | null;
   tip: string;
   tipT: number;

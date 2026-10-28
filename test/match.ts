@@ -746,10 +746,11 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
 {
   const sim = pastOpening(createMatch(sanctuary, barbarian, 1));
   const dens = sim.map.dens ?? [];
-  assert.equal(dens.length, 6);
-  const boss = sim.units.find((unit) => unit.name === 'Rakanishu');
+  // Item 15 [DOC]/[JOSEPH]: the 6 dens became 4 cave bosses (Countess, Radament, Council, Izual).
+  assert.equal(dens.length, 4);
+  const boss = sim.units.find((unit) => unit.name === 'The Countess');
   assert.ok(boss && boss.team === 'wild' && boss.alive);
-  const named = sim.units.find((unit) => unit.name === 'Bishibosh');
+  const named = sim.units.find((unit) => unit.name === 'Izual');
   assert.ok(named && named.team === 'wild');
   for (const den of dens) {
     for (const path of sim.map.paths ?? []) {

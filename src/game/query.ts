@@ -27,6 +27,7 @@ export function nearestEnemy(
   let bestD = Infinity;
   for (const other of sim.units) {
     if (!other.alive || other.team === from.team) continue;
+    if (other.hidden) continue; // Item 17: hidden in grass from every other team
     if (allow && !allow(other)) continue;
     const d = Math.hypot(other.x - from.x, other.y - from.y);
     if (d <= reach + other.radius && d < bestD) {

@@ -1,6 +1,8 @@
 import { waveMob, waveStrength, WAVE_SIZE } from './data/waves';
 import { itemById } from './data/items';
 import { ORB_RADIUS, ORB_REFILL, orbRestore, orbSpots, POOL_RADIUS, POOL_STAND } from './data/orbs';
+import { CAVE_RESET } from './data/caves';
+import { grassPatches, hiddenUnits } from './data/grass';
 import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
 import { dealTeams } from './teams';
@@ -82,12 +84,15 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     announcedWave: false,
     pace: 'Normal',
     denIn: [],
+    caveQuiet: [],
+    caveHp: [],
     dragonIn: 18,
     dragonStep: 0,
     heraldIn: 22,
     heraldCount: 0,
     shrineIn: (map.shrines ?? []).map(() => 0),
     orbs: orbSpots(map.paths ?? []).map((spot) => ({ ...spot, ...clampToPlayable(map, spot.x, spot.y), refill: 0, stand: {} })),
+    grass: grassPatches(map.paths ?? []),
     banner: null,
     tip: 'Last-hit Fallen for gold. Points spends skills and stats. Shop at the Encampment.',
     tipT: 9,
@@ -436,7 +441,10 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
     banner(sim, pace.name === 'Nightmare' ? 'The wilds turn to Nightmare.' : 'Hell walks the roads.');
   }
 
+  updateGrass(sim);
   const hero = player(sim);
+  const lockedOn = byId(sim, input.targetId);
+  if (lockedOn?.hidden && lockedOn.team !== hero.team) input = { ...input, targetId: null };
   if (hero.alive) updatePlayer(sim, hero, input, step);
   const raven = byId(sim, sim.enemyChampionId);
   if (raven) updateEnemyChampion(sim, raven, step);
@@ -452,6 +460,8 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
   }
 
   resolveBodies(sim, started);
+  updateGrass(sim);
+  dropHiddenTargets(sim);
   strikes(sim, input, step);
   updateProjectiles(sim, step);
   regen(sim, step);
@@ -1188,6 +1198,10 @@ function withExtra(groups: { unit: string; count: number }[], extra: number): { 
 }
 
 function spawnDen(sim: Sim, den: DenSpawn): void {
+  if (den.cave) {
+    spawnCave(sim, den);
+    return;
+  }
   const count = den.boss ? 1 : den.count;
   for (let n = 0; n < count; n++) {
     const angle = (n / Math.max(1, count)) * Math.PI * 2;
@@ -1207,17 +1221,53 @@ function spawnDen(sim: Sim, den: DenSpawn): void {
   }
 }
 
+/** Item 15: cave bosses use their UnitDef stats as is ([JOSEPH] answer 2). */
+function spawnCave(sim: Sim, den: DenSpawn): void {
+  for (let n = 0; n < den.count; n++) {
+    const angle = (n / Math.max(1, den.count)) * Math.PI * 2;
+    const r = den.count > 1 ? 30 : 0;
+    const unit = spawnMinion(sim, den.unit, 'wild', den.x + Math.cos(angle) * r, den.y + Math.sin(angle) * r * 0.75, 0, 1);
+    unit.pack = den.id;
+    unit.anchorX = den.x;
+    unit.anchorY = den.y;
+  }
+  sim.caveQuiet[den.id] = 0;
+  sim.caveHp[den.id] = cavePackHp(sim, den.id);
+}
+
+function cavePackHp(sim: Sim, id: number): number {
+  return sim.units.reduce((sum, unit) => (unit.alive && unit.pack === id ? sum + unit.hp : sum), 0);
+}
+
+/**
+ * Item 15. Doc: "If there is no attack for 60 seconds in the cave, that boss's health goes
+ * back to 100%." Any health lost by the pack counts as an attack and restarts the clock.
+ */
+function updateCaveReset(sim: Sim, den: DenSpawn, dt: number): void {
+  const hp = cavePackHp(sim, den.id);
+  if (hp < (sim.caveHp[den.id] ?? hp)) sim.caveQuiet[den.id] = 0;
+  else sim.caveQuiet[den.id] = (sim.caveQuiet[den.id] ?? 0) + dt;
+  if (sim.caveQuiet[den.id] >= CAVE_RESET) {
+    for (const unit of sim.units) if (unit.alive && unit.pack === den.id) unit.hp = unit.maxHp;
+    sim.caveQuiet[den.id] = 0;
+  }
+  sim.caveHp[den.id] = cavePackHp(sim, den.id);
+}
+
 function updateDens(sim: Sim, dt: number): void {
   for (const den of sim.map.dens ?? []) {
     const alive = sim.units.some((unit) => unit.alive && unit.pack === den.id);
     if (alive) {
       sim.denIn[den.id] = den.respawn;
+      if (den.cave) updateCaveReset(sim, den, dt);
       continue;
     }
     sim.denIn[den.id] = (sim.denIn[den.id] ?? den.respawn) - dt;
     if (sim.denIn[den.id] > 0) continue;
     spawnDen(sim, den);
     sim.denIn[den.id] = den.respawn;
+    // Item 15 [DOC]: "A boss is back after 3 minutes, with a notice of respawn."
+    if (den.cave) banner(sim, `${unitDef(den.unit).name} has returned to its cave.`);
   }
 }
 
@@ -1513,6 +1563,22 @@ function updateOrbs(sim: Sim, dt: number): void {
       break;
     }
     orb.stand = orb.refill > 0 ? {} : stand;
+    }
+  }
+
+/** Item 17 [DOC]/[JOSEPH]: mark units hidden in grass; leaving the grass reveals them. */
+function updateGrass(sim: Sim): void {
+  if (!sim.grass.length) return;
+  const hidden = hiddenUnits(sim.grass, sim.units);
+  for (const unit of sim.units) unit.hidden = hidden.has(unit.id);
+}
+
+/** Item 17: enemies lose a target that has become hidden ("invisible unless an enemy is inside"). */
+function dropHiddenTargets(sim: Sim): void {
+  for (const unit of sim.units) {
+    if (unit.id === sim.playerId) continue;
+    const target = byId(sim, unit.targetId);
+    if (target?.hidden && target.team !== unit.team) unit.targetId = null;
   }
 }
 

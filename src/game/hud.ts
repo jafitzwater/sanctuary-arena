@@ -1,7 +1,7 @@
 import portraitUrl from '../assets/art/d2/portrait.webp';
 import { ROSTER } from './data/classes/roster';
 import { itemIcon, plateIcons, skillIcon } from './art/icons';
-import { isShopItem, ITEMS, potionCap, type ItemDef } from './data/items';
+import { isBetterGear, isShopItem, itemById, ITEMS, potionCap, type ItemDef } from './data/items';
 import { inShopRange, manaCost, MAX_LEVEL, xpToNext } from './combat';
 import { player } from './query';
 import type { Sim } from './types';
@@ -614,11 +614,8 @@ export class Hud {
 
   private quote(sim: Sim, item: ItemDef): { price: number; owned: boolean; broke: boolean; needStr: boolean; needDex: boolean; locked: boolean; full: boolean } {
     const owned = this.owned(sim, item);
-    const equippedId =
-      item.slot === 'weapon' || item.slot === 'armor' || item.slot === 'helm' || item.slot === 'belt' ? sim.loadout[item.slot] : null;
-    const previous = equippedId ? ITEMS.find((entry) => entry.id === equippedId) : undefined;
-    const refund = previous && previous.id !== item.id ? Math.floor(previous.cost * 0.5) : 0;
-    const price = item.consumable ? item.cost : Math.max(0, item.cost - refund);
+    // Item 19 [JOSEPH]/doc: "An item cannot be sold." No sell-back refund in the quote.
+    const price = item.cost;
     return {
       price,
       owned,
@@ -655,7 +652,9 @@ export class Hud {
 
   private owned(sim: Sim, item: ItemDef): boolean {
     if (item.slot === 'weapon' || item.slot === 'armor' || item.slot === 'helm' || item.slot === 'belt') {
-      return sim.loadout[item.slot] === item.id;
+      // Item 19 [JOSEPH]: a slot only takes a better item, so an equal or worse one reads as owned.
+      const equipped = sim.loadout[item.slot];
+      return equipped === item.id || (!!equipped && !isBetterGear(item, itemById(equipped)));
     }
     return false;
   }

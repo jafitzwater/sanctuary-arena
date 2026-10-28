@@ -304,6 +304,7 @@ export class Renderer {
     }
     this.drawMist(sim, cssW, cssH);
     this.drawOrbs(sim);
+    this.drawGrass(sim);
 
     this.tickFx();
     this.syncRecall(sim);
@@ -315,11 +316,20 @@ export class Renderer {
     this.simTime = sim.time;
     const u = this.spriteScale();
     const layers: { depth: number; paint: () => void }[] = [];
-    const units = sim.units.filter((unit) => unit.alive || unit.corpse > 0 || unit.kind !== 'minion');
+    const myTeam = sim.units.find((unit) => unit.id === sim.playerId)?.team;
+    // Item 17: enemies hidden in grass are not drawn.
+    const units = sim.units.filter(
+      (unit) => (unit.alive || unit.corpse > 0 || unit.kind !== 'minion') && !(unit.alive && unit.hidden && unit.team !== myTeam),
+    );
     for (const unit of units) {
       layers.push({
         depth: unit.x + unit.y,
-        paint: () => this.drawUnit(ctx, unit, opts, u, this.armorTier(sim), sim.playerId),
+        paint: () => {
+          // Item 17: own side's hidden units are drawn faded so the player can tell they are in grass.
+          if (unit.hidden) ctx.globalAlpha = 0.6;
+          this.drawUnit(ctx, unit, opts, u, this.armorTier(sim), sim.playerId);
+          ctx.globalAlpha = 1;
+        },
       });
     }
     layers.sort((a, b) => a.depth - b.depth);
@@ -989,6 +999,34 @@ export class Renderer {
     }
   }
 
+  /** Item 17: hiding grass patches, drawn as dark tufted ground. */
+  private drawGrass(sim: Sim): void {
+    const ctx = this.ctx;
+    for (const patch of sim.grass ?? []) {
+      const p = this.project(patch.x, patch.y);
+      const edge = this.project(patch.x + patch.r, patch.y);
+      const r = Math.max(4, Math.hypot(edge.x - p.x, edge.y - p.y));
+      if (p.x < -r || p.y < -r || p.x > this.camera.cssW + r || p.y > this.camera.cssH + r) continue;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, r, r * 0.5, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(28, 52, 18, 0.75)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(70, 104, 38, 0.8)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 18; i++) {
+        const a = (i * 2.399) % (Math.PI * 2);
+        const d = ((i * 37) % 17) / 17;
+        const tx = p.x + Math.cos(a) * r * 0.85 * d;
+        const ty = p.y + Math.sin(a) * r * 0.42 * d;
+        ctx.beginPath();
+        ctx.moveTo(tx - 2, ty);
+        ctx.lineTo(tx, ty - 6);
+        ctx.lineTo(tx + 2, ty);
+        ctx.stroke();
+      }
+    }
+  }
+
   private drawMist(sim: Sim, cssW: number, cssH: number): void {
     const pattern = this.ensureMistPattern();
     if (!pattern) return;
@@ -1352,8 +1390,10 @@ export class Renderer {
     }
     const sx = w / map.width;
     const sy = h / map.height;
+    const myTeam = sim.units.find((unit) => unit.id === sim.playerId)?.team;
     for (const unit of sim.units) {
       if (!unit.alive && unit.kind === 'minion') continue;
+      if (unit.alive && unit.hidden && unit.team !== myTeam) continue; // Item 17
       const x = unit.x * sx;
       const y = unit.y * sy;
       ctx.fillStyle = unit.team === 'ally' ? '#e6d3a1' : unit.team === 'wild' ? '#c49a3a' : '#e15a4a';
