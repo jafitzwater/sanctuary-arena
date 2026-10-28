@@ -1,5 +1,6 @@
 import type { ClassDef, SkillDef } from './types';
 import classes from '../d2/charstats.json';
+import { STARTING_STATS } from './startingStats';
 
 const row = classes.find((entry) => entry.id === 'barbarian');
 if (!row) throw new Error('Barbarian missing from CharStats import');
@@ -148,10 +149,11 @@ export const barbarian: ClassDef = {
     armorPerLevel: 0,
     regenHp: 0.8,
     regenMana: moba.regenMana,
-    str: moba.str,
-    dex: moba.dex,
-    vit: moba.vit,
-    energy: moba.energy,
+    // [JOSEPH] item 10: "Barbarian 30/20/25/10" (joseph-answers-oct27.md, answer 6).
+    str: STARTING_STATS.barbarian.str,
+    dex: STARTING_STATS.barbarian.dex,
+    vit: STARTING_STATS.barbarian.vit,
+    energy: STARTING_STATS.barbarian.energy,
     hpPerVit: 4,
     manaPerEnergy: moba.manaPerEnergy,
     statPointsPerLevel: moba.statPointsPerLevel,
