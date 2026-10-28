@@ -31,14 +31,15 @@ import { attackSheetFrame, cycleFrame } from './art/flare-frames';
 import { drawFlare, flareFrameCount, flareReady, type FlareAnim } from './art/flare';
 import { classSheetReady, drawClassSheet, drawMobSheet, mobSheetReady } from './art/director-sheets';
 import {
-  CLASS_SHEET,
+  CLASS_COLS,
   MOB_ROWS,
   classSheetCol,
   classSheetRow,
   hasClassSheet,
-  mobFacesLeft,
+  mobSheetCol,
   mobSheetId,
-  type MobAnim,
+  mobSheetRow,
+  type SheetAnim,
 } from './art/sheet-frames';
 import { stampBloodPool } from './decals';
 import { heroGaitStep, heroHoldCompass, readStickMotion } from './gait';
@@ -718,7 +719,7 @@ export class Renderer {
     const drew = sheet
       ? sheet.kind === 'class'
         ? drawClassSheet(ctx, sheet.id, sheet.row, sheet.col, dx, dy, height)
-        : drawMobSheet(ctx, sheet.id, sheet.row, sheet.col, sheet.left, dx, dy, height)
+        : drawMobSheet(ctx, sheet.id, sheet.row, sheet.col, dx, dy, height)
       : drawFlare(ctx, unit.defId, anim, pose.compass, frame, dx, dy, height);
     if (unit.whirlT > 0) {
       ctx.strokeStyle = 'rgba(240, 220, 170, 0.8)';
@@ -732,36 +733,41 @@ export class Renderer {
   }
 
   /**
-   * Batch 3 item a: pick a Sprite Director sheet cell, or null to keep the Flare/procedural art.
-   * Class sheets have idle and move only (manifest: no attack, cast or death frames). The Barbarian keeps
-   * its Flare attack and death; other class looks hold the stand pose for those [TEMP, NEEDS JOSEPH].
+   * Pick a Sprite Director full 8-direction sheet cell, or null to keep the Flare/procedural art
+   * (only while the sheet image is still loading, or for units with no sheet).
+   * Manifest "Full 8-direction sheets": every class and wave mob has idle, walk, attack and death in all
+   * 8 directions, so the old TEMP "hold the stand frame while attacking/dying" fallback and the Barbarian's
+   * Flare attack/death stand-in are gone. Attack/death frames are derived [TEMP/art direction].
    */
   private sheetFrame(
     unit: Unit,
     anim: FlareAnim,
     pose: Pose,
-  ): { kind: 'class' | 'mob'; id: string; row: number; col: number; left: boolean } | null {
+  ): { kind: 'class' | 'mob'; id: string; row: number; col: number } | null {
+    const sheetAnim: SheetAnim = anim === 'die' ? 'death' : anim === 'attack' ? 'attack' : anim === 'idle' ? 'idle' : 'move';
     if (unit.defId === 'barbarian') {
       const id = unit.look ?? 'barbarian';
       if (!hasClassSheet(id) || !classSheetReady(id)) return null;
-      const moving = anim === 'walk' || anim === 'run';
-      if (!moving && anim !== 'idle' && id === 'barbarian') return null;
-      const col = classSheetCol(moving, cycleFrame(pose.phase, CLASS_SHEET.moveFrames));
-      return { kind: 'class', id, row: classSheetRow(pose.compass), col, left: false };
+      const frame = this.sheetAnimFrame(unit, sheetAnim, pose, CLASS_COLS[sheetAnim].frames);
+      return { kind: 'class', id, row: classSheetRow(pose.compass), col: classSheetCol(sheetAnim, frame) };
     }
     const id = mobSheetId(unit.defId);
     if (!id || !mobSheetReady(id)) return null;
-    const mob: MobAnim = anim === 'die' ? 'death' : anim === 'attack' ? 'attack' : anim === 'idle' ? 'idle' : 'move';
-    const { row, frames } = MOB_ROWS[mob];
-    let col = cycleFrame(pose.phase, frames);
-    if (mob === 'attack') {
+    const frame = this.sheetAnimFrame(unit, sheetAnim, pose, MOB_ROWS[sheetAnim].frames);
+    return { kind: 'mob', id, row: mobSheetRow(pose.compass, sheetAnim), col: mobSheetCol(sheetAnim, frame) };
+  }
+
+  /** Frame within a sheet animation: attack follows the attack cycle, death plays once over 0.8 s and holds. */
+  private sheetAnimFrame(unit: Unit, anim: SheetAnim, pose: Pose, frames: number): number {
+    if (anim === 'attack') {
       const phase = unit.attackCycle.phase === AttackPhase.Windup ? 'Windup' : 'Backswing';
-      col = attackSheetFrame(phase, unit.attackCycle.phaseElapsedMs, unit.attackInterval, frames);
-    } else if (mob === 'death') {
-      const elapsed = Math.max(0, this.simTime - unit.diedAt);
-      col = Math.min(frames - 1, Math.floor(Math.min(0.999, elapsed / 0.8) * frames));
+      return attackSheetFrame(phase, unit.attackCycle.phaseElapsedMs, unit.attackInterval, frames);
     }
-    return { kind: 'mob', id, row, col, left: mobFacesLeft(pose.compass) };
+    if (anim === 'death') {
+      const elapsed = Math.max(0, this.simTime - unit.diedAt);
+      return Math.min(frames - 1, Math.floor(Math.min(0.999, elapsed / 0.8) * frames));
+    }
+    return cycleFrame(pose.phase, frames);
   }
 
   private paintFigure(
