@@ -305,12 +305,13 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.ok(sim.sfx.includes('level'));
   grantXp(sim, 115); // Doc: Shout (2nd skill) unlocks at level 3
   assert.ok(sim.fx.some((fx) => fx.kind === 'text' && fx.text === 'Level 2'));
-  assert.equal(sim.belt[1], '', 'Shout is not equipped until it is learned');
-  tryAssignBelt(sim, 'shout', 1);
-  assert.equal(sim.belt[1], '');
-  tryUpgrade(sim, 'shout');
-  assert.equal(sim.skillRanks.shout, 1);
+  // Pass 3 item 4 [JOSEPH]: Shout is auto-learned at rank 1 at level 3 with that level's point.
+  assert.equal(sim.skillRanks.shout, 1, 'Shout auto-learned at its kit level');
+  assert.equal(sim.skillPoints, 1, 'the level-2 point stays unspent for manual use');
   assert.equal(sim.belt[1], 'shout', 'Learning Shout fills the first empty slot');
+  assert.equal(sim.skillRanks['leap-attack'], 0);
+  tryAssignBelt(sim, 'leap-attack', 2);
+  assert.equal(sim.belt[2], '', 'Leap Attack is not equipped until it is learned');
   tryAssignBelt(sim, 'shout', 0);
   assert.equal(sim.belt[0], 'shout');
   assert.equal(sim.belt[1], 'bash');

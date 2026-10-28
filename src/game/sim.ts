@@ -46,7 +46,7 @@ import { byId, findBase, inRange, isStructure, nearestEnemy, player } from './qu
 import { SKILLS } from './skills';
 import type { FrameInput, Sim, Team, Unit } from './types';
 
-const PASSIVE_GOLD = 1.4;
+export const PASSIVE_GOLD = 1.4;
 /** Champions that issued a move this tick. A move does not start a new windup. */
 let championsMoved = new Set<number>();
 /** The sim currently inside updateSim, so movement can cancel a backswing. */
