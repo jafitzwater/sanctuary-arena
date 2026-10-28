@@ -24,6 +24,12 @@ export function classSheetReady(classId: string): boolean {
   return !!imageOf(`classes/${classId}-full-sheet-64.png`);
 }
 
+/** Columns in the loaded class sheet (0 while loading). Lets the barbarian fall back to the old columns. */
+export function classSheetCols(classId: string): number {
+  const image = imageOf(`classes/${classId}-full-sheet-64.png`);
+  return image ? Math.floor(image.naturalWidth / CLASS_SHEET.cell) : 0;
+}
+
 export function mobSheetReady(sheetId: string): boolean {
   return !!imageOf(`mobs/${sheetId}-full-sheet-64.png`);
 }

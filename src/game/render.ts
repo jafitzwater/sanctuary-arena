@@ -29,10 +29,15 @@ import { AttackPhase } from './combat/attackCycle';
 import { damageColor } from './combat';
 import { attackSheetFrame, cycleFrame } from './art/flare-frames';
 import { drawFlare, flareFrameCount, flareReady, type FlareAnim } from './art/flare';
-import { classSheetReady, drawClassSheet, drawMobSheet, mobSheetReady } from './art/director-sheets';
+import { classSheetCols, classSheetReady, drawClassSheet, drawMobSheet, mobSheetReady } from './art/director-sheets';
 import {
   CLASS_COLS,
   MOB_ROWS,
+  barbarianAttackFrame,
+  barbarianCycleDistance,
+  barbarianMotionCol,
+  barbarianStrideFrame,
+  hasBarbarianMotion,
   classSheetCol,
   classSheetRow,
   hasClassSheet,
@@ -44,6 +49,7 @@ import {
 import { stampBloodPool } from './decals';
 import { heroGaitStep, heroHoldCompass, readStickMotion } from './gait';
 import type { ActDef } from './data/acts/types';
+import { barbarian as barbarianClass } from './data/classes/barbarian';
 import { projectIso, unprojectIso } from './iso';
 import { TEAM_GLOW, baseFloorReady, onBaseFloor, paintBaseFloor, paintTeamGlow } from './art/base-ground';
 import { drawItemBeam, drawItemNameplate, ITEM_LABEL_CLASS, type GroundDrop } from './itemBeam';
@@ -77,7 +83,12 @@ interface Pose {
   y: number;
   elapsed: number;
   state: HeroPose;
+  /** World distance actually moved while walking/running. Drives the barbarian 12-frame stride (no foot sliding). */
+  travel: number;
 }
+
+/** A per-frame jump larger than this is a teleport (recall, respawn), not a step. */
+const MAX_STRIDE_STEP = 100;
 
 interface TokenLook {
   mark: CreatureKind;
@@ -748,6 +759,8 @@ export class Renderer {
     if (unit.defId === 'barbarian') {
       const id = unit.look ?? 'barbarian';
       if (!hasClassSheet(id) || !classSheetReady(id)) return null;
+      const motion = id === 'barbarian' ? this.barbarianMotionCol(unit, anim, pose) : null;
+      if (motion != null) return { kind: 'class', id, row: classSheetRow(pose.compass), col: motion };
       const frame = this.sheetAnimFrame(unit, sheetAnim, pose, CLASS_COLS[sheetAnim].frames);
       return { kind: 'class', id, row: classSheetRow(pose.compass), col: classSheetCol(sheetAnim, frame) };
     }
@@ -755,6 +768,25 @@ export class Renderer {
     if (!id || !mobSheetReady(id)) return null;
     const frame = this.sheetAnimFrame(unit, sheetAnim, pose, MOB_ROWS[sheetAnim].frames);
     return { kind: 'mob', id, row: mobSheetRow(pose.compass, sheetAnim), col: mobSheetCol(sheetAnim, frame) };
+  }
+
+  /**
+   * WORK ORDER "Code engineer - WIRE BARBARIAN MOTION": walk12/run12/attack12 for the barbarian only.
+   * Walk/run frame comes from distance travelled, so the loop rate follows actual move speed. Run uses the
+   * existing run gait (pose.state 'run', stick tilt / gait hold); no new gameplay. Attack follows the
+   * existing attack cycle with impact frame 7 at the hit. Returns null (old columns) for idle, death, or
+   * when the loaded sheet is the old narrow one.
+   */
+  private barbarianMotionCol(unit: Unit, anim: FlareAnim, pose: Pose): number | null {
+    if (!hasBarbarianMotion(classSheetCols('barbarian'))) return null;
+    if (anim === 'attack') {
+      const phase = unit.attackCycle.phase === AttackPhase.Windup ? 'Windup' : 'Backswing';
+      return barbarianMotionCol('attack', barbarianAttackFrame(phase, unit.attackCycle.phaseElapsedMs, unit.attackInterval));
+    }
+    if (anim !== 'walk' && anim !== 'run') return null;
+    const stats = barbarianClass.stats;
+    const dist = barbarianCycleDistance(anim, anim === 'run' ? stats.runSpeed : stats.walkSpeed);
+    return barbarianMotionCol(anim, barbarianStrideFrame(pose.travel, dist));
   }
 
   /** Frame within a sheet animation: attack follows the attack cycle, death plays once over 0.8 s and holds. */
@@ -1187,7 +1219,9 @@ export class Renderer {
     const compass = heroHoldCompass(prev?.compass ?? null, unit.facing);
     const target = compass * (Math.PI / 4);
     const shown = prev ? smoothFacing(prev.shown, target, this.frameDt) : target;
-    const pose: Pose = { phase, shown, compass, x: unit.x, y: unit.y, elapsed, state };
+    const stepped = state !== 'idle' && step < MAX_STRIDE_STEP ? step : 0;
+    const travel = (prev?.travel ?? 0) + stepped;
+    const pose: Pose = { phase, shown, compass, x: unit.x, y: unit.y, elapsed, state, travel };
     this.poses.set(unit.id, pose);
     if (STICK_LOG && unit.id === playerId) {
       const speed = this.frameDt > 0 ? step / this.frameDt : 0;

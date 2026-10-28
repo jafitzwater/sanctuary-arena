@@ -95,3 +95,59 @@ export function mobSheetRow(compass: number, anim: MobAnim): number {
 export function mobSheetCol(anim: MobAnim, frame: number): number {
   return wrap(frame, MOB_ROWS[anim].frames);
 }
+
+/**
+ * WORK ORDER "Code engineer - WIRE BARBARIAN MOTION" (Oct 28, Joseph approved): "Barbarian walk12 = cols
+ * 26-37, run12 = cols 38-49, attack12 = cols 50-61 (sheet 3968x512, see manifest.md). Use them for the
+ * barbarian only; other classes and mobs keep their current frames."
+ * Manifest "Barbarian motion": "walk12: cols 26-37, 80 ms/frame (0.96 s loop)"; "run12: cols 38-49, 60 ms/frame
+ * (0.72 s loop)"; "attack12: cols 50-61 ... 0 ready, 1-3 wind-up, 4 overhead, 5-6 swing arc, 7-9 impact with
+ * lunge (hit on frame 7, hold on 8-9), 10-11 recovery". Art is [TEMP/art direction] per the manifest.
+ * Excluded: no gameplay timing; old cols 0-25 stay in the sheet as the fallback.
+ */
+export const BARBARIAN_MOTION_COLS = 62;
+export const BARBARIAN_MOTION = {
+  walk: { col: 26, frames: 12, msPerFrame: 80 },
+  run: { col: 38, frames: 12, msPerFrame: 60 },
+  attack: { col: 50, frames: 12, impact: 7 },
+} as const;
+export type BarbarianGait = 'walk' | 'run';
+
+/** True when the loaded barbarian sheet is wide enough for the 12-frame blocks (else use the old columns). */
+export function hasBarbarianMotion(sheetCols: number): boolean {
+  return sheetCols >= BARBARIAN_MOTION_COLS;
+}
+
+/**
+ * World distance covered in one 12-frame loop. Calibrated so the loop plays at the manifest timing
+ * (0.96 s walk, 0.72 s run) when the hero moves at the class walk/run speed; at any other actual speed the
+ * loop rate scales with it, so the feet stay planted. [TEMP/art direction] calibration.
+ */
+export function barbarianCycleDistance(gait: BarbarianGait, gaitSpeed: number): number {
+  const m = BARBARIAN_MOTION[gait];
+  return Math.max(1, gaitSpeed) * (m.frames * m.msPerFrame) / 1000;
+}
+
+/** Walk/run frame from distance actually travelled (not time), wrapping within 12 frames. */
+export function barbarianStrideFrame(travel: number, cycleDistance: number): number {
+  const frames = BARBARIAN_MOTION.walk.frames;
+  return wrap((Math.max(0, travel) / Math.max(1, cycleDistance)) * frames, frames);
+}
+
+/**
+ * Attack frame across the existing attack cycle (attackCycle.ts: windup and backswing are each 30% of the
+ * attack interval; the hit fires when windup ends). Frames 0-6 span the windup, so the manifest impact
+ * frame 7 shows at the moment damage applies; frames 7-11 span the backswing. No timing is changed.
+ */
+export function barbarianAttackFrame(phase: 'Windup' | 'Backswing', elapsedMs: number, intervalSec: number): number {
+  const { frames, impact } = BARBARIAN_MOTION.attack;
+  const phaseMs = Math.max(1, intervalSec * 1000 * 0.3);
+  const t = Math.min(0.999, Math.max(0, elapsedMs / phaseMs));
+  return phase === 'Windup' ? Math.floor(t * impact) : impact + Math.floor(t * (frames - impact));
+}
+
+/** Sheet column for a barbarian motion block frame. */
+export function barbarianMotionCol(anim: BarbarianGait | 'attack', frame: number): number {
+  const b = BARBARIAN_MOTION[anim];
+  return b.col + wrap(frame, b.frames);
+}
