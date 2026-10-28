@@ -243,7 +243,49 @@ const GEAR: ItemDef[] = [
   },
 ];
 
-export const ITEMS: ItemDef[] = [...POTIONS, ...GEAR];
+/**
+ * Gap-list item 19, batch 4. Source [JOSEPH] (joseph-answers-oct27.md, answer 1):
+ *   "Gear: 4 slots Helmet, Armor, Weapon, Belt. Better = higher required level + higher
+ *    base stat/tier; ties = more useful affixes for class. Price base = itemLevel*50;
+ *    unique/set = base*3-5 (hardcode)."
+ * Doc: "An item cannot be sold. It can only be overwritten for a better item."
+ * Implements: gear price = itemLevel * 50, where itemLevel is the item's unlockLevel
+ * (the required match level) [DERIVED]; the "better item" rule; no sell-back.
+ * The 4 slots are the repo's existing weapon/armor/helm/belt (unchanged).
+ * Excluded (NEEDS JOSEPH): the affix tie-break (shop items have no affixes) and the
+ * unique/set multiplier (no unique/set item is sold; "3-5" is not one number).
+ */
+export const GEAR_PRICE_PER_LEVEL = 50;
+
+export function gearPrice(item: ItemDef): number {
+  // [JOSEPH] "Price base = itemLevel*50"
+  return (item.unlockLevel ?? 1) * GEAR_PRICE_PER_LEVEL;
+}
+
+const TIER_RANK: Record<ItemTier, number> = { base: 0, magic: 1, rare: 2, set: 3, unique: 4 };
+
+/** Weapons compare damage; armor, helms and belts compare armor. */
+export function gearBaseStat(item: ItemDef): number {
+  return item.slot === 'weapon' ? item.ad ?? item.adOne ?? 0 : item.armor ?? 0;
+}
+
+/**
+ * [JOSEPH] "Better = higher required level + higher base stat/tier".
+ * Better means a higher required level with a base stat and tier no lower, or the same
+ * required level with a higher base stat or tier. A full tie is not better [the affix
+ * tie-break is NEEDS JOSEPH]. An empty slot accepts anything.
+ */
+export function isBetterGear(next: ItemDef, current: ItemDef | undefined): boolean {
+  if (!current) return true;
+  const lvl = (next.unlockLevel ?? 1) - (current.unlockLevel ?? 1);
+  const stat = gearBaseStat(next) - gearBaseStat(current);
+  const tier = TIER_RANK[next.tier ?? 'base'] - TIER_RANK[current.tier ?? 'base'];
+  if (lvl > 0) return stat >= 0 && tier >= 0;
+  if (lvl === 0) return (stat > 0 && tier >= 0) || (tier > 0 && stat >= 0);
+  return false;
+}
+
+export const ITEMS: ItemDef[] = [...POTIONS, ...GEAR.map((item) => ({ ...item, cost: gearPrice(item) }))];
 
 /** Not sold. The shop only lists base items from ITEMS. */
 export const FUTURE_ITEMS: ItemDef[] = [
