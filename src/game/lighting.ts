@@ -4,8 +4,26 @@
  * once; a frame stamps them and composites the buffer a single time.
  */
 
-/** Single knob for the night overlay. 0.55 keeps the lanes outside a light playable. */
-export const AMBIENT_ALPHA = 0.55;
+/**
+ * WORK ORDER "Wild Rift pass 2 (Code engineer)", item 4 [JOSEPH]: "Lighting: raise ambient brightness; reduce or
+ * remove the heavy vignette/spotlight; keep the Diablo 2 tone but readable on a phone."
+ * All values [TEMP]; mirrored in /workspace/sanctuary-canon/wild-rift-view-spec.md.
+ *   ambientAlpha    0.55 -> 0.30   night overlay outside any light (lower = brighter world)
+ *   heroLight       radius 220 -> 340 css px, intensity 1 (wider, softer pool: no hard spotlight edge)
+ *   vignette        edge alpha 0.62 -> 0.22, clear radius 0.20 -> 0.50 of screen height, fade-out 0.78 -> 1.05
+ *   top/bottom tint unchanged (cold top 0.18, warm bottom 0.16): the D2 tone stays.
+ */
+export const LIGHTING = {
+  ambientAlpha: 0.3,
+  heroLightRadius: 340,
+  heroLightIntensity: 1,
+  vignetteAlpha: 0.22,
+  vignetteInner: 0.5,
+  vignetteOuter: 1.05,
+} as const;
+
+/** Single knob for the night overlay (LIGHTING.ambientAlpha). */
+export const AMBIENT_ALPHA = LIGHTING.ambientAlpha;
 export const AMBIENT_DARKNESS = `rgba(8,10,6,${AMBIENT_ALPHA})`;
 
 export interface LightSource {

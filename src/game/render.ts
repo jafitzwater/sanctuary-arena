@@ -1,4 +1,7 @@
+import { mapLen } from './data/mapScale';
 import { totalMS } from './data/moveSpeed';
+import { championMS } from './sim';
+import { advanceLocoClock, CLASS_MOVE_FRAME_MS, locoFrame, locomotionRate } from './locomotion';
 import {
   drawBolt,
   drawFire,
@@ -35,9 +38,8 @@ import {
   CLASS_COLS,
   MOB_ROWS,
   barbarianAttackFrame,
-  barbarianCycleDistance,
+  BARBARIAN_MOTION,
   barbarianMotionCol,
-  barbarianStrideFrame,
   hasBarbarianMotion,
   classSheetCol,
   classSheetRow,
@@ -50,7 +52,6 @@ import {
 import { stampBloodPool } from './decals';
 import { heroGaitStep, heroHoldCompass, readStickMotion } from './gait';
 import type { ActDef } from './data/acts/types';
-import { barbarian as barbarianClass } from './data/classes/barbarian';
 import { projectIso as isoProject, unprojectIso as isoUnproject } from './iso';
 import {
   activeView,
@@ -71,7 +72,7 @@ import {
 import { TEAM_GLOW, baseFloorReady, onBaseFloor, paintBaseFloor, paintTeamGlow } from './art/base-ground';
 import { drawItemBeam, drawItemNameplate, ITEM_LABEL_CLASS, type GroundDrop } from './itemBeam';
 import { FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, mirroredBases, propForm, sceneryFor, type Prop } from './landscape';
-import { AMBIENT_ALPHA, DarkGothicLighting, type LightSource } from './lighting';
+import { AMBIENT_ALPHA, DarkGothicLighting, LIGHTING, type LightSource } from './lighting';
 import type { Vec } from './math';
 import { player } from './query';
 import { GROUND_BASE, groundAt, tilePaint, walkable, type GroundKind } from './terrain';
@@ -116,6 +117,8 @@ interface Pose {
   state: HeroPose;
   /** World distance actually moved while walking/running. Drives the barbarian 12-frame stride (no foot sliding). */
   travel: number;
+  /** Wild Rift pass 2 item 3: locomotion clock (ms), advanced by dt x playbackRate while moving or stick-held. */
+  loco: number;
 }
 
 /** A per-frame jump larger than this is a teleport (recall, respawn), not a step. */
@@ -800,7 +803,9 @@ export class Renderer {
       if (!hasClassSheet(id) || !classSheetReady(id)) return null;
       const motion = id === 'barbarian' ? this.barbarianMotionCol(unit, anim, pose) : null;
       if (motion != null) return { kind: 'class', id, row: classSheetRow(pose.compass), col: motion };
-      const frame = this.sheetAnimFrame(unit, sheetAnim, pose, CLASS_COLS[sheetAnim].frames);
+      const frames = CLASS_COLS[sheetAnim].frames;
+      // Wild Rift pass 2 item 3: class move blocks follow the speed-scaled locomotion clock too.
+      const frame = sheetAnim === 'move' ? locoFrame(pose.loco, CLASS_MOVE_FRAME_MS, frames) : this.sheetAnimFrame(unit, sheetAnim, pose, frames);
       return { kind: 'class', id, row: classSheetRow(pose.compass), col: classSheetCol(sheetAnim, frame) };
     }
     const id = mobSheetId(unit.defId);
@@ -811,8 +816,8 @@ export class Renderer {
 
   /**
    * WORK ORDER "Code engineer - WIRE BARBARIAN MOTION": walk12/attack12 for the barbarian only.
-   * [JOSEPH] LoL-style single MS: the barbarian always plays walk12 (cols 26-37); run12 (cols 38-49) stays in
-   * the sheet unused. Frame comes from distance travelled, so the loop rate follows the current MS. Attack follows the
+   * [JOSEPH] LoL-style single MS, one locomotion: Wild Rift pass 2 item 3 switches it to run12 (cols 38-49) on the
+   * locomotion clock (locomotion.ts: rate = clamp(currentMS / baseMS, 0.5, 2)); walk12 (cols 26-37) stays unused. Attack follows the
    * existing attack cycle with impact frame 7 at the hit. Returns null (old columns) for idle, death, or
    * when the loaded sheet is the old narrow one.
    */
@@ -823,8 +828,10 @@ export class Renderer {
       return barbarianMotionCol('attack', barbarianAttackFrame(phase, unit.attackCycle.phaseElapsedMs, unit.attackInterval));
     }
     if (anim !== 'walk' && anim !== 'run') return null;
-    const dist = barbarianCycleDistance('walk', totalMS(barbarianClass.stats.moveSpeed));
-    return barbarianMotionCol('walk', barbarianStrideFrame(pose.travel, dist));
+    // Wild Rift pass 2 item 3 [JOSEPH] "trigger and hold the run animation": run12 (cols 38-49, 60 ms/frame at
+    // rate 1) on the time-based locomotion clock, so it keeps playing while the stick is held in any of 8 directions.
+    const run = BARBARIAN_MOTION.run;
+    return barbarianMotionCol('run', locoFrame(pose.loco, run.msPerFrame, run.frames));
   }
 
   /** Frame within a sheet animation: attack follows the attack cycle, death plays once over 0.8 s and holds. */
@@ -962,9 +969,10 @@ export class Renderer {
     tint.addColorStop(1, 'rgba(48, 24, 10, 0.16)');
     g.fillStyle = tint;
     g.fillRect(0, 0, cssW, cssH);
-    const vignette = g.createRadialGradient(cssW / 2, cssH / 2, cssH * 0.2, cssW / 2, cssH / 2, cssH * 0.78);
+    // Wild Rift pass 2 item 4 [TEMP]: lighter, wider vignette (lighting.ts LIGHTING).
+    const vignette = g.createRadialGradient(cssW / 2, cssH / 2, cssH * LIGHTING.vignetteInner, cssW / 2, cssH / 2, cssH * LIGHTING.vignetteOuter);
     vignette.addColorStop(0, 'rgba(0,0,0,0)');
-    vignette.addColorStop(1, 'rgba(0,0,0,0.62)');
+    vignette.addColorStop(1, `rgba(0,0,0,${LIGHTING.vignetteAlpha})`);
     g.fillStyle = vignette;
     g.fillRect(0, 0, cssW, cssH);
     this.shadeCanvas = canvas;
@@ -1012,7 +1020,7 @@ export class Renderer {
   private collectUnitLight(unit: Unit, playerId: number, x: number, y: number): void {
     if (!unit.alive) return;
     if (unit.id === playerId) {
-      this.lights.push({ screenX: x, screenY: y - 36, radius: 220, intensity: 1 });
+      this.lights.push({ screenX: x, screenY: y - 36, radius: LIGHTING.heroLightRadius, intensity: LIGHTING.heroLightIntensity });
       if (unit.recall > 0) {
         this.lights.push({ screenX: x, screenY: y, radius: 80, intensity: 0.85, color: 'rgb(90, 160, 255)' });
       }
@@ -1261,11 +1269,14 @@ export class Renderer {
     const shown = prev ? smoothFacing(prev.shown, target, this.frameDt) : target;
     const stepped = state !== 'idle' && step < MAX_STRIDE_STEP ? step : 0;
     const travel = (prev?.travel ?? 0) + stepped;
-    const pose: Pose = { phase, shown, compass, x: unit.x, y: unit.y, elapsed, state, travel };
+    // Wild Rift pass 2 item 3: playbackRate = clamp(championMS / totalMS(msBase), 0.5, 2) [TEMP clamp].
+    const rate = unit.kind === 'champion' ? locomotionRate(championMS(unit), totalMS(unit.msBase)) : 1;
+    const loco = advanceLocoClock(prev?.loco ?? 0, this.frameDt * 1000, rate, state !== 'idle');
+    const pose: Pose = { phase, shown, compass, x: unit.x, y: unit.y, elapsed, state, travel, loco };
     this.poses.set(unit.id, pose);
     if (STICK_LOG && unit.id === playerId) {
       const speed = this.frameDt > 0 ? step / this.frameDt : 0;
-      const trace = globalThis as { __locoLog?: { state: string; frame: number; speed: number; x: number; y: number; dt: number; heroHeight: number; hz: number }[] };
+      const trace = globalThis as { __locoLog?: { state: string; frame: number; speed: number; x: number; y: number; dt: number; heroHeight: number; hz: number; loco: number; rate: number; compass: number }[] };
       if (!trace.__locoLog) trace.__locoLog = [];
       trace.__locoLog.push({
         state: state === 'idle' ? 'IDLE' : state === 'walk' ? 'WALK' : 'RUN',
@@ -1276,6 +1287,9 @@ export class Renderer {
         dt: this.frameDt,
         heroHeight: heroDrawHeight(state),
         hz: heroCycleHz(state),
+        loco,
+        rate,
+        compass,
       });
       if (trace.__locoLog.length > 400) trace.__locoLog.shift();
     }
@@ -1606,7 +1620,7 @@ export class Renderer {
     for (let i = 1; i < posts.length; i++) {
       const a = posts[i - 1];
       const b = posts[i];
-      if (Math.hypot(a.x - b.x, a.y - b.y) > 90) continue;
+      if (Math.hypot(a.x - b.x, a.y - b.y) > mapLen(90)) continue;
       const pa = at(a.x, a.y);
       const pb = at(b.x, b.y);
       ctx.beginPath();
