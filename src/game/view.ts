@@ -108,8 +108,10 @@ export function characterScale(cssH: number): number {
 // ---- Minimap ---------------------------------------------------------------------------------------------
 /**
  * Wild Rift pass 2 item 5 [JOSEPH]: "Minimap: raise it so it is fully visible above the stick area; adjustable
- * size with a phone-readable default." Values [TEMP]; style.css body.touch #minimap-toggle mirrors touchBottom,
- * touchLeft and topClear (test/wild-rift-pass2.ts checks the css matches).
+ * size with a phone-readable default." Pass 3 order item 1 [JOSEPH]: "minimap top-left; game stats/timer
+ * centered in the top bar; gold counter directly under the minimap." Values [TEMP]; style.css
+ * body.touch #minimap-toggle / #gold-badge mirror touchTop, touchLeft, goldGap and belowCard
+ * (test/wild-rift-pass2.ts checks the css matches).
  */
 export const MINIMAP = {
   /** [TEMP] Width in css px; height follows the map aspect (11:7, 3300 x 2100 at MAP_SCALE 0.75). Was 150. */
@@ -118,26 +120,33 @@ export const MINIMAP = {
   maxW: 240,
   /** New key so the old 150 px saved width does not hide the new default. */
   storageKey: 'sa.minimapW2',
-  /** Touch: card bottom edge above the screen bottom (the resting stick is bottom 16 + 90 = 106 px). */
-  touchBottom: 132,
+  /** Touch: card top edge below the screen top (pass 3: top-left corner, over the top bar's left end). */
+  touchTop: 4,
   touchLeft: 8,
-  /** Touch: the card's top edge never rises above this (top bar is 32 px). */
-  topClear: 44,
-  /** The resting stick's top edge (style.css body.touch #stick: bottom 16px, height 90px). */
+  /** Touch: gap from the card's bottom edge to the gold counter under it. */
+  goldGap: 6,
+  /** Touch: gold counter height (style.css body.touch #gold-badge, about 23 px). */
+  goldH: 24,
+  /** The resting stick's top edge above the screen bottom (style.css body.touch #stick: bottom 16px, height 90px). */
   stickTop: 106,
+  /** Clear gap kept between the gold counter and the resting stick. */
+  stickGap: 16,
+  /** Css px the card keeps free under itself: gold gap + gold + stick gap + stick (6 + 24 + 16 + 106). */
+  belowCard: 152,
 } as const;
 
 /**
- * Pure: the touch map card for a viewport height. Width is the chosen width clamped so the card fits between the
- * top bar and the stick; it is anchored bottom-left at (touchLeft, touchBottom).
+ * Touch box for a wanted width on a viewport of height viewH: top-left card, gold counter right under it, and the
+ * whole stack above the resting stick. A short screen shrinks the width so nothing overlaps.
  */
-export function minimapTouchBox(viewH: number, wantW: number, mapW: number, mapH: number, safeBottom = 0) {
-  const room = viewH - MINIMAP.touchBottom - safeBottom - MINIMAP.topClear;
+export function minimapTouchBox(viewH: number, wantW: number, mapW: number, mapH: number, safeTop = 0, safeBottom = 0) {
+  const top = MINIMAP.touchTop + safeTop;
+  const room = viewH - top - safeBottom - MINIMAP.belowCard;
   const fitW = Math.floor((room * mapW) / mapH);
   const w = Math.min(clampMinimapW(wantW), fitW);
   const h = minimapH(w, mapW, mapH);
-  const bottom = MINIMAP.touchBottom + safeBottom;
-  return { left: MINIMAP.touchLeft, bottom, w, h, top: viewH - bottom - h };
+  const goldTop = top + h + MINIMAP.goldGap;
+  return { left: MINIMAP.touchLeft, top, w, h, bottom: top + h, goldTop, goldBottom: goldTop + MINIMAP.goldH };
 }
 
 export function clampMinimapW(w: number): number {
