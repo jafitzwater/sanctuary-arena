@@ -253,6 +253,19 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
     sim.shake = 14;
   }
 
+  // Item 15 [DOC]: "A boss drops a health potion and a mana potion instead." When the last
+  // of a cave pack falls to the player, one of each goes to the player's potions, up to
+  // the belt cap. Drops for AI killers are not tracked (the repo has no AI potions).
+  if (unit.pack && killer?.id === sim.playerId && sim.map.dens?.some((den) => den.id === unit.pack && den.cave)) {
+    const packLeft = sim.units.some((other) => other.alive && other.pack === unit.pack);
+    if (!packLeft) {
+      const cap = potionCap(sim.loadout.belt);
+      sim.potions.health = Math.min(cap, sim.potions.health + 1);
+      sim.potions.mana = Math.min(cap, sim.potions.mana + 1);
+      banner(sim, `${unit.name} dropped a health potion and a mana potion.`);
+    }
+  }
+
   if (unit.objective === 'dragon' && killer && (killer.team === 'ally' || killer.team === 'enemy')) {
     for (const heroUnit of sim.units) {
       if (!heroUnit.alive || heroUnit.kind !== 'champion' || heroUnit.team !== killer.team) continue;
