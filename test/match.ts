@@ -7,6 +7,7 @@ import { distToPolyline } from '../src/game/math';
 import { act1 } from '../src/game/data/acts/act1';
 import { sanctuary } from '../src/game/data/acts/sanctuary';
 import { getAct } from '../src/game/data/acts';
+import { MAP_SCALE } from '../src/game/data/mapScale';
 import { barbarian, STICK_IDLE_TILT } from '../src/game/data/classes/barbarian';
 import { getClass } from '../src/game/data/classes';
 import { grantXp, MAX_LEVEL, recomputeHero, tryAssignBelt, tryBuy, trySpendAttribute, tryUpgrade, damageUnit } from '../src/game/combat';
@@ -403,15 +404,16 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
     assert.ok(gap < 80, `${spec.name} is ${gap.toFixed(1)}px off ${path.name}`);
   }
   const hero = player(sim);
-  hero.x = 2360;
-  hero.y = 1240;
+  // Wild Rift pass 2 item 1: design coordinates times MAP_SCALE (same spots on the scaled map).
+  hero.x = 2360 * MAP_SCALE;
+  hero.y = 1240 * MAP_SCALE;
   updateSim(sim, emptyInput(), 0.1);
-  assert.ok(Math.hypot(hero.x - 2360, hero.y - 1240) < 40, 'the blood moor road stays open');
-  hero.x = 1500;
-  hero.y = 1100;
+  assert.ok(Math.hypot(hero.x - 2360 * MAP_SCALE, hero.y - 1240 * MAP_SCALE) < 40, 'the blood moor road stays open');
+  hero.x = 1500 * MAP_SCALE;
+  hero.y = 1100 * MAP_SCALE;
   updateSim(sim, emptyInput(), 0.1);
-  assert.ok(Math.hypot(hero.x - 1500, hero.y - 1100) > 40, 'ground between the paths blocks movement');
-  assert.ok(walkable(sanctuary, 1680, 160), 'a den clearing stays open');
+  assert.ok(Math.hypot(hero.x - 1500 * MAP_SCALE, hero.y - 1100 * MAP_SCALE) > 40, 'ground between the paths blocks movement');
+  assert.ok(walkable(sanctuary, 1680 * MAP_SCALE, 160 * MAP_SCALE), 'a den clearing stays open');
   // Item 23: the river no longer blocks movement; walkability is the same with or without it.
   const dry = { ...sanctuary, river: undefined };
   for (let x = 0; x <= sanctuary.width; x += 40) {
@@ -419,8 +421,8 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
       assert.equal(walkable(sanctuary, x, y), walkable(dry, x, y), `river blocks ${x},${y}`);
     }
   }
-  assert.ok(walkable(sanctuary, sanctuary.playerBase.x + 150, sanctuary.playerBase.y), 'camp spawn stays open');
-  assert.equal(groundAt(sanctuary, 2360, 1240), 'path', 'the blood moor cobbles stay a path');
+  assert.ok(walkable(sanctuary, sanctuary.playerBase.x + 150 * MAP_SCALE, sanctuary.playerBase.y), 'camp spawn stays open');
+  assert.equal(groundAt(sanctuary, 2360 * MAP_SCALE, 1240 * MAP_SCALE), 'path', 'the blood moor cobbles stay a path');
   for (const path of sanctuary.paths ?? []) {
     const mid = path.lane[Math.floor(path.lane.length / 2)];
     assert.equal(groundAt(sanctuary, mid.x, mid.y), 'path', `${path.name} is a continuous cobble lane`);
@@ -442,7 +444,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
       assert.ok((sanctuary.towers ?? []).some((other) => other.team !== tower.team && near(flip(tower), other)), `${tower.name} has a mirrored tower`);
     }
   }
-  assert.equal(groundAt(sanctuary, 1500, 1100), 'grass', 'open ground between the paths is grass');
+  assert.equal(groundAt(sanctuary, 1500 * MAP_SCALE, 1100 * MAP_SCALE), 'grass', 'open ground between the paths is grass');
   assert.equal(groundAt(sanctuary, 20, 20), 'grass', 'the map edge is grass, not a void');
   for (let y = 0; y < sanctuary.height; y += 80) {
     for (let x = 0; x < sanctuary.width; x += 80) {
@@ -457,7 +459,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   const tent = sceneryFor(sanctuary).find((prop) => prop.kind === 'tent' && prop.block > 0);
   assert.ok(tent && !walkable(sanctuary, tent.x, tent.y), 'a tent blocks passage');
   // Item 7 moved the mirrored center lane; same shoulder offset from its new segment.
-  assert.equal(groundAt(sanctuary, 2598, 1372), 'blend', 'the lane shoulder uses a grass-to-dirt transition');
+  assert.equal(groundAt(sanctuary, 2598 * MAP_SCALE, 1372 * MAP_SCALE), 'blend', 'the lane shoulder uses a grass-to-dirt transition');
   const decorLimit = sanctuary.laneWidth / 2 + DECOR_MARGIN;
   for (const prop of sceneryFor(sanctuary)) {
     if (prop.kind !== 'tree' && prop.kind !== 'stump' && prop.kind !== 'rock' && prop.kind !== 'fence') continue;
@@ -478,7 +480,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
       const right = clearHalf(sample.x, sample.y, sample.nx, sample.ny, -1);
       const width = left + right;
       narrow = Math.min(narrow, width);
-      assert.ok(width >= 5 * FLOOR_STEP - 1, `${path.name} corridor is ${width.toFixed(0)} at ${sample.x.toFixed(0)},${sample.y.toFixed(0)}`);
+      assert.ok(width >= 5 * FLOOR_STEP * MAP_SCALE - 1, `${path.name} corridor is ${width.toFixed(0)} at ${sample.x.toFixed(0)},${sample.y.toFixed(0)}`);
       assert.equal(
         walkable(sanctuary, sample.x + sample.nx * (LANE_CLEAR_HALF - 2), sample.y + sample.ny * (LANE_CLEAR_HALF - 2)),
         true,
@@ -513,7 +515,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
       else left = Math.min(left, inner);
     }
     const width = left + right;
-    assert.ok(Math.abs(width - 6 * FLOOR_STEP) < 1, `${side} gate is ${width.toFixed(2)}, expected ${ (6 * FLOOR_STEP).toFixed(2) }`);
+    assert.ok(Math.abs(width - 6 * FLOOR_STEP * MAP_SCALE) < 1, `${side} gate is ${width.toFixed(2)}, expected ${ (6 * FLOOR_STEP * MAP_SCALE).toFixed(2) }`);
     console.log(`${side} gate ${width.toFixed(1)} (${(width / FLOOR_STEP).toFixed(2)} tiles)`);
     for (let t = -1; t <= 1; t += 0.25) {
       const off = t * (GATE_HALF - 4);
@@ -603,7 +605,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.equal(animFrame(5 * RUN_FRAME_MS + 5, RUN_FRAME_MS, RUN_FRAMES), kept, 'a facing change does not reset the run frame');
   assert.equal(kept, 5);
   assert.equal(turned, 2);
-  const open = { x: 1760, y: 360 };
+  const open = { x: 1760 * MAP_SCALE, y: 360 * MAP_SCALE }; // pass 2 item 1: same north-road spot, scaled
   for (let dir = 0; dir < 8; dir++) {
     const sim = pastOpening(createMatch(sanctuary, barbarian, 20 + dir));
     const hero = player(sim);
@@ -754,11 +756,11 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   for (const den of dens) {
     for (const path of sim.map.paths ?? []) {
       const gap = distToPolyline(den, path.lane);
-      assert.ok(gap > 140, `${den.unit} den is ${gap.toFixed(0)}px from ${path.name}`);
+      assert.ok(gap > 140 * MAP_SCALE, `${den.unit} den is ${gap.toFixed(0)}px from ${path.name}`);
     }
     if (sim.map.river) {
       const river = distToPolyline(den, sim.map.river);
-      assert.ok(river > 120, `${den.unit} den is ${river.toFixed(0)}px from the river`);
+      assert.ok(river > 120 * MAP_SCALE, `${den.unit} den is ${river.toFixed(0)}px from the river`);
     }
     assert.ok(sim.units.some((unit) => unit.alive && unit.pack === den.id && unit.team === 'wild'));
   }

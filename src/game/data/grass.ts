@@ -12,11 +12,12 @@
  * Excluded (NEEDS JOSEPH): "true sight" (no such system or source exists yet); exact patch
  * placement (the map has no bushes or marked chokepoints). TEMP: radius, side offset.
  */
+import { mapLen } from './mapScale';
 import type { PathDef } from './acts/types';
 
 export const GRASS_COUNT = 7; // [JOSEPH] "6-8 patches"
 export const GRASS_RADIUS = 80; // [TEMP]
-export const GRASS_SIDE = 140; // [TEMP] beside the road edge (road half-width 84)
+export const GRASS_SIDE = mapLen(140); // [TEMP] beside the road edge; map layout, follows MAP_SCALE (pass 2 item 1)
 
 export interface GrassPatch {
   x: number;

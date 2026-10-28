@@ -1,6 +1,7 @@
 import { WAVE_INTERVAL } from '../waves';
 import { CAVE_RESPAWN } from '../caves';
 import type { ActDef, PathDef, PathId, TowerSpawn } from './types';
+import { MAP_SCALE, scaleAct } from '../mapScale';
 
 
 /**
@@ -185,7 +186,8 @@ const seals = [north, center, south].flatMap((path) =>
 );
 
 
-export const sanctuary: ActDef = {
+/** The map as designed (scale 1). The game uses `sanctuary`, which is this times MAP_SCALE. */
+export const SANCTUARY_DESIGN: ActDef = {
   id: 'sanctuary',
   actNumber: 1,
   name: 'Sanctuary',
@@ -283,5 +285,11 @@ export const sanctuary: ActDef = {
     fog: '#1a1214',
   },
 };
+
+/**
+ * Wild Rift pass 2, item 1 [JOSEPH]: one global MAP_SCALE (0.75 [TEMP]) shrinks the physical map; layout,
+ * proportions and gameplay values are unchanged (data/mapScale.ts).
+ */
+export const sanctuary: ActDef = scaleAct(SANCTUARY_DESIGN, MAP_SCALE);
 
 export const SANCTUARY_PATHS: PathId[] = ['north', 'center', 'south'];
