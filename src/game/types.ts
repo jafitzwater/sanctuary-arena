@@ -194,6 +194,8 @@ export interface Sim {
   heraldIn: number;
   heraldCount: number;
   shrineIn: number[];
+  /** Item 16: health orbs and pools. refill > 0 means consumed and waiting; stand is seconds inside per unit id. */
+  orbs: { kind: 'orb' | 'pool'; x: number; y: number; refill: number; stand: Record<number, number> }[];
   /** Item 17: hiding grass patches. */
   grass: { x: number; y: number; r: number }[];
   banner: { text: string; t: number } | null;

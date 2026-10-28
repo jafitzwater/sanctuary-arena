@@ -1,5 +1,6 @@
 import { waveMob, waveStrength, WAVE_SIZE } from './data/waves';
 import { itemById } from './data/items';
+import { ORB_RADIUS, ORB_REFILL, orbRestore, orbSpots, POOL_RADIUS, POOL_STAND } from './data/orbs';
 import { CAVE_RESET } from './data/caves';
 import { grassPatches, hiddenUnits } from './data/grass';
 import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
@@ -90,6 +91,7 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     heraldIn: 22,
     heraldCount: 0,
     shrineIn: (map.shrines ?? []).map(() => 0),
+    orbs: orbSpots(map.paths ?? []).map((spot) => ({ ...spot, ...clampToPlayable(map, spot.x, spot.y), refill: 0, stand: {} })),
     grass: grassPatches(map.paths ?? []),
     banner: null,
     tip: 'Last-hit Fallen for gold. Points spends skills and stats. Shop at the Encampment.',
@@ -479,6 +481,7 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
   updateSeals(sim, step);
   updatePits(sim, step);
   updateShrines(sim, step);
+  updateOrbs(sim, step);
 
   for (const fx of sim.fx) {
     fx.t += step;
@@ -1534,6 +1537,34 @@ function spawnHerald(sim: Sim, x: number, y: number, baron: boolean): void {
   unit.color = baron ? '#6a2040' : '#8a7040';
   unit.accent = '#e6c864';
 }
+
+/**
+ * Item 16 [DOC]/[JOSEPH]: any living champion takes an orb on touch, or a pool after standing
+ * in it for POOL_STAND seconds. Each refills ORB_REFILL seconds after it is consumed.
+ */
+function updateOrbs(sim: Sim, dt: number): void {
+  for (const orb of sim.orbs) {
+    if (orb.refill > 0) {
+      orb.refill = Math.max(0, orb.refill - dt);
+      continue;
+    }
+    const reach = orb.kind === 'pool' ? POOL_RADIUS : ORB_RADIUS;
+    const stand: Record<number, number> = {};
+    for (const unit of sim.units) {
+      if (!unit.alive || unit.kind !== 'champion') continue;
+      if (Math.hypot(unit.x - orb.x, unit.y - orb.y) > reach + unit.radius) continue;
+      stand[unit.id] = (orb.stand[unit.id] ?? 0) + dt;
+      if (orb.kind === 'pool' && stand[unit.id] < POOL_STAND) continue;
+      // [DOC] "A health orb restores only health. A pool restores health and mana."
+      unit.hp = orbRestore(unit.hp, unit.maxHp);
+      if (orb.kind === 'pool') unit.mana = orbRestore(unit.mana, unit.maxMana);
+      orb.refill = ORB_REFILL;
+      if (unit.id === sim.playerId) banner(sim, orb.kind === 'pool' ? 'The pool restores you.' : 'A health orb restores you.');
+      break;
+    }
+    orb.stand = orb.refill > 0 ? {} : stand;
+    }
+  }
 
 /** Item 17 [DOC]/[JOSEPH]: mark units hidden in grass; leaving the grass reveals them. */
 function updateGrass(sim: Sim): void {
