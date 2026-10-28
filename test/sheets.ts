@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  BARBARIAN_MOTION, BARBARIAN_MOTION_COLS, barbarianAttackFrame, barbarianCycleDistance, barbarianMotionCol,
+  barbarianStrideFrame, hasBarbarianMotion,
   CLASS_COLS, CLASS_SHEET, CLASS_SHEET_IDS, MOB_ROWS, MOB_SHEET, classSheetCol, classSheetRow, mobSheetCol, mobSheetId, mobSheetRow,
   type SheetAnim,
 } from '../src/game/art/sheet-frames';
@@ -35,16 +37,48 @@ const frameProbe = [-3, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 15];
 // Every class sheet: 8 directions x 4 states x any frame lands inside 1152x512.
 for (const id of CLASS_SHEET_IDS) {
   const [w, h] = pngSize(`public/sprites/classes/${id}-full-sheet-64.png`);
-  // Barbarian sheet: run 18-25, walk12 26-37, run12 38-49, attack12 50-61 (unwired art): 62 cols = 3968 wide. Others stay 18 cols = 1152.
+  // Barbarian sheet: run 18-25, walk12 26-37, run12 38-49, attack12 50-61 (wired for the barbarian only): 62 cols = 3968 wide. Others stay 18 cols = 1152.
   const expectedW = id === 'barbarian' ? 3968 : CLASS_SHEET.cols * CLASS_SHEET.cell;
   assert.deepEqual([w, h], [expectedW, CLASS_SHEET.rows * CLASS_SHEET.cell]);
   assert.deepEqual([w, h], [id === 'barbarian' ? 3968 : 1152, 512]);
+  if (id === 'barbarian') assert.equal(w / CLASS_SHEET.cell, BARBARIAN_MOTION_COLS);
   for (let c = 0; c < 8; c++) for (const a of anims) for (const f of frameProbe) {
     const row = classSheetRow(c);
     const col = classSheetCol(a, f);
     assert.ok(row >= 0 && row < CLASS_SHEET.rows, `${id} row ${row}`);
     assert.ok(col >= CLASS_COLS[a].col && col < CLASS_COLS[a].col + CLASS_COLS[a].frames && col < CLASS_SHEET.cols, `${id} ${a} col ${col}`);
   }
+}
+
+// Barbarian motion (WORK ORDER "WIRE BARBARIAN MOTION"): walk12 26-37, run12 38-49, attack12 50-61.
+assert.equal(hasBarbarianMotion(62), true);
+assert.equal(hasBarbarianMotion(26), false); // old 1664-wide sheet -> old columns
+for (const [a, first] of [['walk', 26], ['run', 38], ['attack', 50]] as const) {
+  for (const f of [-13, -1, 0, 5, 11, 12, 25]) {
+    const col = barbarianMotionCol(a, f);
+    assert.ok(col >= first && col < first + 12 && col < BARBARIAN_MOTION_COLS, `barbarian ${a} col ${col}`);
+  }
+  assert.equal(barbarianMotionCol(a, 0), first);
+  assert.equal(barbarianMotionCol(a, 11), first + 11);
+}
+// Stride follows distance: at the class walk speed (144) a 12-frame loop takes the manifest 0.96 s.
+const walkLoop = barbarianCycleDistance('walk', 144);
+assert.ok(Math.abs(walkLoop - 144 * 0.96) < 1e-9);
+assert.ok(Math.abs(barbarianCycleDistance('run', 216) - 216 * 0.72) < 1e-9);
+assert.equal(barbarianStrideFrame(0, walkLoop), 0);
+assert.equal(barbarianStrideFrame(walkLoop / 2, walkLoop), 6); // contact frame 6 at half loop
+assert.equal(barbarianStrideFrame(walkLoop * 3 + 1e-6, walkLoop), 0);
+// Half the speed -> the same distance takes twice as long, but the frame for a distance is unchanged.
+for (let f = 0; f < 12; f++) assert.equal(barbarianStrideFrame((walkLoop / 12) * (f + 0.5), walkLoop), f);
+// Attack: windup spans frames 0-6, impact frame 7 at the hit (backswing start), recovery to 11.
+assert.equal(barbarianAttackFrame('Windup', 0, 1), 0);
+assert.equal(barbarianAttackFrame('Windup', 299, 1), 6);
+assert.equal(barbarianAttackFrame('Backswing', 0, 1), BARBARIAN_MOTION.attack.impact);
+assert.equal(barbarianAttackFrame('Backswing', 1e6, 1), 11);
+assert.equal(barbarianAttackFrame('Windup', 1e6, 0.5), 6);
+for (const ph of ['Windup', 'Backswing'] as const) for (let ms = 0; ms <= 400; ms += 7) {
+  const fr = barbarianAttackFrame(ph, ms, 1.1);
+  assert.ok(fr >= 0 && fr < 12);
 }
 
 // Every mob sheet: 8 directions x 4 states x any frame lands inside 384x2048, within its direction block.
@@ -72,10 +106,12 @@ for (const id of ['rogue', 'valkyrie', 'act2-mercenary', 'act3-mercenary']) {
 const failures: string[] = [];
 const check = (ok: boolean, msg: string) => { if (!ok) failures.push(msg); };
 const DIRS = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'] as const; // sheet row order
-// Class blocks (cols): idle 0, walk 1-8, attack 9-12, death 13-17, plus run 18-25 on the barbarian sheet (unwired art).
+// Class blocks (cols): idle 0, walk 1-8, attack 9-12, death 13-17, plus run 18-25, walk12 26-37, run12 38-49, attack12 50-61 on the barbarian sheet.
 const CLASS_BLOCKS: Array<{ name: string; col: number; frames: number; only?: string }> = [
   { name: 'idle', col: 0, frames: 1 }, { name: 'walk', col: 1, frames: 8 }, { name: 'attack', col: 9, frames: 4 },
   { name: 'death', col: 13, frames: 5 }, { name: 'run', col: 18, frames: 8, only: 'barbarian' },
+  { name: 'walk12', col: 26, frames: 12, only: 'barbarian' }, { name: 'run12', col: 38, frames: 12, only: 'barbarian' },
+  { name: 'attack12', col: 50, frames: 12, only: 'barbarian' },
 ];
 for (const id of CLASS_SHEET_IDS) {
   const png = readPng(`public/sprites/classes/${id}-full-sheet-64.png`);
