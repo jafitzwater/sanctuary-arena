@@ -1,6 +1,6 @@
 import { mapLen } from './data/mapScale';
 import type { ActDef } from './data/acts/types';
-import { FLOOR_STEP, inGateSlot, LANE_CLEAR_HALF, sceneryFor } from './landscape';
+import { FLOOR_STEP, inGateSlot, inJungleInterior, LANE_CLEAR_HALF, sceneryFor } from './landscape';
 import { clamp, distToPolyline, nearestOnPolyline, type Vec } from './math';
 
 /** Outer cliff. Inside this margin the ground is open only on roads and clearings. */
@@ -115,6 +115,8 @@ export function walkable(map: ActDef, x: number, y: number): boolean {
   if (inCorridor(map, x, y) || inGateSlot(map, x, y)) return true;
   if (hitProp(map, x, y)) return false;
   if (inOpening(map, x, y)) return true;
+  // Pass 3 order item 2: the interior jungle between the roads is fully walkable.
+  if (inJungleInterior(map, x, y)) return true;
   const road = nearestRoad(map, x, y);
   if (inPlaza(map, x, y)) return true;
   return road <= LANE_CLEAR_HALF;

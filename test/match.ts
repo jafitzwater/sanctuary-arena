@@ -20,7 +20,7 @@ import { dealTeams } from '../src/game/teams';
 import { FUTURE_ITEMS, isShopItem, ITEMS } from '../src/game/data/items';
 import { UNIT_DEFS } from '../src/game/data/units';
 import { emptyInput, type FrameInput, type Sim } from '../src/game/types';
-import { campGates, DECOR_MARGIN, FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, sceneryFor } from '../src/game/landscape';
+import { campGates, DECOR_MARGIN, FLOOR_STEP, GATE_HALF, inJungleInterior, LANE_CLEAR_HALF, sceneryFor } from '../src/game/landscape';
 import { advanceHeroPhase, heroCycleHz, heroDrawHeight, smoothFacing } from '../src/game/art/figures';
 import { getAutoTarget } from '../src/game/mobileInput';
 import { FOOTPRINT, GROUND_BASE, groundAt, slide, tilePaint, walkable } from '../src/game/terrain';
@@ -413,7 +413,9 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   hero.x = 1500 * MAP_SCALE;
   hero.y = 1100 * MAP_SCALE;
   updateSim(sim, emptyInput(), 0.1);
-  assert.ok(Math.hypot(hero.x - 1500 * MAP_SCALE, hero.y - 1100 * MAP_SCALE) > 40, 'ground between the paths blocks movement');
+  // Pass 3 order item 2: the interior jungle between the roads is open ground now.
+  assert.ok(Math.hypot(hero.x - 1500 * MAP_SCALE, hero.y - 1100 * MAP_SCALE) < 40, 'ground between the paths is walkable');
+  assert.equal(walkable(sanctuary, 200, 300), false, 'outer ground beyond the north road still blocks');
   assert.ok(walkable(sanctuary, 1680 * MAP_SCALE, 160 * MAP_SCALE), 'a den clearing stays open');
   // Item 23: the river no longer blocks movement; walkability is the same with or without it.
   const dry = { ...sanctuary, river: undefined };
@@ -565,7 +567,9 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.ok(Math.abs(strideLength(216, RUN_FRAME_MS, RUN_FRAMES) - 103.68) < 0.01, 'run stride at 216 is 103.68px');
   assert.ok(Math.abs(strideLength(144, WALK_FRAME_MS, WALK_FRAMES) - 66.816) < 0.01, 'walk stride at 144 is 66.816px');
   const rocks = sceneryFor(sanctuary).filter((prop) => prop.kind === 'rock');
-  assert.ok(rocks.length > 24, 'boulder walls line the lanes');
+  // Pass 3 item 2: boulders line only the outer side of the roads; the interior jungle is open.
+  assert.ok(rocks.length > 12, 'boulder walls line the outer lanes');
+  assert.ok(rocks.every((rock) => !inJungleInterior(sanctuary, rock.x, rock.y)), 'no boulder inside the open jungle');
   assert.notEqual(animFrame(elapsed, RUN_FRAME_MS, RUN_FRAMES), 0, 'a mid-cycle run is not frame 0');
   const runSeq: number[] = [];
   let clock = 0;

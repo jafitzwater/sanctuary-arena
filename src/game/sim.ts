@@ -942,9 +942,9 @@ function strikes(sim: Sim, input: FrameInput, dt: number): void {
   for (const unit of sim.units) {
     if (unit.kind === 'champion' || !unit.alive || unit.stun > 0) continue;
     if (unit.kind === 'tower' || unit.kind === 'base') {
-      // [JOSEPH] Wild Rift pass 2 item 1: at MAP_SCALE 0.75 with tower range unchanged (300), the Countess cave sits
-      // 283 px from the enemy Blood Moor inner tower, so the tower would farm the camp. On the design map no camp was
-      // ever in tower range; skipping wild units keeps that (Wild Rift turrets never shoot jungle camps either).
+      // NEEDS JOSEPH (Wild Rift pass 2 item 1, re-checked in pass 3 item 2): towers and bases skip wild units.
+      // Since pass 3 every cave sits at least 136 px outside every tower's range (test/match.ts), so this filter
+      // only matters when a boss chases a hero under a tower; Wild Rift turrets never shoot jungle camps either.
       const pool = enemiesIn(sim, unit, unit.attackRange).filter((other) => other.kind !== 'base' && other.team !== 'wild');
       const minions = pool.filter((other) => other.kind === 'minion');
       const choice = closest(unit, minions.length ? minions : pool);

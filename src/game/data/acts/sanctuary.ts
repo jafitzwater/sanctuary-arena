@@ -219,12 +219,13 @@ export const SANCTUARY_DESIGN: ActDef = {
     { x: 3180, y: 1500, kind: 'mana' },
   ],
   // Item 15 [DOC]/[JOSEPH]: the 6 wilderness dens are replaced by 4 cave bosses.
-  // Coordinates reuse four of the old den spots, which sit off the roadways [TEMP].
+  // Pass 3 order item 2 [TEMP]: caves moved deep into the open middle jungle, clear of every
+  // tower's range (+60) and the roads, as two mirrored pairs (W - x, H - y).
   dens: [
-    { id: 1, x: 2480, y: 860, unit: 'countess', count: 1, respawn: CAVE_RESPAWN, cave: true },
-    { id: 2, x: 900, y: 1500, unit: 'radament', count: 1, respawn: CAVE_RESPAWN, cave: true },
-    { id: 3, x: 2920, y: 1680, unit: 'council-member', count: 3, respawn: CAVE_RESPAWN, cave: true },
-    { id: 4, x: 1400, y: 2050, unit: 'izual', count: 1, respawn: CAVE_RESPAWN, cave: true },
+    { id: 1, x: 1453, y: 1053, unit: 'countess', count: 1, respawn: CAVE_RESPAWN, cave: true },
+    { id: 2, x: 1107, y: 1493, unit: 'radament', count: 1, respawn: CAVE_RESPAWN, cave: true },
+    { id: 3, x: 3293, y: 1307, unit: 'council-member', count: 3, respawn: CAVE_RESPAWN, cave: true },
+    { id: 4, x: 2947, y: 1747, unit: 'izual', count: 1, respawn: CAVE_RESPAWN, cave: true },
   ],
   // Mirrored with the roadways (paint only, item 23).
   river: [
