@@ -7,7 +7,7 @@ import { distToPolyline } from '../src/game/math';
 import { act1 } from '../src/game/data/acts/act1';
 import { sanctuary } from '../src/game/data/acts/sanctuary';
 import { getAct } from '../src/game/data/acts';
-import { barbarian, STICK_GAIT_HOLD_MS, STICK_IDLE_TILT, STICK_RUN_TILT } from '../src/game/data/classes/barbarian';
+import { barbarian, STICK_IDLE_TILT } from '../src/game/data/classes/barbarian';
 import { getClass } from '../src/game/data/classes';
 import { grantXp, MAX_LEVEL, recomputeHero, tryAssignBelt, tryBuy, trySpendAttribute, tryUpgrade, damageUnit } from '../src/game/combat';
 import { SKILLS } from '../src/game/skills';
@@ -27,16 +27,13 @@ import {
   animFrame,
   HERO_COMBAT_BANDS,
   HERO_RUN_RECTS,
-  HERO_RUN_SPEED,
   HERO_WALK_RECTS,
   heroCompass,
   heroDrawOrigin,
   commitStickGait,
   heroGaitStep,
   heroHoldCompass,
-  heroMoveScale,
   stepStickGait,
-  type StickGaitMemory,
   heroRectOverlapsCombat,
   heroSheetRow,
   heroSourceRect,
@@ -149,8 +146,9 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   const hero = player(sim);
   assert.equal(hero.maxHp, 240);
   assert.equal(hero.ad, 15);
-  assert.equal(hero.moveSpeed, 216);
-  assert.equal(barbarian.stats.walkSpeed, 144);
+  // [JOSEPH] single MS: Barbarian base 345 -> 345 * 144/345 = 144 px/s (the old walk speed).
+  assert.equal(barbarian.stats.moveSpeed, 345);
+  assert.ok(Math.abs(hero.moveSpeed - 144) < 1e-9);
   const raven = sim.units.find((unit) => unit.defId === 'blood-raven');
   assert.equal(raven?.moveSpeed, 93);
   assert.ok(raven && hero.moveSpeed > raven.moveSpeed, 'the hero should still catch Blood Raven');
@@ -655,7 +653,8 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
     const elevens = seen.filter((frame) => frame === 11).length;
     assert.ok(zeros >= 2 && elevens >= 2, `dir ${dir} frames ${seen.join(',')}`);
     const travelled = Math.hypot(hero.x - open.x, hero.y - open.y);
-    assert.ok(travelled > 180, `dir ${dir} only moved ${travelled.toFixed(1)}px`);
+    // [JOSEPH] single MS 144 px/s over 25 x 40 ms ticks (~144px); was > 180 at the old 216 run.
+    assert.ok(travelled > 130, `dir ${dir} only moved ${travelled.toFixed(1)}px`);
   }
   let slideCase = false;
   for (const fence of sceneryFor(sanctuary).filter((prop) => prop.kind === 'fence')) {
@@ -986,9 +985,8 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   const y0 = hero.y;
   updateSim(sim, camp, 0.05);
   const campSpeed = Math.hypot(hero.x - x0, hero.y - y0) / 0.05;
-  assert.ok(campSpeed >= HERO_RUN_SPEED, `full stick in camp was ${campSpeed.toFixed(1)}`);
-  assert.equal(heroMoveScale(true, true, 144, 216), 1);
-  assert.equal(heroMoveScale(true, false, 144, 216), 144 / 216);
+  // [JOSEPH] one MS everywhere: full stick in camp is the single current MS (144), never a run.
+  assert.ok(Math.abs(campSpeed - 144) < 1, `full stick in camp was ${campSpeed.toFixed(1)}`);
 
   const click = pastOpening(createMatch(sanctuary, barbarian, 1));
   const walker = player(click);
@@ -999,7 +997,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   const wy = walker.y;
   updateSim(click, dest, 0.05);
   const walkSpeed = Math.hypot(walker.x - wx, walker.y - wy) / 0.05;
-  assert.ok(walkSpeed < HERO_RUN_SPEED && walkSpeed > 100, `town click-to-move was ${walkSpeed.toFixed(1)}`);
+  assert.ok(Math.abs(walkSpeed - 144) < 1, `town click-to-move was ${walkSpeed.toFixed(1)}`);
 
   let elapsed = 0;
   let compass: number | null = null;
@@ -1008,7 +1006,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
     compass = heroHoldCompass(compass, tick * 0.35);
     const gait = heroGaitStep(elapsed, 216 * 0.016, 0.016);
     elapsed = gait.elapsed;
-    assert.equal(gait.running, true);
+    assert.equal(gait.moving, true);
     assert.equal(gait.speed, 216);
     frames.push({ row: heroSheetRow(compass), frame: animFrame(elapsed, RUN_FRAME_MS, RUN_FRAMES) });
   }
@@ -1025,13 +1023,13 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.ok(lightRun[3] - lightRun[1] > lightWalk[3] - lightWalk[1], 'run cell is not the walk strip');
 }
 
-function campSpeed(gait: 'idle' | 'walk' | 'run'): number {
+function campSpeed(gait: 'idle' | 'walk', tilt = 1): number {
   commitStickGait(gait, gait !== 'idle');
   const sim = pastOpening(createMatch(sanctuary, barbarian, 1));
   const hero = player(sim);
   const input = emptyInput();
   if (gait !== 'idle') {
-    input.moveX = 1;
+    input.moveX = tilt;
     input.moveY = 0;
   }
   const x = hero.x;
@@ -1041,50 +1039,23 @@ function campSpeed(gait: 'idle' | 'walk' | 'run'): number {
 }
 
 {
+  // [JOSEPH] "No walk vs run": tilt sets direction and moving vs stopped only.
   assert.equal(STICK_IDLE_TILT, 0.15);
-  assert.equal(STICK_RUN_TILT, 0.6);
-  assert.equal(STICK_GAIT_HOLD_MS, 150);
-  assert.equal(barbarian.stats.walkSpeed, 144);
-  assert.equal(barbarian.stats.runSpeed, 216);
+  assert.equal('walkSpeed' in barbarian.stats, false);
+  assert.equal('runSpeed' in barbarian.stats, false);
 
-  const idle = stepStickGait({ gait: 'idle', hold: null, holdMs: 0 }, 0.1, 16);
-  assert.equal(idle.gait, 'idle');
-  const walk = stepStickGait({ gait: 'idle', hold: null, holdMs: 0 }, 0.4, 16);
-  assert.equal(walk.gait, 'walk');
-  const run = stepStickGait({ gait: 'idle', hold: null, holdMs: 0 }, 0.9, 16);
-  assert.equal(run.gait, 'run');
-  assert.equal(stepStickGait({ gait: 'idle', hold: null, holdMs: 0 }, 0.15, 16).gait, 'walk');
-  assert.equal(stepStickGait({ gait: 'idle', hold: null, holdMs: 0 }, 0.6, 16).gait, 'walk');
+  assert.equal(stepStickGait({ gait: 'idle' }, 0.1, 16).gait, 'idle');
+  for (const tilt of [0.15, 0.4, 0.6, 0.62, 0.9, 1]) {
+    assert.equal(stepStickGait({ gait: 'idle' }, tilt, 16).gait, 'walk', `tilt ${tilt}`);
+    assert.equal(stepStickGait({ gait: 'walk' }, tilt, 1).gait, 'walk', `tilt ${tilt} held`);
+  }
 
   const idleSpeed = campSpeed('idle');
-  const walkSpeedInCamp = campSpeed('walk');
-  assert.equal(heroMoveScale(true, true, 144, 216), 144 / 216);
-  const runSpeedInCamp = campSpeed('run');
-  assert.equal(heroMoveScale(true, true, 144, 216), 1);
+  const lightTilt = campSpeed('walk', 0.3);
+  const fullTilt = campSpeed('walk', 1);
   assert.ok(idleSpeed < 1, `idle tilt moved at ${idleSpeed.toFixed(1)}`);
-  assert.ok(Math.abs(walkSpeedInCamp - 144) < 1, `walk tilt in camp was ${walkSpeedInCamp.toFixed(1)}`);
-  assert.ok(Math.abs(runSpeedInCamp - 216) < 1, `run tilt in camp was ${runSpeedInCamp.toFixed(1)}`);
-
-  let held: StickGaitMemory = { gait: 'walk', hold: null, holdMs: 0 };
-  held = stepStickGait(held, 0.9, 149);
-  assert.equal(held.gait, 'walk');
-  held = stepStickGait(held, 0.9, 1);
-  assert.equal(held.gait, 'run');
-
-  let flicker: StickGaitMemory = { gait: 'walk', hold: null, holdMs: 0 };
-  const gaits = new Set<string>();
-  for (let i = 0; i < 20; i++) {
-    flicker = stepStickGait(flicker, i % 2 === 0 ? 0.58 : 0.62, 16);
-    gaits.add(flicker.gait);
-  }
-  assert.deepEqual([...gaits], ['walk']);
-  flicker = { gait: 'run', hold: null, holdMs: 0 };
-  gaits.clear();
-  for (let i = 0; i < 20; i++) {
-    flicker = stepStickGait(flicker, i % 2 === 0 ? 0.58 : 0.62, 16);
-    gaits.add(flicker.gait);
-  }
-  assert.deepEqual([...gaits], ['run']);
+  assert.ok(Math.abs(lightTilt - 144) < 1, `light tilt in camp was ${lightTilt.toFixed(1)}`);
+  assert.ok(Math.abs(fullTilt - 144) < 1, `full tilt in camp was ${fullTilt.toFixed(1)}`);
 
   const inputSrc = readFileSync(new URL('../src/game/input.ts', import.meta.url), 'utf8');
   assert.ok(inputSrc.includes("addEventListener('touchstart'"));

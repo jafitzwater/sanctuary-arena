@@ -19,7 +19,7 @@ import {
 import type { ClassDef } from './data/classes/types';
 import { unitDef } from './data/units';
 import { Rng } from './math';
-import { heroMoveScale } from './gait';
+import { baseMSFor, totalMS } from './data/moveSpeed';
 import { clampToPlayable } from './lane';
 import { FOOTPRINT } from './terrain';
 import {
@@ -225,6 +225,8 @@ function blankUnit(sim: Sim, partial: Pick<Unit, 'defId' | 'kind' | 'team' | 'na
     stun: 0,
     slow: 0,
     slowPct: 0,
+    slows: [],
+    msBase: partial.msBase ?? 0,
     buffT: 0,
     buffDmg: 0,
     buffArmor: 0,
@@ -329,6 +331,7 @@ function spawnPlayer(sim: Sim): Unit {
     ad: built.ad,
     armor: built.armor,
     moveSpeed: built.moveSpeed,
+    msBase: stats.moveSpeed,
     attackRange: built.attackRange,
     attackInterval: built.attackInterval,
     wclass: built.wclass,
@@ -497,6 +500,8 @@ function tickStatus(sim: Sim, unit: Unit, dt: number): void {
   unit.attackCd = Math.max(0, unit.attackCd - dt);
   unit.stun = Math.max(0, unit.stun - dt);
   unit.slow = Math.max(0, unit.slow - dt);
+  unit.slows = unit.slows.filter((s) => (s.t -= dt) > 0);
+  unit.slowPct = unit.slows.reduce((max, s) => Math.max(max, s.pct), 0);
   unit.buffT = Math.max(0, unit.buffT - dt);
   if (unit.buffT <= 0) {
     unit.buffDmg = 0;
@@ -560,9 +565,8 @@ function advanceLeap(sim: Sim, unit: Unit, dt: number): void {
     if (!other.alive || other.team === unit.team) continue;
     if (Math.hypot(other.x - unit.x, other.y - unit.y) <= radius + other.radius) {
       damageUnit(sim, other, damage, unit, 'magic');
-      other.slow = Math.max(other.slow, 1.15);
+      applySlow(other, 0.35, 1.15);
       noteDebuff(sim, other, unit);
-      other.slowPct = Math.max(other.slowPct, 0.35);
     }
   }
   ring(sim, unit.x, unit.y, radius, '#e6d3a1');
@@ -573,7 +577,32 @@ function advanceLeap(sim: Sim, unit: Unit, dt: number): void {
   unit.y = spot.y;
 }
 
+/** Existing slows (Leap Attack 35%/1.15 s, Cursed affix 25%/1.2 s) keep their values; each is tracked separately. */
+function applySlow(unit: Unit, pct: number, t: number): void {
+  unit.slows.push({ pct, t });
+  unit.slow = Math.max(unit.slow, t);
+  unit.slowPct = Math.max(unit.slowPct, pct);
+}
+
+/**
+ * WORK ORDER "LoL-STYLE SINGLE MOVEMENT SPEED" [JOSEPH]: champions move at one current MS =
+ * totalMS(base, flat, addPct, multis, slows). Only sources that already exist are wired:
+ * - haste shrine: +18% additive (existing 1.18 value) [TEMP existing value]
+ * - Whirlwind move pace x1.06 and Frenzy x1.18: existing multipliers kept as-is (moved from playerPace), [TEMP existing value]
+ * - slows: Leap Attack / Cursed affix, strongest only.
+ * No item, potion or teleport changes MS today, so flat is 0. Non-champions keep their old px/s formula.
+ */
+export function championMS(unit: Unit): number {
+  const addPct = unit.haste > 0 ? [0.18] : [];
+  const multis: number[] = [];
+  if (unit.whirlT > 0) multis.push(1.06);
+  if (unit.frenzyT > 0) multis.push(1.18);
+  const slows = unit.slows.map((s) => s.pct);
+  return totalMS(unit.msBase, 0, addPct, multis, slows);
+}
+
 function moveSpeed(unit: Unit): number {
+  if (unit.kind === 'champion' && unit.msBase > 0) return championMS(unit);
   const slow = unit.slow > 0 ? 1 - unit.slowPct : 1;
   const haste = unit.haste > 0 ? 1.18 : 1;
   return unit.moveSpeed * slow * haste;
@@ -610,18 +639,6 @@ function moveToward(unit: Unit, x: number, y: number, dt: number, scale = 1): vo
   unit.facing = Math.atan2(dy, dx);
 }
 
-function playerPace(sim: Sim, hero: Unit, direct = false): number {
-  let scale = hero.whirlT > 0 ? 1.06 : 1;
-  if (hero.frenzyT > 0) scale *= 1.18;
-  scale *= heroMoveScale(
-    inShopRange(sim, hero),
-    direct,
-    sim.classDef.stats.walkSpeed,
-    sim.classDef.stats.runSpeed,
-  );
-  return scale;
-}
-
 function updatePlayer(sim: Sim, hero: Unit, input: FrameInput, dt: number): void {
   if (input.recall && hero.recall <= 0 && hero.stun <= 0 && !hero.leap && hero.whirlT <= 0) {
     hero.recall = TELEPORT_SECONDS;
@@ -655,7 +672,8 @@ function updatePlayer(sim: Sim, hero: Unit, input: FrameInput, dt: number): void
   const direct = Math.hypot(input.moveX, input.moveY) > 0.15;
   const lock = byId(sim, input.targetId);
   const target = lock && lock.alive && lock.team !== hero.team ? lock : null;
-  const pace = playerPace(sim, hero, direct);
+  // [JOSEPH] One speed: no stick walk/run scale and no town click-move walk scale.
+  const pace = 1;
   if (direct) {
     const mag = Math.hypot(input.moveX, input.moveY);
     const speed = moveSpeed(hero) * pace;
@@ -1039,8 +1057,7 @@ function deliverAttack(sim: Sim, unit: Unit, target: Unit): void {
   }
   damageUnit(sim, target, raw, unit);
   if (unit.affix === 'Cursed') {
-    target.slow = Math.max(target.slow, 1.2);
-    target.slowPct = Math.max(target.slowPct, 0.25);
+    applySlow(target, 0.25, 1.2);
     noteDebuff(sim, target, unit);
   }
   if (unit.affix === 'Mana Burn') target.mana = Math.max(0, target.mana - 12);
@@ -1140,6 +1157,8 @@ function reviveChampion(sim: Sim, unit: Unit): void {
   unit.y = spot.y;
   unit.stun = 0;
   unit.slow = 0;
+  unit.slowPct = 0;
+  unit.slows = [];
   unit.leap = null;
   unit.whirlT = 0;
   unit.targetId = null;
@@ -1286,7 +1305,8 @@ export function spawnHero(sim: Sim, team: Team, x: number, y: number, name: stri
     maxMana: 80,
     ad: 15,
     armor: 8,
-    moveSpeed: barbarian.stats.moveSpeed,
+    moveSpeed: totalMS(barbarian.stats.moveSpeed),
+    msBase: barbarian.stats.moveSpeed,
     attackRange: 48,
     attackInterval: 1,
     color: team === 'ally' ? '#c4a574' : '#8a3030',
@@ -1306,6 +1326,8 @@ function spawnRoster(sim: Sim, seed: number): void {
     unit.color = seat.tint;
     unit.accent = seat.tint;
     unit.look = seat.classId;
+    unit.msBase = baseMSFor(seat.classId);
+    unit.moveSpeed = totalMS(unit.msBase);
   });
   dealt.enemies.forEach((seat, index) => {
     const unit = spawnHero(sim, 'enemy', enemyHome.x - 200 - index * 36, enemyHome.y + 70 - seat.lane * 40, seat.name);
@@ -1314,6 +1336,8 @@ function spawnRoster(sim: Sim, seed: number): void {
     unit.color = seat.tint;
     unit.accent = seat.tint;
     unit.look = seat.classId;
+    unit.msBase = baseMSFor(seat.classId);
+    unit.moveSpeed = totalMS(unit.msBase);
   });
 }
 

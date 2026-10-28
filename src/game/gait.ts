@@ -1,6 +1,6 @@
-import { HERO_FACING_DEADBAND, STICK_GAIT_HOLD_MS, STICK_IDLE_TILT, STICK_RUN_TILT } from './data/classes/barbarian';
+import { HERO_FACING_DEADBAND, STICK_IDLE_TILT } from './data/classes/barbarian';
 
-export { STICK_GAIT_HOLD_MS, STICK_IDLE_TILT, STICK_RUN_TILT };
+export { STICK_IDLE_TILT };
 
 /** One direction of the run cycle. The source row continues past this into the next action. */
 export const RUN_FRAMES = 12;
@@ -24,14 +24,10 @@ export interface HeroCombatBand {
   y1: number;
 }
 
-/** Actual speed at or above this is the run cycle. Town click-to-move stays at 144. */
-export const HERO_RUN_SPEED = 180;
-
 export interface HeroGaitStep {
   moving: boolean;
   elapsed: number;
   speed: number;
-  running: boolean;
 }
 
 /**
@@ -45,36 +41,20 @@ export function heroGaitStep(elapsed: number, step: number, dt: number): HeroGai
     moving,
     speed,
     elapsed: elapsed + (moving && dt > 0 ? dt * 1000 : 0),
-    running: moving && speed >= HERO_RUN_SPEED,
   };
 }
 
 /**
- * Joystick and keyboard ignore the town walk scale.
- * A directing stick walks at 144 or runs at 216 from its own tilt, including inside camp.
- * Click-to-move inside the shop radius stays at walkSpeed / runSpeed.
+ * [JOSEPH] "League of Legends has just one movement speed. No walk vs run."
+ * The stick is either idle or moving; the hero always moves at its single current MS (data/moveSpeed.ts).
  */
-export function heroMoveScale(inTown: boolean, direct: boolean, walkSpeed: number, runSpeed: number): number {
-  if (direct) {
-    if (stickDirecting && runSpeed > 0) {
-      if (commandedGait === 'walk') return walkSpeed / runSpeed;
-      if (commandedGait === 'idle') return 0;
-    }
-    return 1;
-  }
-  if (!inTown || runSpeed <= 0) return 1;
-  return walkSpeed / runSpeed;
-}
-
-export type StickGait = 'idle' | 'walk' | 'run';
+export type StickGait = 'idle' | 'walk';
 
 export interface StickGaitMemory {
   gait: StickGait;
-  hold: 'walk' | 'run' | null;
-  holdMs: number;
 }
 
-/** Last stick command. Direct input that never committed a tilt stays a full run. */
+/** Last stick command. */
 let commandedGait: StickGait = 'idle';
 let stickDirecting = false;
 
@@ -87,19 +67,9 @@ export function commitStickGait(gait: StickGait, directing: boolean): void {
   stickDirecting = directing;
 }
 
-/**
- * Tilt below 0.15 is idle immediately. Leaving idle is immediate.
- * Walk and run change only after the tilt stays on the other side of 0.60 for 150ms.
- */
-export function stepStickGait(memory: StickGaitMemory, tilt: number, dtMs: number): StickGaitMemory {
-  const raw: StickGait = tilt < STICK_IDLE_TILT ? 'idle' : tilt <= STICK_RUN_TILT ? 'walk' : 'run';
-  if (raw === 'idle' || memory.gait === 'idle' || raw === memory.gait) {
-    const gait = raw === 'idle' || memory.gait === 'idle' ? raw : memory.gait;
-    return { gait, hold: null, holdMs: 0 };
-  }
-  const held = (memory.hold === raw ? memory.holdMs : 0) + Math.max(0, dtMs);
-  if (held >= STICK_GAIT_HOLD_MS) return { gait: raw, hold: null, holdMs: 0 };
-  return { gait: memory.gait, hold: raw, holdMs: held };
+/** Tilt below 0.15 is idle; anything at or above it is moving. Tilt never changes speed. */
+export function stepStickGait(_memory: StickGaitMemory, tilt: number, _dtMs: number): StickGaitMemory {
+  return { gait: tilt < STICK_IDLE_TILT ? 'idle' : 'walk' };
 }
 
 /** currentFrame = floor(elapsedAnimTime / frameDuration) % totalFrames. Never past the last frame. */

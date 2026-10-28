@@ -1,3 +1,4 @@
+import { BASE_MS } from '../moveSpeed';
 import type { ClassDef, SkillDef } from './types';
 import classes from '../d2/charstats.json';
 import { STARTING_STATS } from './startingStats';
@@ -111,13 +112,11 @@ export const HERO_FACING_DEADBAND = (15 * Math.PI) / 180;
 
 /**
  * Screen-space stick magnitude, 0 at rest and 1 at the edge of the well.
- * Below idle the hero stands. Through the run tilt the hero walks.
- * Above it the hero runs, after the gait hold.
+ * Below idle the hero stands; at or above it the hero moves at its single current MS.
+ * [JOSEPH] "League of Legends has just one movement speed. No walk vs run." Tilt sets direction and
+ * moving vs stopped only; the old run tilt (0.6) and gait hold (150 ms) are removed.
  */
 export const STICK_IDLE_TILT = 0.15;
-export const STICK_RUN_TILT = 0.6;
-/** Walk and run trade places only after the tilt stays across the run line this long. */
-export const STICK_GAIT_HOLD_MS = 150;
 
 /**
  * Stats and the 30-skill tree are the 1.13c CharStats / Skills rows, scaled
@@ -139,7 +138,8 @@ export const barbarian: ClassDef = {
     mana: moba.mana,
     ad: 15,
     armor: moba.baseArmor,
-    moveSpeed: 216,
+    // [JOSEPH] Base MS 345 (LoL units); 345 * UNIT_SCALE (144/345) = 144, the old walk speed.
+    moveSpeed: BASE_MS.barbarian,
     attackRange: 74,
     attackInterval: 0.78,
     radius: 22,
@@ -159,8 +159,6 @@ export const barbarian: ClassDef = {
     statPointsPerLevel: moba.statPointsPerLevel,
     adPerStr: 0.15,
     armorPerDex: moba.armorPerDex,
-    walkSpeed: 144,
-    runSpeed: 216,
   },
   skills: skillList,
   colors: {

@@ -83,6 +83,10 @@ export interface Unit {
   stun: number;
   slow: number;
   slowPct: number;
+  /** [JOSEPH] Active slows; only the strongest applies (data/moveSpeed.ts). */
+  slows: { pct: number; t: number }[];
+  /** [JOSEPH] Champion base MS in LoL units (0 = not a champion; uses moveSpeed px/s as before). */
+  msBase: number;
   buffT: number;
   buffDmg: number;
   buffArmor: number;

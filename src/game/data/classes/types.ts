@@ -35,6 +35,7 @@ export interface ClassStats {
   mana: number;
   ad: number;
   armor: number;
+  /** [JOSEPH] Base MS at level 1 in LoL units (data/moveSpeed.ts BASE_MS); the world speed is totalMS(). */
   moveSpeed: number;
   /** Center-to-edge reach of basic attacks, before the target's radius. */
   attackRange: number;
@@ -55,8 +56,6 @@ export interface ClassStats {
   statPointsPerLevel: number;
   adPerStr: number;
   armorPerDex: number;
-  walkSpeed: number;
-  runSpeed: number;
 }
 
 export interface ClassColors {

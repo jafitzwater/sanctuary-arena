@@ -27,6 +27,9 @@ assert.deepEqual(dens.map((d) => [d.unit, d.count]), [['countess', 1], ['radamen
 assert.ok(dens.every((d) => d.cave && d.respawn === 180), 'only caves, 180 s');
 
 const sim = createMatch(sanctuary, barbarian, 1);
+// Isolate the cave from AI champions: at the single LoL-style MS [JOSEPH] the bots' timing changed and one
+// wanders into the Countess near t=90 s, which would restart the quiet clock this test measures.
+sim.units = sim.units.filter((u) => !(u.kind === 'champion' && u.bot));
 const pack = (id: number) => sim.units.filter((u) => u.alive && u.pack === id);
 assert.equal(pack(3).length, 3, 'the Council is 3');
 const countess = pack(1)[0];

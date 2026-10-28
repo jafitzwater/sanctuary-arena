@@ -68,7 +68,7 @@ export class InputController {
   private stickReleasedAt = 0;
   private ignoredMoves = 0;
   private lastSnap = 0;
-  private stickMemory: StickGaitMemory = { gait: 'idle', hold: null, holdMs: 0 };
+  private stickMemory: StickGaitMemory = { gait: 'idle' };
   private readonly mobile = new MobileInputManager();
   private pinnedAim: Vec | null = null;
   private castFocus = false;
