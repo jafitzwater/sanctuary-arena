@@ -873,7 +873,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.deepEqual(ROSTER.map((entry) => entry.id).sort(), ['amazon', 'barbarian', 'necromancer', 'paladin', 'sorceress']);
   assert.deepEqual(
     ROSTER.filter((entry) => entry.playable).map((entry) => entry.id),
-    ['amazon', 'barbarian', 'paladin', 'sorceress'], // Amazon, Paladin and Sorceress orders: playable
+    ['amazon', 'barbarian', 'necromancer', 'paladin', 'sorceress'], // Amazon, Paladin, Sorceress and Necromancer orders: playable
   );
   // Doc: "4 players on each side. No duplicate character on a side."
   for (const seed of [1, 2, 3, 4, 5]) {

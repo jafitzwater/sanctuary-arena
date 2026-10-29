@@ -356,6 +356,27 @@ export const CLASS_GATES: Record<string, Record<string, { reqStr?: number; reqDe
     rng: { reqStr: 16 },
     fhl: { reqStr: 16 },
   },
+  /**
+   * ORDER "Make Necromancer playable" [TEMP]: the Necromancer grows like the Sorceress (str 15 + 1/level,
+   * dex 15 + 0/level), so every Barbarian strength gate and the Two-Handed Sword's dexterity gate are
+   * out of his reach all match. Quilted Armor (str 12, level 1) is already in reach at his starting 15
+   * and keeps its own gate. His gates are cut to his own strength/dexterity at the item's level
+   * (17/19/21 at levels 3/5/7; dex 15); levels and prices are unchanged. No energy or mana gate is added.
+   * Old -> new Necromancer gates: ssd/lea/skp reqStr 34 -> 17; flc/stu/hlm/mbl reqStr 38 -> 19;
+   * rng/fhl reqStr 42 -> 21; 2hs reqStr 42 -> 21 and reqDex 26 -> 15; qui unchanged (12).
+   */
+  necromancer: {
+    ssd: { reqStr: 17 },
+    lea: { reqStr: 17 },
+    skp: { reqStr: 17 },
+    flc: { reqStr: 19 },
+    stu: { reqStr: 19 },
+    hlm: { reqStr: 19 },
+    mbl: { reqStr: 19 },
+    '2hs': { reqStr: 21, reqDex: 15 },
+    rng: { reqStr: 21 },
+    fhl: { reqStr: 21 },
+  },
 };
 
 /** Stat gate for a class: the class override when one exists, else the item's own reqStr/reqDex. */

@@ -44,7 +44,10 @@ const PALADIN_MELEE = ['zeal', 'smite'];
 const SORC_SINGLE = ['ice-bolt', 'frozen-orb'];
 const SORC_GROUND = ['blizzard', 'teleport'];
 
-/** Barbarian, Amazon, Paladin and Sorceress skills. Leap is the ground cast; bash and the Amazon arrows lock a unit. */
+/** Necromancer order: Teeth, Bone Spear and Bone Spirit lock a unit; Bone Armor is a self cast (skills/necromancer.ts). */
+const NECRO_SINGLE = ['teeth', 'bone-spear', 'bone-spirit'];
+
+/** Barbarian, Amazon, Paladin, Sorceress and Necromancer skills. Leap is the ground cast; bash and the Amazon arrows lock a unit. */
 export function skillAimKind(id: string): SkillAim {
   if (id === 'leap-attack') return 'ground';
   if (id === 'bash') return 'single';
@@ -52,6 +55,7 @@ export function skillAimKind(id: string): SkillAim {
   if (PALADIN_MELEE.includes(id) || id === 'charge') return 'single';
   if (SORC_SINGLE.includes(id)) return 'single';
   if (SORC_GROUND.includes(id)) return 'ground';
+  if (NECRO_SINGLE.includes(id)) return 'single';
   return 'self';
 }
 
@@ -62,6 +66,9 @@ export function skillReach(id: string, attackRange: number): number {
   if (PALADIN_MELEE.includes(id)) return attackRange + 18; // skills/paladin.ts PALADIN_MELEE_REACH_BONUS [TEMP]
   if (id === 'charge') return 260; // skills/paladin.ts CHARGE_REACH [TEMP]
   if (SORC_SINGLE.includes(id)) return attackRange + 40; // skills/sorceress.ts SORC_SKILL_REACH_BONUS [TEMP]
+  if (id === 'teeth') return attackRange + 40; // skills/necromancer.ts TEETH_REACH_BONUS [TEMP]
+  if (id === 'bone-spear') return attackRange + 80; // skills/necromancer.ts SPEAR_REACH_BONUS [TEMP]
+  if (id === 'bone-spirit') return attackRange + 120; // skills/necromancer.ts SPIRIT_REACH_BONUS [TEMP]
   return attackRange;
 }
 
