@@ -74,7 +74,7 @@ assert.deepEqual(paladin.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 5], 'Pal
 assert.equal(BASE_MS.sorceress, 325);
 assert.equal(sorceress.stats.moveSpeed, 325);
 assert.ok(Math.abs(totalMS(325) - 325 * UNIT_SCALE) < 1e-9);
-assert.ok(Math.abs(totalMS(325) - 135.652) < 0.01, `325 -> ${totalMS(325)} px/s`);
+assert.ok(Math.abs(totalMS(325) - 325) < 0.01, `325 -> ${totalMS(325)} px/s`);
 {
   const sim = createMatch(sanctuary, sorceress, 1);
   const hero = sim.units.find((u) => u.id === sim.playerId)!;

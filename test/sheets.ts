@@ -61,7 +61,7 @@ for (const [a, first] of [['walk', 26], ['run', 38], ['attack', 50]] as const) {
   assert.equal(barbarianMotionCol(a, 0), first);
   assert.equal(barbarianMotionCol(a, 11), first + 11);
 }
-// Stride follows distance: at the class walk speed (144) a 12-frame loop takes the manifest 0.96 s.
+// Stride follows distance: at 144 px/s (the pre-Option-B walk speed; pure-function check) a 12-frame loop takes the manifest 0.96 s.
 const walkLoop = barbarianCycleDistance('walk', 144);
 assert.ok(Math.abs(walkLoop - 144 * 0.96) < 1e-9);
 assert.ok(Math.abs(barbarianCycleDistance('run', 216) - 216 * 0.72) < 1e-9);

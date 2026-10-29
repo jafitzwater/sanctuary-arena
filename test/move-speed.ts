@@ -1,7 +1,7 @@
 // WORK ORDER "Code engineer - LoL-STYLE SINGLE MOVEMENT SPEED" [JOSEPH]
 // Spec: "totalMS(base, flat, addPct, multis, slows) = (base + flat) * (1 + sum addPct) * product(multis) * (1 - max slow)";
 // "Soft caps: ms > 490 -> 415 + 75*0.8 + (ms-490)*0.5; 415-490 -> excess over 415 at 80%; floor: if ms < 220 then
-// ms = 110 + ms*0.5." "Result * UNIT_SCALE (144/345)." "Only the strongest slow applies."
+// ms = 110 + ms*0.5." "Result * UNIT_SCALE (144/345)." Superseded by Option B [JOSEPH t211u]: UNIT_SCALE 1.0. "Only the strongest slow applies."
 import assert from 'node:assert/strict';
 import { BASE_MS, rawMS, softCapMS, totalMS, UNIT_SCALE } from '../src/game/data/moveSpeed';
 import { barbarian } from '../src/game/data/classes/barbarian';
@@ -14,10 +14,11 @@ const near = (a: number, b: number, msg?: string) => assert.ok(Math.abs(a - b) <
 
 // Base MS table and unit scale.
 assert.deepEqual({ ...BASE_MS }, { barbarian: 345, amazon: 340, paladin: 335, necromancer: 330, sorceress: 325 });
-near(UNIT_SCALE, 144 / 345);
-near(totalMS(345), 144, 'Barbarian 345 reproduces the old walk speed 144');
+near(UNIT_SCALE, 1.0); // Option B: 1 LoL unit = 1 world px
+near(totalMS(345), 345, 'Barbarian 345 -> 345 px/s');
+near(totalMS(335), 335, 'nominal 335 -> 335 px/s');
 assert.equal(barbarian.stats.moveSpeed, 345);
-near(totalMS(325), 325 * 144 / 345);
+near(totalMS(325), 325);
 
 // Soft caps.
 assert.equal(softCapMS(415), 415);
@@ -50,7 +51,7 @@ near(totalMS(345, 0, [0.5]), (415 + 75 * 0.8 + (517.5 - 490) * 0.5) * UNIT_SCALE
   const sim = createMatch(sanctuary, barbarian, 1);
   const hero = player(sim);
   assert.equal(hero.msBase, 345);
-  near(championMS(hero), 144);
+  near(championMS(hero), totalMS(345));
   hero.haste = 5; // existing haste shrine: +18% additive
   near(championMS(hero), totalMS(345, 0, [0.18]));
   hero.haste = 0;
@@ -67,7 +68,7 @@ near(totalMS(345, 0, [0.5]), (415 + 75 * 0.8 + (517.5 - 490) * 0.5) * UNIT_SCALE
   input.destY = hero.y;
   const x0 = hero.x;
   updateSim(sim, input, 0.05);
-  assert.ok(Math.abs((hero.x - x0) / 0.05 - 144) < 1, `click-move ${(hero.x - x0) / 0.05}`);
+  assert.ok(Math.abs((hero.x - x0) / 0.05 - totalMS(345)) < 1, `click-move ${(hero.x - x0) / 0.05}`);
   // AI champions use their class base MS.
   for (const bot of sim.units.filter((u) => u.kind === 'champion' && u.bot)) {
     assert.equal(bot.msBase, BASE_MS[bot.look ?? 'barbarian'] ?? 345, `${bot.name} ${bot.look}`);

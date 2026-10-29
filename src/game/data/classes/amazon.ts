@@ -114,7 +114,7 @@ export const amazon: ClassDef = {
     mana: moba.mana, // CharStats import, as the Barbarian
     ad: 15, // [TEMP] same as the Barbarian
     armor: moba.baseArmor,
-    // [JOSEPH] movement-speed-spec.md: "Amazon 340"; 340 * UNIT_SCALE (144/345) ≈ 141.9 px/s.
+    // [JOSEPH] movement-speed-spec.md: "Amazon 340"; 340 * UNIT_SCALE (1.0) = 340 px/s.
     moveSpeed: BASE_MS.amazon,
     attackRange: 200, // [TEMP] the existing Rogue Archer bow range
     attackInterval: 0.78, // [TEMP] same as the Barbarian
