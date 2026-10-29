@@ -19,10 +19,25 @@ export const CLASS_NAMES: Record<string, string> = {
 
 /**
  * Unit-frame restyle order [JOSEPH t228u]: Wild Rift layout, slightly larger than the PR #74 frame
- * (w 58 / hp 6 / mana 3 / circle r 8 / name 9). [TEMP] sizes in screen px (phone-readable at 844x390).
+ * (w 58 / hp 6 / mana 3 / circle r 8 / name 9). Sizes in css px (screen px at the current HUD scale; the
+ * canvas is dpr-scaled, so 1 unit = 1 css px).
+ * Four UI/size changes order item 1 [JOSEPH t250u]: hp bar 12 px (was 8), mana bar 8 px (was 4), level
+ * circle 36 px diameter (circle = radius 18, was 12 = 24 px), XP ring 2 px thick inside the circle (unchanged).
+ * w, gap and name stay as they were [TEMP].
  * circle = level badge radius; ring = XP ring stroke width just inside the badge rim.
  */
-export const FRAME = { w: 68, hp: 8, mana: 4, gap: 1, circle: 12, ring: 2, name: 11 } as const;
+export const FRAME = { w: 68, hp: 12, mana: 8, gap: 1, circle: 18, ring: 2, name: 11 } as const;
+
+/** Level badge rim stroke width (css px). */
+export const BADGE_RIM = 1.6;
+
+/**
+ * XP ring path radius: the 2 px ring sits fully inside the badge rim with a 0.8 px gap (outer edge
+ * r - rim - 0.8, inner edge 2 px further in). Filled clockwise from 12 o'clock.
+ */
+export function xpRingRadius(r: number = FRAME.circle, ring: number = FRAME.ring): number {
+  return r - BADGE_RIM - ring / 2 - 0.8;
+}
 
 /** XP ring redraw step: the ring only changes (and the cached chrome rebuilds) every 1/48 of a level. */
 export const XP_RING_STEPS = 48;

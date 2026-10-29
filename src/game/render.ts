@@ -61,9 +61,11 @@ import {
   CAMERA,
   cameraZoom,
   characterScale,
+  championSpriteScale,
   facingToView,
   fromView,
   ICONS,
+  MINIMAP_ICON_SHADE,
   toView,
   viewOriginX,
   viewTurnsFor,
@@ -80,7 +82,7 @@ import type { Vec } from './math';
 import { player } from './query';
 import { GROUND_BASE, groundAt, tilePaint, walkable, type GroundKind } from './terrain';
 import type { Camera, Sim, Unit } from './types';
-import { FRAME, FRAME_COLORS, unitFrameData, type UnitFrameData } from './unitFrame';
+import { BADGE_RIM, FRAME, FRAME_COLORS, unitFrameData, xpRingRadius, type UnitFrameData } from './unitFrame';
 
 /** Unit-frame restyle: bar left / bar top inside the cached chrome canvas (badge to the left, name above). */
 const UF_BX = FRAME.circle * 2 + 3;
@@ -786,7 +788,8 @@ export class Renderer {
     // Amazon order: any playable class body (class sheet id) draws as a hero, not just the Barbarian.
     const hero = unit.kind === 'champion' && hasClassSheet(unit.defId);
     const boss = bossLook(unit);
-    const height = (hero ? heroDrawHeight(pose.state) : this.unitHeight(unit)) * u;
+    // Four UI/size changes item 2 [JOSEPH t250u]: champions (player + bot heroes) drawn 15% larger; sprite only.
+    const height = (hero ? heroDrawHeight(pose.state) : this.unitHeight(unit)) * u * championSpriteScale(unit.kind);
     const bob = swing * (pose.state === 'idle' ? 1.5 : pose.state === 'run' ? 5 : 3.5) * u;
     const melee = !unit.ranged && unit.defId !== 'tower' && unit.kind !== 'base' && unit.kind !== 'seal';
     this.armSlash(unit, melee && (attack === 'swing' || unit.swing > 0.82), screen, playerId);
@@ -1650,10 +1653,10 @@ export class Renderer {
     grad.addColorStop(1, '#0c0805');
     front.c.fillStyle = grad;
     front.c.fill();
-    front.c.lineWidth = 1.6;
+    front.c.lineWidth = BADGE_RIM;
     front.c.strokeStyle = data.rimColor;
     front.c.stroke();
-    const ringR = r - 1.6 - ring / 2 - 0.8;
+    const ringR = xpRingRadius(r, ring);
     front.c.lineWidth = ring;
     front.c.strokeStyle = 'rgba(0,0,0,0.75)';
     front.c.beginPath();
@@ -1756,6 +1759,9 @@ export class Renderer {
       ctx.fillStyle = '#120e0b';
       ctx.fillRect(0, 0, w, h);
     }
+    // Four UI/size changes item 3 [JOSEPH t250u]: 20% black layer over the map plate, under every live icon.
+    ctx.fillStyle = `rgba(0, 0, 0, ${MINIMAP_ICON_SHADE})`;
+    ctx.fillRect(0, 0, w, h);
     const at = (x: number, y: number) => worldToMinimap(x, y, map.width, map.height, w, h, myTeam);
     const ink = (team: Unit['team']) => (team === 'ally' ? '#6aa7ff' : team === 'wild' ? '#c49a3a' : '#e15a4a');
     const diamondAt = (x: number, y: number, size: number, fill: string) => {

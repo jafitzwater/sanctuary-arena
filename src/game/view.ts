@@ -99,6 +99,14 @@ export const CHARACTER = {
   maxPx: 96,
 } as const;
 
+/** Four UI/size changes item 2 [JOSEPH t250u]: champion sprite scale x1.15 vs before (draw only). */
+export const CHAMPION_SPRITE_SCALE = 1.15;
+
+/** Extra draw scale per unit kind: champions (player and bot heroes) get CHAMPION_SPRITE_SCALE, others 1. */
+export function championSpriteScale(kind: string): number {
+  return kind === 'champion' ? CHAMPION_SPRITE_SCALE : 1;
+}
+
 /** Multiplier applied to every unit's body height (minions, towers, bosses use the same factor). */
 export function characterScale(cssH: number): number {
   const px = Math.max(CHARACTER.minPx, Math.min(CHARACTER.maxPx, cssH * CHARACTER.viewFraction));
@@ -224,16 +232,20 @@ export function minimapH(w: number, mapW: number, mapH: number): number {
   return Math.round((w * mapH) / mapW);
 }
 
-/** Icon sizes in css px (multiplied by the minimap backing dpr). Order: nexus > guard > lane. */
+/**
+ * Icon sizes in css px (multiplied by the minimap backing dpr).
+ * Four UI/size changes item 3 [JOSEPH t250u]: structure icons (towers, bases) 8 px (was nexus 13, guard 8,
+ * lane 6), hero icons 6 px (was 13).
+ */
 export const ICONS = {
   /** Worldstone = Nexus/main base. Diamond, full width. */
-  nexus: 13,
+  nexus: 8,
   /** Base guard tower = the inner (tier 1) tower on each roadway, nearest its Worldstone. */
   guardTower: 8,
   /** Lane tower = the outer (tier 2) tower on each roadway. */
-  laneTower: 6,
+  laneTower: 8,
   /** Alive champion portrait, circle diameter. */
-  champion: 13,
+  champion: 6,
   /** Cave boss (major objective). */
   caveBoss: 7,
   /** Jungle camp (den without cave). None exist on the current map. */
@@ -247,6 +259,9 @@ export const ICONS = {
   /** Camera viewport outline width. */
   viewportLine: 1,
 } as const;
+
+/** Four UI/size changes item 3 [JOSEPH t250u]: black layer opacity under the minimap icons (contrast). */
+export const MINIMAP_ICON_SHADE = 0.2;
 
 /** World point onto the minimap. The enemy side sees the map turned 180 degrees, like the main view. */
 export function worldToMinimap(
