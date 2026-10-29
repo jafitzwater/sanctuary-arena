@@ -452,6 +452,19 @@ function payKill(sim: Sim, unit: Unit, killer: Unit | null, mul: number, victimS
   }
 }
 
+/** Reach of a melee two-handed weapon (staff, two-handed axe/mace, two-handed sword), in world px. */
+export const TWO_HAND_REACH = 96;
+
+/**
+ * Batch 2 C [t227u] rule: a two-handed melee weapon (STF/2HT/2HS) lengthens a short reach to TWO_HAND_REACH but never
+ * shortens it. Melee classes (74) get 96 as before; ranged classes (200: Amazon, Sorceress, Necromancer) keep their own
+ * range. Before batch 2 it set 96 for everyone, so ranged classes dropped from 200 to 96.
+ */
+export function weaponRange(classRange: number, twoHanded: boolean, wclass: string): number {
+  if (twoHanded && (wclass === 'STF' || wclass === '2HT' || wclass === '2HS')) return Math.max(classRange, TWO_HAND_REACH);
+  return classRange;
+}
+
 function swingTime(wsm: number): number {
   return Math.min(1.2, Math.max(0.45, 0.78 * (1 + wsm / 100)));
 }
@@ -487,7 +500,7 @@ export function heroNumbers(sim: Sim, timers: { bo: boolean; berserk: boolean })
     ad += main.ad ?? main.adOne ?? 0;
     wclass = (wieldTwo ? main.wclass2 || main.wclass : main.wclass) || '1HS';
     interval = swingTime(main.speed ?? 0);
-    if (wieldTwo && (wclass === 'STF' || wclass === '2HT' || wclass === '2HS')) range = 96;
+    range = weaponRange(range, wieldTwo, wclass);
   }
   for (const id of [sim.loadout.armor, sim.loadout.helm, sim.loadout.belt]) {
     if (!id) continue;

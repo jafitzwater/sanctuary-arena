@@ -87,7 +87,7 @@ const GEAR: ItemDef[] = [
     cost: 40,
     slot: 'weapon',
     unlockLevel: 1,
-    description: '1–6 damage. No strength requirement.',
+    description: '+5 attack damage. No strength requirement.',
     ad: 5,
     adOne: 5,
     reqStr: 0,

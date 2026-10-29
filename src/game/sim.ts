@@ -1375,7 +1375,14 @@ function spawnRoster(sim: Sim, seed: number): void {
 function updateHeroAi(sim: Sim, unit: Unit, dt: number): void {
   if (!unit.alive || unit.stun > 0 || unit.leap || unit.whirlT > 0) return;
   const home = unit.team === 'ally' ? sim.map.playerBase : sim.map.enemyBase;
-  if (unit.hp / unit.maxHp < 0.32) {
+  if (unit.hp / unit.maxHp < BOT_FLEE_HP) {
+    // Batch 2 B [t217u]: a low bot keeps fighting when running would not save it or it is winning.
+    const commit = botShouldCommit(sim, unit);
+    if (commit) {
+      unit.targetId = commit.id;
+      if (!inRange(unit, commit)) moveToward(unit, commit.x, commit.y, dt);
+      return;
+    }
     unit.targetId = null;
     moveToward(unit, home.x, home.y, dt);
     return;
@@ -1700,3 +1707,42 @@ function distTo(a: Unit, b: Unit): number {
 }
 
 export { damageUnit, inShopRange };
+
+/** Bot retreat threshold (fraction of max HP), unchanged from before batch 2. */
+export const BOT_FLEE_HP = 0.32;
+/** Batch 2 B [TEMP]: radius in which enemy and allied champions are counted for "outnumbered", and the commit target is searched. */
+export const BOT_COMMIT_RADIUS = 700;
+/** Batch 2 B [TEMP]: "caught" when the chaser is within its attack range + radius of the bot + this many px. */
+export const BOT_CAUGHT_SLACK = 30;
+/** Batch 2 B [TEMP]: "caught" when the chaser's move speed is at least this share of the bot's own. */
+export const BOT_CAUGHT_SPEED = 0.97;
+
+function basicDps(a: Unit, b: Unit): number {
+  return (a.ad * 100) / (100 + b.armor) / Math.max(0.2, a.attackInterval);
+}
+
+/**
+ * Batch 2 B [t217u] flee rule. Called only when the bot is below BOT_FLEE_HP. Returns the enemy champion to keep
+ * fighting, or null to retreat to the fountain as before. Keep fighting the nearest enemy champion within
+ * BOT_COMMIT_RADIUS when (a) not outnumbered (enemy champions <= own champions incl. itself within the radius) and
+ * (b) not inside an enemy tower's or Worldstone's attack range, and either (c) caught: that champion is already within
+ * its attack range + bot radius + BOT_CAUGHT_SLACK and at least BOT_CAUGHT_SPEED as fast (running only gives free
+ * hits), or (d) the bot wins the straight basic-attack damage race (its time-to-kill < theirs).
+ */
+export function botShouldCommit(sim: Sim, unit: Unit): Unit | null {
+  const dist = (o: Unit) => Math.hypot(o.x - unit.x, o.y - unit.y);
+  const foes = sim.units.filter((o) => o.alive && o.kind === 'champion' && o.team !== unit.team && o.team !== 'wild' && dist(o) < BOT_COMMIT_RADIUS);
+  if (!foes.length) return null;
+  const friends = sim.units.filter((o) => o.alive && o.kind === 'champion' && o.team === unit.team && dist(o) < BOT_COMMIT_RADIUS);
+  if (foes.length > friends.length) return null;
+  const underTower = sim.units.some(
+    (o) => o.alive && (o.kind === 'tower' || o.kind === 'base') && o.team !== unit.team && o.team !== 'wild' && o.attackRange > 0 && dist(o) < o.attackRange + unit.radius,
+  );
+  if (underTower) return null;
+  const foe = foes.sort((a, b) => dist(a) - dist(b))[0];
+  const caught = dist(foe) <= foe.attackRange + unit.radius + BOT_CAUGHT_SLACK && foe.moveSpeed >= unit.moveSpeed * BOT_CAUGHT_SPEED;
+  if (caught) return foe;
+  const myKill = foe.hp / basicDps(unit, foe);
+  const theirKill = unit.hp / basicDps(foe, unit);
+  return myKill < theirKill ? foe : null;
+}
