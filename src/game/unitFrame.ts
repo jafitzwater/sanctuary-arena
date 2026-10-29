@@ -2,10 +2,12 @@
  * Economy order, step 6: champion unit frames (world space). Pure data for the renderer and
  * tests: class name, level, bar fills, tick marks, and a cache key that only changes when the
  * frame chrome (name, level, team, ticks) changes.
- * Layout [TEMP]: round level circle at the left, green HP bar with ticks, thinner blue mana
- * bar directly under it, class name in small text over the HP bar.
+ * Layout (unit-frame restyle order [JOSEPH t228u]): class name centered above the bars, round
+ * level badge at the left with an XP ring, green HP bar with ticks right of it, thinner blue mana
+ * bar directly under it and aligned.
  */
 import type { Unit } from './types';
+import { MAX_LEVEL, xpToNext } from './economy';
 
 export const CLASS_NAMES: Record<string, string> = {
   barbarian: 'Barbarian',
@@ -15,8 +17,39 @@ export const CLASS_NAMES: Record<string, string> = {
   necromancer: 'Necromancer',
 };
 
-/** [TEMP] Frame sizes in screen px (phone-readable at 844x390). */
-export const FRAME = { w: 58, hp: 6, mana: 3, gap: 1, circle: 8, name: 9 } as const;
+/**
+ * Unit-frame restyle order [JOSEPH t228u]: Wild Rift layout, slightly larger than the PR #74 frame
+ * (w 58 / hp 6 / mana 3 / circle r 8 / name 9). [TEMP] sizes in screen px (phone-readable at 844x390).
+ * circle = level badge radius; ring = XP ring stroke width just inside the badge rim.
+ */
+export const FRAME = { w: 68, hp: 8, mana: 4, gap: 1, circle: 12, ring: 2, name: 11 } as const;
+
+/** XP ring redraw step: the ring only changes (and the cached chrome rebuilds) every 1/48 of a level. */
+export const XP_RING_STEPS = 48;
+
+/** [TEMP] Frame colors. Enemy HP stays red [JOSEPH earlier]; allies and the player read green. */
+export const FRAME_COLORS = {
+  hp: { ally: '#4fbf3a', enemy: '#d8432e', wild: '#4fbf3a' },
+  rim: { ally: '#c7b377', enemy: '#b8402c', wild: '#c7b377' },
+  mana: '#3a8fe8',
+  ring: '#ffd75e',
+} as const;
+
+/**
+ * XP ring fill (0..1), quantized to XP_RING_STEPS. Max level shows a full ring. Bots have a clock
+ * level and no XP track, so pass xp undefined to get an empty ring [TEMP].
+ */
+export function xpRingFraction(level: number, xp: number | undefined): number {
+  if (level >= MAX_LEVEL) return 1;
+  if (xp === undefined) return 0;
+  const raw = Math.max(0, Math.min(1, xp / xpToNext(level)));
+  return Math.floor(raw * XP_RING_STEPS) / XP_RING_STEPS;
+}
+
+/** Level text shown in the badge. */
+export function levelText(level: number): string {
+  return String(Math.max(1, Math.min(MAX_LEVEL, Math.floor(level) || 1)));
+}
 
 /** HP per tick mark: 100, or 250 when 100-hp ticks would sit closer than 4 px (as before). */
 export function tickStep(maxHp: number, width: number = FRAME.w): number {
@@ -46,15 +79,22 @@ export interface UnitFrameData {
   manaPct: number;
   showMana: boolean;
   ticks: number[];
+  /** Level badge text (centered in the circle). */
+  levelText: string;
+  /** XP ring fill 0..1 in 1/48 steps; 1 at max level. */
+  xpRing: number;
+  hpColor: string;
+  rimColor: string;
   /** Chrome cache key: changes only with class, level, team, ownership or tick layout. */
   key: string;
 }
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
-export function unitFrameData(unit: Unit, playerId: number, heroLevel?: number): UnitFrameData {
+export function unitFrameData(unit: Unit, playerId: number, heroLevel?: number, heroXp?: number): UnitFrameData {
   const mine = unit.id === playerId;
   const level = mine && heroLevel ? heroLevel : unit.level || 1;
+  const xpRing = xpRingFraction(level, mine ? heroXp : undefined);
   const name = className(unit);
   const step = tickStep(unit.maxHp);
   const ticks = tickMarks(unit.maxHp);
@@ -68,6 +108,10 @@ export function unitFrameData(unit: Unit, playerId: number, heroLevel?: number):
     manaPct: showMana ? clamp01(unit.mana / unit.maxMana) : 0,
     showMana,
     ticks,
-    key: `${name}|${level}|${unit.team}|${mine ? 1 : 0}|${Math.round(unit.maxHp)}|${step}|${showMana ? 1 : 0}`,
+    levelText: levelText(level),
+    xpRing,
+    hpColor: FRAME_COLORS.hp[unit.team],
+    rimColor: FRAME_COLORS.rim[unit.team],
+    key: `${name}|${level}|${unit.team}|${mine ? 1 : 0}|${Math.round(unit.maxHp)}|${step}|${showMana ? 1 : 0}|${Math.round(xpRing * XP_RING_STEPS)}`,
   };
 }
