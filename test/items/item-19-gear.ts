@@ -12,7 +12,9 @@ import { createMatch } from '../../src/game/sim';
 
 const gear = ITEMS.filter((i) => !i.consumable);
 assert.deepEqual([...new Set(gear.map((i) => i.slot))].sort(), ['armor', 'belt', 'helm', 'weapon'], '4 slots');
-for (const item of gear) assert.equal(item.cost, (item.unlockLevel ?? 1) * 50, `${item.id} price = itemLevel*50`);
+// Economy order [TEMP]: prices rebalanced by unlock level (old itemLevel*50 superseded).
+const PRICE: Record<number, number> = { 1: 200, 2: 300, 3: 450, 5: 700, 7: 1000 };
+for (const item of gear) assert.equal(item.cost, PRICE[item.unlockLevel ?? 1], `${item.id} price by level`);
 assert.equal(itemById('health-potion')!.cost, 45, 'potion prices unchanged');
 
 const clb = itemById('clb')!, ssd = itemById('ssd')!, qui = itemById('qui')!, lea = itemById('lea')!;
@@ -31,10 +33,11 @@ sim.attributes.str = 60;
 sim.gold = 1000;
 tryBuy(sim, 'clb');
 assert.equal(sim.loadout.weapon, 'clb');
-assert.equal(sim.gold, 950);
+assert.equal(sim.gold, 800);
 tryBuy(sim, 'ssd');
 assert.equal(sim.loadout.weapon, 'ssd');
-assert.equal(sim.gold, 800, 'no sell-back refund for the club');
+// Economy order [TEMP 70%]: the club sells back for 140 (replaces the doc's "cannot be sold").
+assert.equal(sim.gold, 800 - 450 + 140, 'club sold for 70% when overwritten');
 tryBuy(sim, 'clb');
 assert.equal(sim.loadout.weapon, 'ssd', 'cannot overwrite with a worse item');
-assert.equal(sim.gold, 800);
+assert.equal(sim.gold, 490);

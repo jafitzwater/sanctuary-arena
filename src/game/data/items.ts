@@ -264,9 +264,17 @@ const GEAR: ItemDef[] = [
  */
 export const GEAR_PRICE_PER_LEVEL = 50;
 
+/**
+ * Economy order [JOSEPH]: "rebalance item prices and level/stat gates to the new pace (start 500,
+ * 3.5/s)... progressive, not everything buyable at 0:00 with 500". The old itemLevel*50 rule
+ * (50/100/150/250/350) is superseded; prices by unlock level are [TEMP]:
+ * L1 200, L2 300, L3 450, L5 700, L7 1000. Level and stat gates are unchanged.
+ */
+export const GEAR_PRICE_BY_LEVEL: Record<number, number> = { 1: 200, 2: 300, 3: 450, 5: 700, 7: 1000 };
+
 export function gearPrice(item: ItemDef): number {
-  // [JOSEPH] "Price base = itemLevel*50"
-  return (item.unlockLevel ?? 1) * GEAR_PRICE_PER_LEVEL;
+  const level = item.unlockLevel ?? 1;
+  return GEAR_PRICE_BY_LEVEL[level] ?? level * 150;
 }
 
 const TIER_RANK: Record<ItemTier, number> = { base: 0, magic: 1, rare: 2, set: 3, unique: 4 };

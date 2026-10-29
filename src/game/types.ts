@@ -112,6 +112,8 @@ export interface Unit {
   deathCount: number;
   /** Champion kills since this unit last died. Doc: "A streak is 3 kills in a row". */
   streak: number;
+  /** Economy order: a bot champion's gold (bots never shop); only feeds the lowest-gold bonus. */
+  purse?: number;
   corpse: number;
   /** sim.time when this unit died. 0 while alive. */
   diedAt: number;

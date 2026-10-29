@@ -42,10 +42,11 @@ assert.deepEqual(STAT_GROWTH.paladin, { str: 2, dex: 2, vit: 1, energy: 0 });
 // [DOC] kits-final: "One path. In order: zeal, smite, charge, holy shield. Battle hammers is the top tier skill."
 assert.deepEqual(paladin.skills.map((s) => s.name), ['Zeal', 'Smite', 'Charge', 'Holy Shield', 'Battle Hammers']);
 assert.equal(paladin.skills.length, 5, 'doc names exactly five Paladin skills, no invented extra');
-// [DOC] 1/3/5/7; top tier [TEMP] 10 (doc: "after level 7"), same as the Barbarian Whirlwind.
-assert.deepEqual(paladin.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 10]);
-assert.ok(paladin.skills[4].unlockLevel > 7);
-assert.ok(paladin.skills.every((s) => s.maxRank === 5 && !s.passive));
+// [DOC] 1/3/5/7; economy order [JOSEPH]: top tier unlocks at 5 with ranks at 9 and 13 (was 10).
+assert.deepEqual(paladin.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 5]);
+assert.deepEqual(paladin.skills[4].rankLevels, [5, 9, 13]);
+assert.deepEqual(paladin.skills.map((s) => s.maxRank), [5, 5, 5, 5, 3]);
+assert.ok(paladin.skills.every((s) => !s.passive));
 assert.deepEqual(paladin.startingBelt, ['zeal', '', '', '']);
 assert.equal(paladin.role, 'melee');
 assert.equal(paladin.token, 'PA');

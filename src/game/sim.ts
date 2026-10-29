@@ -5,6 +5,7 @@ import { CAVE_RESET } from './data/caves';
 import { grassPatches, hiddenUnits } from './data/grass';
 import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
+import { MINION_GOLD, MINION_XP, PASSIVE_GOLD, START_GOLD, lowestGoldIds, minionRole, passiveGoldRate } from './economy';
 import { dealTeams } from './teams';
 import { barbarian, STICK_IDLE_TILT } from './data/classes/barbarian';
 import {
@@ -46,7 +47,8 @@ import { byId, findBase, inRange, isStructure, nearestEnemy, player } from './qu
 import { SKILLS } from './skills';
 import type { FrameInput, Sim, Team, Unit } from './types';
 
-export const PASSIVE_GOLD = 1.4;
+/** Economy order [JOSEPH]: 3.5 gold/s from 0:20 (was 1.4/s from 0:00). See economy.ts. */
+export { PASSIVE_GOLD };
 /** Champions that issued a move this tick. A move does not start a new windup. */
 let championsMoved = new Set<number>();
 /** The sim currently inside updateSim, so movement can cancel a backswing. */
@@ -64,7 +66,8 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     nextId: 1,
     playerId: 0,
     enemyChampionId: 0,
-    gold: 175,
+    // Economy order [JOSEPH]: "starting gold 500" (was 175).
+    gold: START_GOLD,
     xp: 0,
     level: 1,
     skillPoints: 0,
@@ -403,8 +406,10 @@ export function spawnMinion(sim: Sim, defId: string, team: Team, x: number, y: n
     attackInterval: def.attackInterval,
     attackCd: new Rng((sim.nextId * 17 + sim.seed) | 0).next() * def.attackInterval,
     aggro: def.aggro,
-    gold: def.gold,
-    xp: def.xp,
+    // Economy order: lane minions pay by role ([JOSEPH] gold 65/40/85, [TEMP] xp 60/30/90);
+    // camps ('wild') keep their unit gold/xp.
+    gold: team === 'wild' ? def.gold : MINION_GOLD[minionRole(defId, def.ranged)],
+    xp: team === 'wild' ? def.xp : MINION_XP[minionRole(defId, def.ranged)],
     ranged: def.ranged,
     projectileSpeed: def.projectileSpeed || 440,
     waypoint: team === 'ally' ? 1 : lane.length - 2,
@@ -472,7 +477,7 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
   strikes(sim, input, step);
   updateProjectiles(sim, step);
   regen(sim, step);
-  sim.gold += PASSIVE_GOLD * step;
+  passiveGold(sim, step);
 
   if (input.cast) tryCast(sim, input);
   if (input.upgrade) tryUpgrade(sim, input.upgrade);
@@ -1405,6 +1410,21 @@ function updateHeroAi(sim: Sim, unit: Unit, dt: number): void {
   if (Math.hypot(unit.x - wp.x, unit.y - wp.y) < 36) {
     const next = unit.waypoint + (forward ? 1 : -1);
     if (next >= 0 && next < lane.length) unit.waypoint = next;
+  }
+}
+
+/**
+ * Economy order [JOSEPH]: passive gold from 0:20, and from 4:00 +2/s for the lowest-gold
+ * champion. Bots keep a purse (never spent) so "lowest" compares every champion on the map.
+ */
+function passiveGold(sim: Sim, step: number): void {
+  const champs = sim.units.filter((unit) => unit.kind === 'champion');
+  const purse = (unit: Unit) => (unit.id === sim.playerId ? sim.gold : (unit.purse ?? 0));
+  const low = lowestGoldIds(champs.map((unit) => ({ id: unit.id, gold: purse(unit) })));
+  for (const unit of champs) {
+    const gain = passiveGoldRate(sim.time, low.has(unit.id)) * step;
+    if (unit.id === sim.playerId) sim.gold += gain;
+    else unit.purse = (unit.purse ?? 0) + gain;
   }
 }
 

@@ -80,6 +80,7 @@ import type { Vec } from './math';
 import { player } from './query';
 import { GROUND_BASE, groundAt, tilePaint, walkable, type GroundKind } from './terrain';
 import type { Camera, Sim, Unit } from './types';
+import { FRAME, unitFrameData, type UnitFrameData } from './unitFrame';
 
 export interface DrawOpts {
   mode: 'title' | 'play' | 'end';
@@ -1500,9 +1501,13 @@ export class Renderer {
     const w = unit.kind === 'base' ? 74 : unit.kind === 'champion' ? 54 : 34;
     const barH = 5;
     const y = footY - height - (unit.kind === 'minion' ? 10 : 18);
+    if (unit.kind === 'champion') {
+      this.drawUnitFrame(unitFrameData(unit, playerId, unit.id === playerId ? this.heroLevel : undefined), x, y);
+      return;
+    }
     const pct = Math.max(0, Math.min(1, unit.hp / Math.max(1, unit.maxHp)));
     const mine = unit.id === playerId;
-    if (mine || unit.kind === 'champion') {
+    if (mine) {
       const badge = 13;
       const bx = x - w / 2 - badge - 1;
       const by = y + barH / 2;
@@ -1552,6 +1557,106 @@ export class Renderer {
       ctx.textBaseline = 'alphabetic';
       ctx.fillText(unit.name, x, y - 4);
     }
+  }
+
+  /** Economy order: cached frame chrome (back + front layers) keyed by unitFrameData.key. */
+  private frameCache = new Map<string, { back: HTMLCanvasElement; front: HTMLCanvasElement }>();
+
+  /**
+   * Economy order, step 6 [TEMP styling]: champion unit frame in Diablo 2 dress. A dark round
+   * level circle with a gold rim (red rim on enemies) at the left, a green HP bar (enemies red,
+   * NEEDS JOSEPH) with ticks, a thinner blue mana bar right under it, and the class name in small
+   * gold text over the bar. Chrome is drawn once into offscreen canvases and reused until the
+   * class, level, team or tick layout changes; each frame only blits it and fills two rects.
+   */
+  private drawUnitFrame(data: UnitFrameData, x: number, y: number): void {
+    const ctx = this.ctx;
+    const { w, hp: hpH, mana: manaH, gap, circle } = FRAME;
+    const left = Math.round(x - w / 2 + circle / 2);
+    const top = Math.round(y);
+    const pad = circle + 3;
+    const scale = Math.min(2, Math.max(1, this.camera.dpr || 1));
+    const chrome = this.frameChrome(data, scale);
+    const ox = left - pad - circle;
+    const oy = top - FRAME.name - 4;
+    const cw = chrome.back.width / scale;
+    const ch = chrome.back.height / scale;
+    ctx.drawImage(chrome.back, ox, oy, cw, ch);
+    ctx.fillStyle = data.team === 'enemy' ? '#d8432e' : '#4fbf3a';
+    ctx.fillRect(left, top, w * data.hpPct, hpH);
+    if (data.showMana) {
+      ctx.fillStyle = '#3a8fe8';
+      ctx.fillRect(left, top + hpH + gap, w * data.manaPct, manaH);
+    }
+    ctx.drawImage(chrome.front, ox, oy, cw, ch);
+  }
+
+  private frameChrome(data: UnitFrameData, scale: number): { back: HTMLCanvasElement; front: HTMLCanvasElement } {
+    const key = `${data.key}|${scale}`;
+    const hit = this.frameCache.get(key);
+    if (hit) return hit;
+    if (this.frameCache.size > 48) this.frameCache.clear();
+    const { w, hp: hpH, mana: manaH, gap, circle, name } = FRAME;
+    const pad = circle + 3;
+    const cssW = pad + circle + Math.max(w + 4, 96); // room for 'Necromancer' past the bar end
+    const cssH = name + 4 + hpH + gap + manaH + circle + 2;
+    const make = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(cssW * scale);
+      canvas.height = Math.ceil(cssH * scale);
+      const c = canvas.getContext('2d')!;
+      c.scale(scale, scale);
+      return { canvas, c };
+    };
+    const bx = pad + circle; // bar left inside the chrome canvas
+    const by = name + 4; // bar top
+    const barsH = hpH + (data.showMana ? gap + manaH : 0);
+    const rim = data.team === 'enemy' ? '#b8402c' : '#c7b377';
+    // Back: bar well, trough colors and the class name.
+    const back = make();
+    back.c.fillStyle = 'rgba(0,0,0,0.82)';
+    back.c.fillRect(bx - 1, by - 1, w + 2, barsH + 2);
+    back.c.fillStyle = data.team === 'enemy' ? '#2a1210' : '#16200f';
+    back.c.fillRect(bx, by, w, hpH);
+    if (data.showMana) {
+      back.c.fillStyle = '#071422';
+      back.c.fillRect(bx, by + hpH + gap, w, manaH);
+    }
+    back.c.font = `600 ${name}px "Cinzel", "Cinzel Decorative", Georgia, serif`;
+    back.c.textAlign = 'left';
+    back.c.textBaseline = 'alphabetic';
+    back.c.lineWidth = 2.5;
+    back.c.strokeStyle = 'rgba(0,0,0,0.9)';
+    back.c.strokeText(data.className, bx + 1, by - 2);
+    back.c.fillStyle = data.mine ? '#f0d68a' : '#d8c79a';
+    back.c.fillText(data.className, bx + 1, by - 2);
+    // Front: ticks, a gold hairline over the bars, and the level circle on top.
+    const front = make();
+    front.c.fillStyle = 'rgba(0,0,0,0.85)';
+    for (const t of data.ticks) front.c.fillRect(Math.round(bx + t * w), by, 1, hpH);
+    front.c.strokeStyle = 'rgba(199,179,119,0.55)';
+    front.c.lineWidth = 1;
+    front.c.strokeRect(bx - 0.5, by - 0.5, w + 1, barsH + 1);
+    const cx = pad;
+    const cy = by + barsH / 2;
+    front.c.beginPath();
+    front.c.arc(cx, cy, circle, 0, Math.PI * 2);
+    const grad = front.c.createRadialGradient(cx - 2, cy - 2, 1, cx, cy, circle);
+    grad.addColorStop(0, '#3a2c1c');
+    grad.addColorStop(1, '#0c0805');
+    front.c.fillStyle = grad;
+    front.c.fill();
+    front.c.lineWidth = 1.6;
+    front.c.strokeStyle = rim;
+    front.c.stroke();
+    front.c.fillStyle = '#e6c864';
+    front.c.font = `700 ${data.level >= 10 ? 8 : 9}px "Cinzel Decorative", Georgia, serif`;
+    front.c.textAlign = 'center';
+    front.c.textBaseline = 'middle';
+    front.c.fillText(String(data.level), cx, cy + 0.5);
+    const entry = { back: back.canvas, front: front.canvas };
+    this.frameCache.set(key, entry);
+    return entry;
   }
 
   private drawFx(ctx: CanvasRenderingContext2D, fx: Sim['fx'][number], sim?: Sim): void {

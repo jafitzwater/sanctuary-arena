@@ -298,12 +298,12 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   const heroBefore = player(sim);
   heroBefore.hp = 40;
   heroBefore.mana = 12;
-  grantXp(sim, 60);
+  grantXp(sim, 120); // economy order [TEMP] curve: 120 to reach level 2
   assert.equal(sim.level, 2);
   assert.equal(heroBefore.hp, heroBefore.maxHp, 'level-up restores life');
   assert.equal(heroBefore.mana, heroBefore.maxMana, 'level-up restores mana');
   assert.ok(sim.sfx.includes('level'));
-  grantXp(sim, 115); // Doc: Shout (2nd skill) unlocks at level 3
+  grantXp(sim, 150); // Doc: Shout (2nd skill) unlocks at level 3 (economy order [TEMP] curve: 150 for 2->3)
   assert.ok(sim.fx.some((fx) => fx.kind === 'text' && fx.text === 'Level 2'));
   // Pass 3 item 4 [JOSEPH]: Shout is auto-learned at rank 1 at level 3 with that level's point.
   assert.equal(sim.skillRanks.shout, 1, 'Shout auto-learned at its kit level');
@@ -320,7 +320,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   trySpendAttribute(sim, 'str');
   assert.equal(sim.attributes.str, str + 1);
   assert.equal(sim.statPoints, 0);
-  sim.gold = 400;
+  sim.gold = 600; // economy order [TEMP] prices: Light Belt is 300 now (was 100)
   const hero = player(sim);
   hero.x = sim.map.playerBase.x;
   hero.y = sim.map.playerBase.y;
@@ -725,7 +725,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.equal(xpShare(2), 0.65);
   assert.equal(xpShare(4), 0.45);
   assert.equal(comebackMul(1, 0), 1);
-  assert.ok(comebackMul(1, 90) > 1);
+  assert.ok(comebackMul(1, 600) > 1); // economy order [TEMP]: clock = expectedLevel
 
   const solo = createMatch(act1, barbarian, 1);
   const hero = player(solo);
@@ -746,7 +746,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   assert.equal(group.xp, Math.round(foe2.xp * 0.65));
 
   const behind = createMatch(act1, barbarian, 1);
-  behind.time = 90;
+  behind.time = 600; // economy order [TEMP]: past the new expectedLevel clock's first levels
   const hero3 = player(behind);
   const foe3 = spawnMinion(behind, 'fallen', 'enemy', hero3.x + 30, hero3.y);
   const baseXp = foe3.xp;
