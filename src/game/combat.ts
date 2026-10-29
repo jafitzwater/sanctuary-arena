@@ -1,5 +1,6 @@
 import { totalMS } from './data/moveSpeed';
 import { STAT_GROWTH } from './data/classes/statGrowth';
+import { classDamageMult } from './data/classes/damageMult';
 import { isBetterGear, itemById, itemGate, potionCap, type ItemDef, type PotionKind } from './data/items';
 import type { SkillDef } from './data/classes/types';
 import { dist } from './math';
@@ -522,7 +523,8 @@ export function heroNumbers(sim: Sim, timers: { bo: boolean; berserk: boolean })
   return {
     hp: Math.max(1, Math.round(hp)),
     mana: Math.max(0, Math.round(mana)),
-    ad: Math.max(1, Math.round(ad)),
+    // Item 5 [TEMP]: Necromancer/Sorceress damage multiplier (data/classes/damageMult.ts); 1 for other classes.
+    ad: Math.max(1, Math.round(ad * classDamageMult(sim.classDef.id))),
     armor: Math.round(armor),
     // [JOSEPH] world px/s of the base MS with no modifiers; live modifiers apply in sim championMS().
     moveSpeed: totalMS(move),
