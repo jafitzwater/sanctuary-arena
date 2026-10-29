@@ -1,5 +1,6 @@
 import { amazon } from './amazon';
 import { barbarian } from './barbarian';
+import { necromancer } from './necromancer';
 import { paladin } from './paladin';
 import { sorceress } from './sorceress';
 import type { ClassDef } from './types';
@@ -17,6 +18,7 @@ export const CLASSES: Record<string, ClassDef> = {
   amazon,
   paladin,
   sorceress,
+  necromancer,
 };
 
 export function getClass(id: string): ClassDef {

@@ -25,10 +25,10 @@ import { cellHasFigure, readPng } from './png';
 
 // --- Registry and selection (the existing title-screen class picker reads ROSTER/CLASSES).
 assert.equal(getClass('amazon'), amazon);
-assert.deepEqual(Object.keys(CLASSES).sort(), ['amazon', 'barbarian', 'paladin', 'sorceress']); // Paladin and Sorceress orders added them
-assert.deepEqual(playableIds().sort(), ['amazon', 'barbarian', 'paladin', 'sorceress']);
+assert.deepEqual(Object.keys(CLASSES).sort(), ['amazon', 'barbarian', 'necromancer', 'paladin', 'sorceress']); // Paladin and Sorceress orders added them
+assert.deepEqual(playableIds().sort(), ['amazon', 'barbarian', 'necromancer', 'paladin', 'sorceress']);
 assert.equal(ROSTER.find((r) => r.id === 'amazon')?.playable, true);
-for (const id of ['necromancer']) assert.equal(ROSTER.find((r) => r.id === id)?.playable, false);
+assert.equal(ROSTER.find((r) => r.id === 'necromancer')?.playable, true); // Necromancer order
 
 // --- Values vs docs.
 // [JOSEPH] joseph-answers-oct27 answer 6: "Amazon Str20 Dex25 Vit20 Ene15".
@@ -145,7 +145,7 @@ assert.ok(Math.abs(totalMS(340) - 141.913) < 0.01, `340 -> ${totalMS(340)} px/s`
     assert.deepEqual([item.reqStr ?? 0, item.reqDex ?? 0], [s, d], `${id} Barbarian gate unchanged`);
     assert.deepEqual(itemGate(item, 'barbarian'), { reqStr: s, reqDex: d });
   }
-  assert.deepEqual(Object.keys(CLASS_GATES), ['amazon', 'paladin', 'sorceress']);
+  assert.deepEqual(Object.keys(CLASS_GATES), ['amazon', 'paladin', 'sorceress', 'necromancer']);
 
   const LAST_HIT = 0.4;
   const GATE_BY = 8 * 60;
