@@ -28,6 +28,24 @@ export const CLASS_NAMES: Record<string, string> = {
  */
 export const FRAME = { w: 68, hp: 12, mana: 8, gap: 1, circle: 18, ring: 2, name: 11 } as const;
 
+/**
+ * Structure scale + nameplate order item 3 [JOSEPH t275u]: the frame sits just ABOVE the champion's head.
+ * [TEMP] Gap between the top of the scaled sprite (foot - drawn height, which already includes the +15%) and the
+ * lowest point of the frame (css px). Frame sizes unchanged.
+ */
+export const NAMEPLATE_HEAD_GAP = 4;
+
+/** How far the frame reaches below the HP bar top: the bars, or the level circle centred on them (28.5 px). */
+export function nameplateDrop(): number {
+  const bars = FRAME.hp + FRAME.gap + FRAME.mana;
+  return Math.max(bars, bars / 2 + FRAME.circle);
+}
+
+/** HP bar top (css y) for a champion with foot at footY and drawn sprite height spriteH (was footY - spriteH - 18). */
+export function nameplateBarTop(footY: number, spriteH: number): number {
+  return footY - spriteH - NAMEPLATE_HEAD_GAP - nameplateDrop();
+}
+
 /** Level badge rim stroke width (css px). */
 export const BADGE_RIM = 1.6;
 
