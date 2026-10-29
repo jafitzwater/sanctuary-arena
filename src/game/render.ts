@@ -60,7 +60,9 @@ import {
   preloadStructureBitmaps,
   structureBitmap,
   structureBitmapKey,
+  STRUCTURE_CULL_PAD,
   structureBitmapScale,
+  structureUnitHeight,
 } from './art/structure-bitmaps';
 import {
   BASE_OUTLINE_PX,
@@ -70,7 +72,6 @@ import {
   LANE_EDGE_DARKEN,
   RUIN_ALPHA,
   STRUCTURE_CONTRAST,
-  BASE_VISUAL_SCALE,
   STRUCTURE_SHADOW_ALPHA,
   STRUCTURE_SHADOW_GROW,
   TOWER_OUTLINE_PX,
@@ -114,7 +115,7 @@ import type { Vec } from './math';
 import { player } from './query';
 import { GROUND_BASE, groundAt, tilePaint, walkable, type GroundKind } from './terrain';
 import type { Camera, Sim, Unit } from './types';
-import { BADGE_RIM, FRAME, FRAME_COLORS, unitFrameData, xpRingRadius, type UnitFrameData } from './unitFrame';
+import { BADGE_RIM, FRAME, FRAME_COLORS, nameplateBarTop, unitFrameData, xpRingRadius, type UnitFrameData } from './unitFrame';
 
 /** Unit-frame restyle: bar left / bar top inside the cached chrome canvas (badge to the left, name above). */
 const UF_BX = FRAME.circle * 2 + 3;
@@ -854,7 +855,14 @@ export class Renderer {
   ): void {
     const pose = this.poseOf(unit, playerId);
     const p = this.project(unit.x, unit.y);
-    if (p.x < -180 || p.y < -220 || p.x > this.camera.cssW + 180 || p.y > this.camera.cssH + 80) return;
+    // Structure scale order [JOSEPH t275u]: tall towers / bases stay drawn while their top or sides are on screen.
+    const structure = unit.kind === 'tower' || unit.kind === 'base';
+    const tall = structure ? this.unitHeight(unit) * u * structureVisualScale(unit.defId) : 0;
+    // Platform half-width is up to 0.5x the height and reaches 0.25x below the foot; the body rises the full height.
+    const side = Math.max(180, tall * 0.5 + STRUCTURE_CULL_PAD);
+    const above = Math.max(220, tall * 0.25 + STRUCTURE_CULL_PAD);
+    const below = Math.max(80, tall + STRUCTURE_CULL_PAD);
+    if (p.x < -side || p.y < -above || p.x > this.camera.cssW + side || p.y > this.camera.cssH + below) return;
     let footY = p.y;
     if (unit.leap) {
       const t = Math.min(1, unit.leap.t / unit.leap.dur);
@@ -1075,7 +1083,7 @@ export class Renderer {
     const u = this.spriteScale();
     const s = structureBitmapScale(kind, u);
     // Bitmap ruins keep the alive footprint (manifest), so shadow + platform keep the alive size too.
-    const h = bmp ? (tower ? TOWER_DRAW_H : BASE_DRAW_H * BASE_VISUAL_SCALE) * u : alive ? height : height * 0.55;
+    const h = bmp ? (tower ? TOWER_DRAW_H : BASE_DRAW_H) * u : alive ? height : height * 0.55;
     const sw = h * (tower ? 0.28 : 0.4) * STRUCTURE_SHADOW_GROW;
     const sh = h * (tower ? 0.1 : 0.12) * STRUCTURE_SHADOW_GROW;
     const alpha = ctx.globalAlpha;
@@ -1634,11 +1642,12 @@ export class Renderer {
       case 'act2-mercenary':
       case 'act3-mercenary':
         return 100;
+      // Structure scale order [JOSEPH t275u]: towers 2.5x a champion, bases 1.75x the tower (t280u; visual only).
       case 'tower':
-        return unit.alive ? 128 : 70;
+        return structureUnitHeight('tower', unit.alive);
       case 'base-ally':
       case 'base-enemy':
-        return unit.alive ? 220 : 120;
+        return structureUnitHeight('base', unit.alive);
       default:
         return 70;
     }
@@ -1671,7 +1680,9 @@ export class Renderer {
     const barH = 5;
     const y = footY - height - (unit.kind === 'minion' ? 10 : 18);
     if (unit.kind === 'champion') {
-      this.drawUnitFrame(unitFrameData(unit, playerId, unit.id === playerId ? this.heroLevel : undefined, this.heroXp), x, y);
+      // Structure scale + nameplate order item 3 [JOSEPH t275u]: frame sits just above the scaled head.
+      const frameY = nameplateBarTop(footY, height);
+      this.drawUnitFrame(unitFrameData(unit, playerId, unit.id === playerId ? this.heroLevel : undefined, this.heroXp), x, frameY);
       return;
     }
     const pct = Math.max(0, Math.min(1, unit.hp / Math.max(1, unit.maxHp)));
