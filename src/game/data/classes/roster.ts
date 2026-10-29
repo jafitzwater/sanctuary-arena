@@ -13,7 +13,7 @@ export const ROSTER: ClassSlot[] = [
   { id: 'amazon', name: 'Amazon', playable: true, blurb: 'Magic Arrow path, ranged.' },
   { id: 'barbarian', name: 'Barbarian', playable: true, blurb: 'The only class in the match today.' },
   { id: 'necromancer', name: 'Necromancer', playable: false, blurb: 'Coming soon.' },
-  { id: 'paladin', name: 'Paladin', playable: false, blurb: 'Coming soon.' },
+  { id: 'paladin', name: 'Paladin', playable: true, blurb: 'One path, melee.' },
   { id: 'sorceress', name: 'Sorceress', playable: false, blurb: 'Coming soon.' },
 ];
 

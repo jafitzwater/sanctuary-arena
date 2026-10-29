@@ -315,6 +315,25 @@ export const CLASS_GATES: Record<string, Record<string, { reqStr?: number; reqDe
     rng: { reqStr: 26 },
     fhl: { reqStr: 26 },
   },
+  /**
+   * ORDER "Make Paladin playable" [TEMP]: the Paladin grows str 25 + 2/level and dex 20 + 2/level,
+   * so the Barbarian's strength gates (34/38/42 at levels 3/5/7) open 2-3 levels late for him. His
+   * strength gate is cut to his own strength at the item's level (29/33/37); levels, dexterity gates
+   * (2hs dex 26, met by his 32 at level 7) and prices are unchanged. Old -> new Paladin reqStr:
+   * ssd/lea/skp 34 -> 29, flc/stu/hlm/mbl 38 -> 33, 2hs/rng/fhl 42 -> 37.
+   */
+  paladin: {
+    ssd: { reqStr: 29 },
+    lea: { reqStr: 29 },
+    skp: { reqStr: 29 },
+    flc: { reqStr: 33 },
+    stu: { reqStr: 33 },
+    hlm: { reqStr: 33 },
+    mbl: { reqStr: 33 },
+    '2hs': { reqStr: 37 },
+    rng: { reqStr: 37 },
+    fhl: { reqStr: 37 },
+  },
 };
 
 /** Stat gate for a class: the class override when one exists, else the item's own reqStr/reqDex. */
