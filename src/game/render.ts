@@ -68,6 +68,7 @@ import {
   CHARACTER_OUTLINE_PX,
   LANE_EDGE_BAND,
   LANE_EDGE_DARKEN,
+  RUIN_ALPHA,
   STRUCTURE_CONTRAST,
   BASE_VISUAL_SCALE,
   STRUCTURE_SHADOW_ALPHA,
@@ -1142,7 +1143,9 @@ export class Renderer {
   ): void {
     const body = unit.kind === 'minion' || unit.kind === 'champion';
     ctx.save();
-    if (!unit.alive) {
+    if (!unit.alive && (unit.kind === 'tower' || unit.kind === 'base')) {
+      ctx.globalAlpha = RUIN_ALPHA; // Joseph t271u: ruins solid; other dead units keep the fade below.
+    } else if (!unit.alive) {
       const fade = unit.corpse > 0 ? Math.max(0.05, (unit.corpse / 4.5) * 0.55) : 0.55;
       ctx.globalAlpha = fade;
     } else if (unit.invuln > 0 && Math.sin(opts.time * 28) > 0) ctx.globalAlpha = 0.45;
