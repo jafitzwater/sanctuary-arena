@@ -18,11 +18,11 @@ assert.equal(CHAMPION_SPRITE_SCALE, 1.15);
 assert.equal(championSpriteScale('champion'), 1.15);
 for (const kind of ['minion', 'tower', 'base', 'seal']) assert.equal(championSpriteScale(kind), 1, kind);
 
-// 3. Minimap icons: structures 8 px, heroes 6 px, 20% dark layer under icons.
-assert.equal(ICONS.nexus, 8);
+// 3. Minimap icons restored to pre-#84 sizes [JOSEPH t255u]; 20% dark layer under icons kept.
+assert.equal(ICONS.nexus, 13);
 assert.equal(ICONS.guardTower, 8);
-assert.equal(ICONS.laneTower, 8);
-assert.equal(ICONS.champion, 6);
+assert.equal(ICONS.laneTower, 6);
+assert.equal(ICONS.champion, 13);
 assert.equal(MINIMAP_ICON_SHADE, 0.2);
 
 // 4. Ability buttons 64 px with a 3 px border (desktop squares, narrow/short media rules, touch petals).

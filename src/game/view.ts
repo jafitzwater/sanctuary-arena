@@ -234,18 +234,18 @@ export function minimapH(w: number, mapW: number, mapH: number): number {
 
 /**
  * Icon sizes in css px (multiplied by the minimap backing dpr).
- * Four UI/size changes item 3 [JOSEPH t250u]: structure icons (towers, bases) 8 px (was nexus 13, guard 8,
- * lane 6), hero icons 6 px (was 13).
+ * Restore minimap icon sizes [JOSEPH t255u]: back to pre-#84 sizes (nexus 13 > guard 8 > lane 6, hero 13);
+ * the #84 20% shade layer stays.
  */
 export const ICONS = {
   /** Worldstone = Nexus/main base. Diamond, full width. */
-  nexus: 8,
+  nexus: 13,
   /** Base guard tower = the inner (tier 1) tower on each roadway, nearest its Worldstone. */
   guardTower: 8,
   /** Lane tower = the outer (tier 2) tower on each roadway. */
-  laneTower: 8,
+  laneTower: 6,
   /** Alive champion portrait, circle diameter. */
-  champion: 6,
+  champion: 13,
   /** Cave boss (major objective). */
   caveBoss: 7,
   /** Jungle camp (den without cave). None exist on the current map. */
