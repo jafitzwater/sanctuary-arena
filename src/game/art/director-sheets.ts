@@ -6,6 +6,8 @@
  * only while a sheet image is still loading.
  */
 import { CLASS_SHEET, MOB_SHEET } from './sheet-frames';
+import { blitOutlinedCell } from './outline';
+import { CHARACTER_CONTRAST, CHARACTER_OUTLINE_PX } from '../readability';
 
 const images = new Map<string, HTMLImageElement>();
 
@@ -41,7 +43,9 @@ export function drawClassSheet(
   if (!image) return false;
   const s = CLASS_SHEET;
   const scale = height / s.body;
-  ctx.drawImage(image, col * s.cell, row * s.cell, s.cell, s.cell, x - s.footX * scale, y - s.footY * scale, s.cell * scale, s.cell * scale);
+  // Visual readability item 5 [JOSEPH t253u]: 2 px dark outline + local contrast (draw only, same cell and size).
+  blitOutlinedCell(ctx, image, s.cell, CHARACTER_CONTRAST, CHARACTER_OUTLINE_PX,
+    col * s.cell, row * s.cell, s.cell, s.cell, x - s.footX * scale, y - s.footY * scale, s.cell * scale, s.cell * scale);
   return true;
 }
 
@@ -53,7 +57,9 @@ export function drawMobSheet(
   const s = MOB_SHEET;
   const scale = height / s.body;
   // Full sheets carry all 8 directions (w/sw/nw pre-mirrored in the sheet), so no runtime flip.
-  ctx.drawImage(image, col * s.cell, row * s.cell, s.cell, s.cell, x - s.footX * scale, y - s.footY * scale, s.cell * scale, s.cell * scale);
+  // Visual readability item 5 [JOSEPH t253u]: 2 px dark outline + local contrast (draw only).
+  blitOutlinedCell(ctx, image, s.cell, CHARACTER_CONTRAST, CHARACTER_OUTLINE_PX,
+    col * s.cell, row * s.cell, s.cell, s.cell, x - s.footX * scale, y - s.footY * scale, s.cell * scale, s.cell * scale);
   return true;
 }
 
