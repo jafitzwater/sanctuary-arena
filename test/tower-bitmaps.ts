@@ -31,13 +31,13 @@ for (const kind of ['tower', 'base'] as const) {
 }
 assert.equal(Object.keys(STRUCTURE_BITMAPS).length, 8);
 
-// Scale math (structure scale order t275u): tower 368·u/120, base 1104·u/216, same for destroyed.
+// Scale math (structure scale order t275u): tower 368·u/120, base 644·u/216, same for destroyed.
 for (const u of [0.6, 1, 1.37]) {
   close(structureBitmapScale('tower', u), (368 * u) / 120, 'tower scale');
-  close(structureBitmapScale('base', u), (1104 * u) / 216, 'base scale');
+  close(structureBitmapScale('base', u), (644 * u) / 216, 'base scale');
 }
 
-// Anchoring: the anchor pixel's bottom-centre lands on the foot; alive art height = 368u / 1104u (t275u).
+// Anchoring: the anchor pixel's bottom-centre lands on the foot; alive art height = 368u / 644u (t275u).
 const u = 1.2;
 for (const key of Object.keys(STRUCTURE_BITMAPS)) {
   const def = STRUCTURE_BITMAPS[key];
@@ -47,7 +47,7 @@ for (const key of Object.keys(STRUCTURE_BITMAPS)) {
   close(r.dy + r.dh, 500, `${key} foot y`);
 }
 close(bitmapRect(STRUCTURE_BITMAPS['tower:ally:alive'], 0, 0, structureBitmapScale('tower', u)).dh, 368 * u, 'tower drawn height');
-close(bitmapRect(STRUCTURE_BITMAPS['base:enemy:alive'], 0, 0, structureBitmapScale('base', u)).dh, 1104 * u, 'base drawn height');
+close(bitmapRect(STRUCTURE_BITMAPS['base:enemy:alive'], 0, 0, structureBitmapScale('base', u)).dh, 644 * u, 'base drawn height');
 assert.equal(BITMAP_CONTRAST, 1);
 
 // Fallback: with no DOM image (node, or still loading / failed) the lookup returns null so render.ts draws paintSpire / paintStronghold.

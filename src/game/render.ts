@@ -1642,7 +1642,7 @@ export class Renderer {
       case 'act2-mercenary':
       case 'act3-mercenary':
         return 100;
-      // Structure scale order [JOSEPH t275u]: towers 2.5x a champion, bases 3x the tower (visual only).
+      // Structure scale order [JOSEPH t275u]: towers 2.5x a champion, bases 1.75x the tower (t280u; visual only).
       case 'tower':
         return structureUnitHeight('tower', unit.alive);
       case 'base-ally':

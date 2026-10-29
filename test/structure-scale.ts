@@ -1,4 +1,4 @@
-// Structure scale + nameplate position [JOSEPH t275u]: towers >= 2.5x a champion, base = 3x tower, anchoring,
+// Structure scale + nameplate position [JOSEPH t275u]: towers >= 2.5x a champion, base = 1.75x tower (t280u), anchoring,
 // HP bars follow the new tops, champion nameplate just above the head, hit radius unchanged, outline not scaled.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -26,9 +26,9 @@ const close = (a: number, b: number, msg: string) => assert.ok(Math.abs(a - b) <
 // [TEMP] constants.
 assert.equal(CHAMPION_REF_H, 128);
 assert.equal(TOWER_CHAMPION_RATIO, 2.5);
-assert.equal(BASE_TOWER_RATIO, 3);
+assert.equal(BASE_TOWER_RATIO, 1.75);
 close(TOWER_DRAW_H, 368, 'tower draw h');
-close(BASE_DRAW_H, 1104, 'base draw h');
+close(BASE_DRAW_H, 644, 'base draw h');
 assert.equal(NAMEPLATE_HEAD_GAP, 4);
 
 const tower = STRUCTURE_BITMAPS['tower:ally:alive'];
@@ -42,14 +42,14 @@ for (const cssH of [320, 390, 480, 720, 900, 1080, 1440]) {
   const towerH = bitmapRect(tower, 0, 0, structureBitmapScale('tower', u)).dh;
   for (const key of ['base:ally:alive', 'base:enemy:alive']) {
     const r = bitmapRect(STRUCTURE_BITMAPS[key], 0, 0, structureBitmapScale('base', u));
-    close(r.dh, 3 * towerH, `${key} @${cssH} = 3x tower`);
+    close(r.dh, 1.75 * towerH, `${key} @${cssH} = 1.75x tower`);
   }
   // Ruins use the same scale as alive (bottom-centre anchored), so they grow with them.
   close(structureBitmapScale('tower', u) * 120, towerH, 'tower ruin scale = alive scale');
 
   // HP bar (drawBar: footY - height - 18) follows the new top: render height = unitHeight · u · structureVisualScale.
   close(structureUnitHeight('tower', true) * u * structureVisualScale('tower'), towerH, `tower bar height @${cssH}`);
-  close(structureUnitHeight('base', true) * u * structureVisualScale('base-ally'), 3 * towerH, `base bar height @${cssH}`);
+  close(structureUnitHeight('base', true) * u * structureVisualScale('base-ally'), 1.75 * towerH, `base bar height @${cssH}`);
 
   // Nameplate: frame bottom (bars or level circle) at least NAMEPLATE_HEAD_GAP above the scaled head top.
   const spriteH = HERO_DRAW_HEIGHT * u * CHAMPION_SPRITE_SCALE;
