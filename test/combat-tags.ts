@@ -1,3 +1,4 @@
+import { botAd, isCaster } from '../src/game/data/classes/damageMult';
 import { botMaxHp, expectedLevel } from '../src/game/economy';
 import assert from 'node:assert/strict';
 import { sanctuary } from '../src/game/data/acts/sanctuary';
@@ -138,7 +139,8 @@ assert.ok(enemyOf(clock).level > 1);
 // Skill rework order item 6 [JOSEPH]: bot HP now grows with level (0.85x the player's growth); AD/speed unchanged.
 assert.equal(enemyOf(clock).maxHp, botMaxHp(enemyOf(clock).look ?? 'barbarian', enemyOf(clock).level));
 assert.ok(enemyOf(clock).maxHp > hp);
-assert.equal(enemyOf(clock).ad, ad);
+// Item 5 follow-up (Joseph t242u): Necromancer/Sorceress bots' AD now grows with level; other bots keep their AD.
+assert.equal(enemyOf(clock).ad, isCaster(enemyOf(clock).look ?? '') ? botAd(enemyOf(clock).look!, enemyOf(clock).level) : ad);
 assert.equal(enemyOf(clock).moveSpeed, speed);
 assert.equal(enemyOf(clock).radius, radius);
 assert.equal(player(clock).level, clock.level);

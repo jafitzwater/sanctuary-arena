@@ -1,6 +1,6 @@
 import { totalMS } from './data/moveSpeed';
 import { STAT_GROWTH } from './data/classes/statGrowth';
-import { classDamageMult } from './data/classes/damageMult';
+import { botAd, casterAdBonus, isCaster } from './data/classes/damageMult';
 import { isBetterGear, itemById, itemGate, potionCap, type ItemDef, type PotionKind } from './data/items';
 import type { SkillDef } from './data/classes/types';
 import { dist } from './math';
@@ -145,6 +145,9 @@ export function syncChampionLevels(sim: Sim): void {
         unit.hp = unit.alive ? unit.hp * (max / unit.maxHp) : max;
         unit.maxHp = max;
       }
+      // Item 5 follow-up [TEMP]: bot Necromancers/Sorceresses get the same level-based caster AD as players.
+      const look = unit.look ?? unit.defId;
+      if (isCaster(look)) unit.ad = botAd(look, unit.level);
     }
   }
 }
@@ -523,8 +526,8 @@ export function heroNumbers(sim: Sim, timers: { bo: boolean; berserk: boolean })
   return {
     hp: Math.max(1, Math.round(hp)),
     mana: Math.max(0, Math.round(mana)),
-    // Item 5 [TEMP]: Necromancer/Sorceress damage multiplier (data/classes/damageMult.ts); 1 for other classes.
-    ad: Math.max(1, Math.round(ad * classDamageMult(sim.classDef.id))),
+    // Item 5 follow-up [TEMP]: Necromancer/Sorceress AD grows with level (data/classes/damageMult.ts); 0 for other classes.
+    ad: Math.max(1, Math.round(ad + casterAdBonus(sim.classDef.id, sim.level))),
     armor: Math.round(armor),
     // [JOSEPH] world px/s of the base MS with no modifiers; live modifiers apply in sim championMS().
     moveSpeed: totalMS(move),
