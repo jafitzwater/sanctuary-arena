@@ -114,7 +114,7 @@ export function characterScale(cssH: number): number {
  * (test/wild-rift-pass2.ts checks the css matches).
  */
 export const MINIMAP = {
-  /** [TEMP] Width in css px; height follows the map aspect (11:7, 3300 x 2100 at MAP_SCALE 0.75). Was 150. */
+  /** [TEMP] Width in css px; height follows the map aspect (square since the map 12k order, was 11:7). Was 150. */
   defaultW: 180,
   minW: 120,
   maxW: 240,

@@ -50,3 +50,7 @@ These units stay procedural (`src/game/art/figures.ts`, `src/game/art/d2look.ts`
 ## Base floor (batch 3 item 7)
 
 `public/env/stone_path_128x64.png` is the stone path sheet from [Isometric ground tiles](https://opengameart.org/content/isometric-ground-tiles) by rubberduck, [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Attribution is not required. Both mirrored base yards use the first 16 full-diamond variants, darkened. See `public/env/LICENSE-stone_path.txt`.
+
+## Map 12k theme (order "Map size and Diablo 2 theme from reference")
+
+All new terrain art is procedural Canvas 2D code (`src/game/art/zoneTheme.ts`, `src/game/data/mapZones.ts`): zone palettes, lava river, bridge, decals, trees, sandstone and obsidian features. No new image assets. The Diablo 2 acts and the reference image are a style reference only; nothing from Lords of Pain, The Spriters Resource or the reference image is in the repo.

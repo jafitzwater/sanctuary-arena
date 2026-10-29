@@ -50,6 +50,9 @@ import {
   type SheetAnim,
 } from './art/sheet-frames';
 import { stampBloodPool } from './decals';
+import { ChunkedBake } from './bakeChunks';
+import { ZONE_MINI, ZONE_SIZES, zoneAt, zoneGrid, zoneGroundPaint, type ZoneId } from './data/mapZones';
+import { paintBorderFeature, paintBridge, paintLavaRibbon, paintZoneDecal, themeFamily } from './art/zoneTheme';
 import { heroGaitStep, heroHoldCompass, readStickMotion } from './gait';
 import type { ActDef } from './data/acts/types';
 import { projectIso as isoProject, unprojectIso as isoUnproject } from './iso';
@@ -210,7 +213,16 @@ export class Renderer {
     cssH: 1,
     dpr: 1,
   };
-  private mapCanvas: HTMLCanvasElement | null = null;
+  /** Map 12k order: the ground bake is chunked (no single giant canvas, each chunk well under 4096 px). */
+  private bake: ChunkedBake | null = null;
+  private bakeMap: ActDef | null = null;
+  private bakeOx = 0;
+  private bakeOy = 0;
+  private sceneryAt: { prop: Prop; x: number; y: number }[] = [];
+  private lavaLayers: { crust: Vec[]; lava: Vec[]; core: Vec[] } | null = null;
+  private bridges: Vec[][] = [];
+  /** Blood pools stay on the ground when a chunk is evicted and rebaked. */
+  private readonly bloodLog: { x: number; y: number; r: number; ichor: boolean; seed: number }[] = [];
   private mapKey = '';
   /** Item 7: the CC0 stone floor is loaded and paints both base yards. */
   private floorArt = false;
@@ -238,7 +250,6 @@ export class Renderer {
   private seen = { slash: 0, spark: 0, flinch: 0, portal: 0, heroSlash: 0 };
   private shadeCanvas: HTMLCanvasElement | null = null;
   private shadeKey = '';
-  private mapCtx: CanvasRenderingContext2D | null = null;
   private readonly lighting = new DarkGothicLighting();
   private readonly lights: LightSource[] = [];
   private readonly hudPaint: (() => void)[] = [];
@@ -342,12 +353,12 @@ export class Renderer {
     ctx.fillStyle = '#1c2410';
     ctx.fillRect(0, 0, cssW, cssH);
     this.observeBlood(sim);
-    if (this.mapCanvas) {
+    if (this.bake) {
       const srcX = Math.round(this.camBakeX);
       const srcY = Math.round(this.camBakeY);
       const srcW = Math.max(1, Math.round(cssW / this.scale));
       const srcH = Math.max(1, Math.round(cssH / this.scale));
-      ctx.drawImage(this.mapCanvas, srcX, srcY, srcW, srcH, 0, 0, cssW, cssH);
+      this.bake.draw(ctx, srcX, srcY, srcW, srcH, cssW, cssH, 1);
     }
     this.drawMist(sim, cssW, cssH);
     this.drawOrbs(sim);
@@ -484,34 +495,23 @@ export class Renderer {
     const mirrored = mirroredBases(map);
     const floor = mirrored && baseFloorReady();
     const key = `${map.id}${floor ? ':floor' : ''}:t${turns}`;
-    if (this.mapCanvas && this.mapKey === key) return;
+    if (this.bake && this.mapKey === key) return;
     if (mirrored && !floor) onBaseFloor(() => { this.mapKey = ''; });
     this.floorArt = floor;
     const hw = BAKE_HW;
     const width = Math.ceil((map.width + map.height) * hw + PAD * 2);
     const height = Math.ceil((map.width + map.height) * hw * 0.5 + PAD * 2);
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    this.mapCtx = ctx;
     const ox = viewOriginX(turns, map.width, map.height, hw, PAD);
     const oy = PAD;
-    crisp(ctx);
-    ctx.fillStyle = tilePaint(GROUND_BASE).fill;
-    ctx.fillRect(0, 0, width, height);
+    this.bakeOx = ox;
+    this.bakeOy = oy;
+    this.bakeMap = map;
     this.scenery = sceneryFor(map);
-    this.stampGround(ctx, map, ox, oy, hw);
-    if (mirrored) {
-      // Item 7: red and blue primary glow over each yard (doc: "Red is one side's primary glow. Blue is the other.").
-      const r = map.fountainRadius * hw * Math.SQRT2 * 1.15;
-      for (const [base, color] of [[map.playerBase, TEAM_GLOW.ally], [map.enemyBase, TEAM_GLOW.enemy]] as const) {
-        const c = projectIso(base.x, base.y, hw, ox, oy);
-        paintTeamGlow(ctx, c.x, c.y, r, r * 0.5, color);
-      }
-    }
-    this.bakeProps(ctx, map, ox, oy, hw);
+    this.sceneryAt = this.scenery.map((prop) => ({ prop, ...projectIso(prop.x, prop.y, hw, ox, oy) }));
+    this.lavaLayers = this.buildLava(map, hw, ox, oy);
+    this.bridges = this.buildBridges(map, hw, ox, oy);
+    // Map 12k order: lazily painted 512 px chunks instead of one (W + H) * 0.85 px wide canvas.
+    this.bake = new ChunkedBake(width, height, (ctx, x0, y0, w, h) => this.paintChunk(ctx, x0, y0, w, h));
     this.fires = mirrored
       ? [
           // Item 7: the same brazier on each side, mirrored, burning in the side's color.
@@ -523,52 +523,171 @@ export class Renderer {
       { x: map.enemyBase.x - 80, y: map.enemyBase.y - 24, hell: true },
       { x: map.enemyBase.x + 40, y: map.enemyBase.y + 70, hell: true },
         ];
-    this.mapCanvas = canvas;
     this.mapKey = key;
   }
 
-  /** Props and camp clutter live in the map canvas, so a frame only redraws units. */
-  private bakeProps(ctx: CanvasRenderingContext2D, map: ActDef, ox: number, oy: number, hw: number): void {
+  /** One bake chunk: ground tiles, lava river, team glows, border features, props, then saved blood pools. */
+  private paintChunk(ctx: CanvasRenderingContext2D, x0: number, y0: number, w: number, h: number): void {
+    const map = this.bakeMap;
+    if (!map) return;
+    const hw = BAKE_HW;
+    const ox = this.bakeOx;
+    const oy = this.bakeOy;
+    crisp(ctx);
+    ctx.fillStyle = tilePaint(GROUND_BASE).fill;
+    ctx.fillRect(x0, y0, w, h);
+    const features = this.stampGround(ctx, map, ox, oy, hw, x0, y0, w, h);
+    if (this.lavaLayers) paintLavaRibbon(ctx, this.lavaLayers);
+    for (const deck of this.bridges) paintBridge(ctx, deck);
+    if (mirroredBases(map)) {
+      // Item 7: red and blue primary glow over each yard (doc: "Red is one side's primary glow. Blue is the other.").
+      const r = map.fountainRadius * hw * Math.SQRT2 * 1.15;
+      for (const [base, color] of [[map.playerBase, TEAM_GLOW.ally], [map.enemyBase, TEAM_GLOW.enemy]] as const) {
+        const c = projectIso(base.x, base.y, hw, ox, oy);
+        if (c.x + r < x0 || c.x - r > x0 + w || c.y + r < y0 || c.y - r > y0 + h) continue;
+        paintTeamGlow(ctx, c.x, c.y, r, r * 0.5, color);
+      }
+    }
+    features.sort((a, b) => a.y - b.y);
+    for (const f of features) paintBorderFeature(ctx, f.zone, f.x, f.y, f.n);
+    this.bakeProps(ctx, map, x0, y0, w, h);
+    for (const pool of this.bloodLog) {
+      if (pool.x + 40 < x0 || pool.x - 40 > x0 + w || pool.y + 40 < y0 || pool.y - 40 > y0 + h) continue;
+      seededStamp(ctx, pool);
+    }
+  }
+
+  /** Map 12k item 3: the river polyline as one continuous lava ribbon (paint only; the river never blocked). */
+  private buildLava(map: ActDef, hw: number, ox: number, oy: number): { crust: Vec[]; lava: Vec[]; core: Vec[] } | null {
+    const river = map.river;
+    if (!river || river.length < 2) return null;
+    const pts: { x: number; y: number; nx: number; ny: number; s: number }[] = [];
+    let run = 0;
+    for (let i = 1; i < river.length; i++) {
+      const a = river[i - 1];
+      const b = river[i];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      const steps = Math.max(1, Math.ceil(len / 80));
+      for (let k = i === 1 ? 0 : 1; k <= steps; k++) {
+        const t = k / steps;
+        pts.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, nx: -(b.y - a.y) / len, ny: (b.x - a.x) / len, s: run + len * t });
+      }
+      run += len;
+    }
+    const side = (half: number, wob: number) => {
+      const left: Vec[] = [];
+      const right: Vec[] = [];
+      for (const p of pts) {
+        const k = 1 + Math.sin(p.s / 310) * wob + Math.sin(p.s / 97 + 1.3) * wob * 0.5;
+        const taper = Math.min(1, p.s / 260, (run - p.s) / 260);
+        const hh = half * k * Math.max(0.35, taper);
+        left.push(projectIso(p.x + p.nx * hh, p.y + p.ny * hh, hw, ox, oy));
+        right.push(projectIso(p.x - p.nx * hh, p.y - p.ny * hh, hw, ox, oy));
+      }
+      return [...left, ...right.reverse()];
+    };
+    return { crust: side(ZONE_SIZES.river, 0.12), lava: side(ZONE_SIZES.river * 0.66, 0.18), core: side(ZONE_SIZES.river * 0.24, 0.3) };
+  }
+
+  /** Stone deck where a lane crosses the lava river (bake space corners). */
+  private buildBridges(map: ActDef, hw: number, ox: number, oy: number): Vec[][] {
+    const river = map.river;
+    if (!river || river.length < 2) return [];
+    const out: Vec[][] = [];
+    for (const path of map.paths ?? []) {
+      for (let i = 1; i < path.lane.length; i++) {
+        for (let k = 1; k < river.length; k++) {
+          const hit = segHit(path.lane[i - 1], path.lane[i], river[k - 1], river[k]);
+          if (!hit) continue;
+          const a = path.lane[i - 1];
+          const b = path.lane[i];
+          const len = Math.hypot(b.x - a.x, b.y - a.y);
+          const dx = (b.x - a.x) / len;
+          const dy = (b.y - a.y) / len;
+          const rl = Math.hypot(river[k].x - river[k - 1].x, river[k].y - river[k - 1].y);
+          const sin = Math.abs(dx * (river[k].y - river[k - 1].y) - dy * (river[k].x - river[k - 1].x)) / rl;
+          const along = (ZONE_SIZES.river * 1.15) / Math.max(0.3, sin) + 30;
+          const half = map.laneWidth / 2 + 6;
+          const corner = (u: number, v: number) => projectIso(hit.x + dx * u - dy * v, hit.y + dy * u + dx * v, hw, ox, oy);
+          out.push([corner(-along, -half), corner(along, -half), corner(along, half), corner(-along, half)]);
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Props and camp clutter live in the bake chunks, so a frame only redraws units. */
+  private bakeProps(ctx: CanvasRenderingContext2D, map: ActDef, x0: number, y0: number, w: number, h: number): void {
     const u = 0.72;
-    for (const prop of this.scenery) {
-      const p = projectIso(prop.x, prop.y, hw, ox, oy);
+    for (const { prop, x, y } of this.sceneryAt) {
+      if (x < x0 - 160 || x > x0 + w + 160 || y < y0 - 60 || y > y0 + h + 200) continue;
       const form = propForm(prop.kind);
-      const h =
+      const ph =
         (form === 'pillar' ? 78 :
         form === 'posts' ? 54 :
         form === 'tent' ? 48 :
         form === 'cart' ? 36 :
         form === 'figure' ? 44 :
         28) * u;
-      const hell = !mirroredBases(map) && Math.hypot(prop.x - map.enemyBase.x, prop.y - map.enemyBase.y)
-        < Math.hypot(prop.x - map.playerBase.x, prop.y - map.playerBase.y);
-      drawPropArt(ctx, p.x, p.y, h, form, prop.variant, hell);
-      paintDecorMark(ctx, p.x, p.y, prop.variant);
+      const family = themeFamily(zoneAt(map, prop.x, prop.y));
+      // Map 12k item 3: props in the fire / hell zones use the existing hell variant of the same art.
+      const hell = (!mirroredBases(map) && Math.hypot(prop.x - map.enemyBase.x, prop.y - map.enemyBase.y)
+        < Math.hypot(prop.x - map.playerBase.x, prop.y - map.playerBase.y)) || family === 'fire' || family === 'hell';
+      drawPropArt(ctx, x, y, ph, form, prop.variant, hell);
+      paintDecorMark(ctx, x, y, prop.variant);
     }
   }
 
-  /** Every grid cell gets an opaque grass diamond, then the lane or camp. */
-  private stampGround(ctx: CanvasRenderingContext2D, map: ActDef, ox: number, oy: number, hw: number): void {
+  /**
+   * Every grid cell gets an opaque grass diamond, then the lane or camp. Map 12k order: only the cells that reach
+   * the chunk rect (x0, y0, w, h) are painted, each in its theme zone's colors; returns the border features
+   * (not-walkable tiles) to draw after the ground.
+   */
+  private stampGround(
+    ctx: CanvasRenderingContext2D, map: ActDef, ox: number, oy: number, hw: number,
+    x0: number, y0: number, w: number, h: number,
+  ): { x: number; y: number; zone: ZoneId; n: number }[] {
     const step = 80 / hw;
     const i1 = Math.ceil(map.width / step) + 2;
     const j1 = Math.ceil(map.height / step) + 2;
-    for (let j = -2; j <= j1; j++) {
-      for (let i = -2; i <= i1; i++) {
+    const mx = 100;
+    const my = 120;
+    const corners = [
+      unprojectIso(x0 - mx, y0 - my, hw, ox, oy),
+      unprojectIso(x0 + w + mx, y0 - my, hw, ox, oy),
+      unprojectIso(x0 - mx, y0 + h + my, hw, ox, oy),
+      unprojectIso(x0 + w + mx, y0 + h + my, hw, ox, oy),
+    ];
+    const ia = Math.max(-2, Math.floor(Math.min(...corners.map((c) => c.x)) / step) - 1);
+    const ib = Math.min(i1, Math.ceil(Math.max(...corners.map((c) => c.x)) / step) + 1);
+    const ja = Math.max(-2, Math.floor(Math.min(...corners.map((c) => c.y)) / step) - 1);
+    const jb = Math.min(j1, Math.ceil(Math.max(...corners.map((c) => c.y)) / step) + 1);
+    const features: { x: number; y: number; zone: ZoneId; n: number }[] = [];
+    for (let j = ja; j <= jb; j++) {
+      for (let i = ia; i <= ib; i++) {
         const wx = i * step;
         const wy = j * step;
-        const kind = groundAt(map, wx, wy);
         // WILD RIFT VIEW: tile centers go through the view rotation (same 80 x 40 diamond lattice).
         const at = projectIso(wx, wy, hw, ox, oy);
         const sx = Math.round(at.x);
         const sy = Math.round(at.y);
+        if (sx < x0 - mx || sx > x0 + w + mx || sy < y0 - my || sy > y0 + h + my) continue;
+        const kind = groundAt(map, wx, wy);
+        // Ragged theme borders: the zone is read at a jittered point (paint only).
+        const zone = zoneAt(map, wx + (hash(i, j) - 0.5) * 3 * step, wy + (hash(j + 7, i - 3) - 0.5) * 3 * step);
         const overlay = kind !== GROUND_BASE;
         const wild = kind === 'grass' || kind === 'edge' || kind === 'bank' || kind === 'dark' || kind === 'river';
         const decor = wild && !walkable(map, wx, wy);
         const mud = kind === 'grass' && this.nearPath(map, wx, wy, step);
-        this.paintTile(ctx, GROUND_BASE, i, j, sx, sy, !overlay && decor, !overlay && mud);
-        if (overlay) this.paintTile(ctx, kind, i, j, sx, sy, false, false);
+        this.paintTile(ctx, GROUND_BASE, i, j, sx, sy, !overlay && decor, !overlay && mud, zone);
+        if (overlay) this.paintTile(ctx, kind, i, j, sx, sy, false, false, zone);
+        const n = hash(i * 13 + 5, j * 17 + 11);
+        if (decor && wx > 0 && wy > 0 && wx < map.width && wy < map.height && n > 0.45) {
+          features.push({ x: sx + (hash(i, j + 1) - 0.5) * 40, y: sy + (hash(i + 1, j) - 0.5) * 16, zone, n: (n - 0.45) / 0.55 });
+        }
       }
     }
+    return features;
   }
 
   private nearPath(map: ActDef, x: number, y: number, step: number): boolean {
@@ -589,8 +708,10 @@ export class Renderer {
     sy: number,
     decor: boolean,
     mud: boolean,
+    zone: ZoneId = 'blood-moor',
   ): void {
-    if (kind === 'town' && this.floorArt) {
+    // Map 12k item 3: the Red yard is procedural Pandemonium stone; the Blue yard keeps the CC0 stone floor.
+    if (kind === 'town' && this.floorArt && zone !== 'pandemonium-fortress') {
       ctx.save();
       diamond(ctx, sx, sy);
       ctx.lineWidth = 2;
@@ -599,7 +720,7 @@ export class Renderer {
       ctx.restore();
       if (drew) return;
     }
-    const paint = tilePaint(kind);
+    const paint = zoneGroundPaint(zone, kind) ?? tilePaint(kind);
     diamond(ctx, sx, sy);
     ctx.fillStyle = paint.fill;
     ctx.fill();
@@ -630,6 +751,7 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
     paintTileVariation(ctx, kind, i, j, sx, sy, decor, mud);
+    paintZoneDecal(ctx, zone, kind, i, j, sx, sy);
     ctx.restore();
   }
 
@@ -1039,8 +1161,7 @@ export class Renderer {
   }
 
   private observeBlood(sim: Sim): void {
-    const ctx = this.mapCtx;
-    if (!ctx) return;
+    if (!this.bake) return;
     if (!this.bloodReady) {
       for (const unit of sim.units) {
         if (unit.alive) this.aliveWas.add(unit.id);
@@ -1052,7 +1173,7 @@ export class Renderer {
       const wasAlive = this.aliveWas.has(unit.id);
       const bleeds = unit.kind === 'minion' || unit.kind === 'champion';
       if (wasAlive && !unit.alive && bleeds) {
-        this.stampAt(ctx, unit, unit.kind === 'champion' ? 26 : 18);
+        this.stampAt(unit, unit.kind === 'champion' ? 26 : 18);
         this.bloodStamps += 1;
       }
       if (unit.alive) this.aliveWas.add(unit.id);
@@ -1060,9 +1181,23 @@ export class Renderer {
     }
   }
 
-  private stampAt(ctx: CanvasRenderingContext2D, unit: Unit, radius: number): void {
+  /** Map 12k: the pool goes into every cached chunk it touches and into the log for chunks baked later. */
+  private stampAt(unit: Unit, radius: number): void {
     const p = projectIso(unit.x, unit.y, BAKE_HW, this.ox, this.oy);
-    stampBloodPool(ctx, p.x, p.y, radius, bleedsIchor(unit));
+    const pool = { x: p.x, y: p.y, r: radius, ichor: bleedsIchor(unit), seed: this.bloodStamps + 1 };
+    this.bloodLog.push(pool);
+    if (this.bloodLog.length > BLOOD_LOG_CAP) this.bloodLog.shift();
+    if (!this.bake) return;
+    const size = this.bake.size;
+    for (const chunk of this.bake.live()) {
+      const bx = chunk.cx * size;
+      const by = chunk.cy * size;
+      if (pool.x + 40 < bx || pool.x - 40 > bx + size || pool.y + 40 < by || pool.y - 40 > by + size) continue;
+      chunk.ctx.save();
+      chunk.ctx.translate(-bx, -by);
+      seededStamp(chunk.ctx, pool);
+      chunk.ctx.restore();
+    }
   }
 
   /** Item 16: ready health orbs (red) and pools (red-blue); consumed ones are hidden until refill. */
@@ -1212,14 +1347,16 @@ export class Renderer {
     };
   }
 
+  /** Map 12k: ground bake chunk stats (debug hook). */
+  bakeStats(): { live: number; baked: number; width: number; height: number; chunk: number; draws: number; view: number[] } | null {
+    if (!this.bake) return null;
+    return { live: this.bake.count, baked: this.bake.baked, width: this.bake.width, height: this.bake.height, chunk: this.bake.size, draws: this.bake.draws, view: this.bake.lastView };
+  }
+
   sampleMap(worldX: number, worldY: number): [number, number, number, number] | null {
-    if (!this.mapCanvas || !this.mapCtx) return null;
+    if (!this.bake) return null;
     const p = projectIso(worldX, worldY, BAKE_HW, this.ox, this.oy);
-    const x = Math.round(p.x);
-    const y = Math.round(p.y);
-    if (x < 0 || y < 0 || x >= this.mapCanvas.width || y >= this.mapCanvas.height) return null;
-    const px = this.mapCtx.getImageData(x, y, 1, 1).data;
-    return [px[0], px[1], px[2], px[3]];
+    return this.bake.sample(Math.round(p.x), Math.round(p.y));
   }
 
   sampleView(cssX: number, cssY: number): [number, number, number, number] | null {
@@ -1596,6 +1733,22 @@ export class Renderer {
     const at = (x: number, y: number) => worldToMinimap(x, y, map.width, map.height, w, h, team);
     ctx.fillStyle = '#120e0b';
     ctx.fillRect(0, 0, w, h);
+    // Map 12k item 4: theme zones from the same map data (mapZones.ts), as a low-res grid under the lanes.
+    {
+      const cols = MINI_ZONE_GRID;
+      const rows = Math.max(1, Math.round((MINI_ZONE_GRID * map.height) / map.width));
+      const grid = zoneGrid(map, cols, rows);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const a = at((c * map.width) / cols, (r * map.height) / rows);
+          const b = at(((c + 1) * map.width) / cols, ((r + 1) * map.height) / rows);
+          ctx.fillStyle = ZONE_MINI[grid[r * cols + c]];
+          ctx.fillRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x) + 0.5, Math.abs(b.y - a.y) + 0.5);
+        }
+      }
+      ctx.fillStyle = 'rgba(10, 8, 6, 0.28)';
+      ctx.fillRect(0, 0, w, h);
+    }
     const strokeLane = (points: Vec[], color: string, width: number) => {
       ctx.strokeStyle = color;
       ctx.lineWidth = width;
@@ -1609,7 +1762,11 @@ export class Renderer {
       ctx.stroke();
     };
     const lw = w / 160;
-    if (map.river && map.river.length > 1) strokeLane(map.river, '#c44a3a', 4 * lw);
+    // Map 12k item 3: the river is a lava river (dark crust + molten core).
+    if (map.river && map.river.length > 1) {
+      strokeLane(map.river, '#3a1208', 5 * lw);
+      strokeLane(map.river, '#ff7a22', 2.5 * lw);
+    }
     const paths = map.paths?.length ? map.paths : null;
     const roads = paths ? paths.map((path) => roadPoints(map, path.lane)) : [map.lane];
     for (const road of roads) strokeLane(road, '#3a2c22', 5 * lw);
@@ -1653,6 +1810,40 @@ export class Renderer {
     this.miniStaticKey = key;
     return canvas;
   }
+}
+
+/** Map 12k: minimap zone grid resolution (cells across). */
+const MINI_ZONE_GRID = 96;
+/** Map 12k: blood pools remembered for chunks that bake after the pool landed. */
+const BLOOD_LOG_CAP = 400;
+
+/** Blood pool with a fixed random sequence, so the same pool repaints identically in every chunk it crosses. */
+function seededStamp(ctx: CanvasRenderingContext2D, pool: { x: number; y: number; r: number; ichor: boolean; seed: number }): void {
+  const random = Math.random;
+  let state = (pool.seed * 2654435761) >>> 0 || 1;
+  Math.random = () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+  try {
+    stampBloodPool(ctx, pool.x, pool.y, pool.r, pool.ichor);
+  } finally {
+    Math.random = random;
+  }
+}
+
+/** Intersection point of segments ab and cd, or null. */
+function segHit(a: Vec, b: Vec, c: Vec, d: Vec): Vec | null {
+  const rX = b.x - a.x;
+  const rY = b.y - a.y;
+  const sX = d.x - c.x;
+  const sY = d.y - c.y;
+  const den = rX * sY - rY * sX;
+  if (Math.abs(den) < 1e-9) return null;
+  const t = ((c.x - a.x) * sY - (c.y - a.y) * sX) / den;
+  const u = ((c.x - a.x) * rY - (c.y - a.y) * rX) / den;
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return { x: a.x + rX * t, y: a.y + rY * t };
 }
 
 function groundShadow(ctx: CanvasRenderingContext2D, x: number, y: number, height: number): void {

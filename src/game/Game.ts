@@ -205,6 +205,13 @@ export class Game {
       probe: () => game.renderer.debugAtmosphere(),
       sampleMap: (x: number, y: number) => game.renderer.sampleMap(x, y),
       sampleView: (x: number, y: number) => game.renderer.sampleView(x, y),
+      // Map 12k order (debug only, ?atmoslog=1): bake chunk stats and a hero teleport for headless screenshots.
+      bake: () => game.renderer.bakeStats(),
+      teleport(x: number, y: number) {
+        const hero = player(game.sim);
+        hero.x = x;
+        hero.y = y;
+      },
       setHitFlash() {
         player(game.sim).hitFlash = 0.12;
       },
