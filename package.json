@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
-    "test": "tsx test/match.ts && tsx test/attack-cycle.ts && tsx test/combat-tags.ts && tsx test/sprites.ts && tsx test/items.ts && tsx test/sheets.ts && tsx test/move-speed.ts && tsx test/wild-rift-view.ts && tsx test/wild-rift-pass2.ts && tsx test/amazon.ts && tsx test/paladin.ts && tsx test/sorceress.ts"
+    "test": "tsx test/match.ts && tsx test/attack-cycle.ts && tsx test/combat-tags.ts && tsx test/sprites.ts && tsx test/items.ts && tsx test/sheets.ts && tsx test/move-speed.ts && tsx test/wild-rift-view.ts && tsx test/wild-rift-pass2.ts && tsx test/amazon.ts && tsx test/paladin.ts && tsx test/sorceress.ts && tsx test/necromancer.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
