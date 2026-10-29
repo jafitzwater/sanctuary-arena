@@ -34,18 +34,18 @@ export const MOBILE_ZONE: TouchZoneConfig = { maxRadius: 45, dragSlop: 12 };
 
 export type SkillAim = 'single' | 'ground' | 'self';
 
-/** Amazon order: the four Magic Arrow path skills aim at a unit (handlers in skills/amazon.ts). */
-const AMAZON_SINGLE = ['magic-arrow', 'multi-shot', 'ice-shot', 'fire-shot'];
+/** Amazon order: the bow skills (and Strafe, skill rework) aim at a unit (handlers in skills/amazon.ts). */
+const AMAZON_SINGLE = ['magic-arrow', 'multi-shot', 'ice-shot', 'fire-shot', 'strafe'];
 
 /** Paladin order: Zeal and Smite lock a unit in melee reach, Charge locks a unit to rush (skills/paladin.ts). */
 const PALADIN_MELEE = ['zeal', 'smite'];
 
-/** Sorceress order: Ice Bolt and Frozen Orb lock a unit; Blizzard and Teleport aim the ground (skills/sorceress.ts). */
-const SORC_SINGLE = ['ice-bolt', 'frozen-orb'];
+/** Sorceress (skill rework): Frost Bolt, Lightning and Fire Blast lock a unit; Blizzard and Teleport aim the ground (skills/sorceress.ts). */
+const SORC_SINGLE = ['ice-bolt', 'lightning', 'fire-blast'];
 const SORC_GROUND = ['blizzard', 'teleport'];
 
-/** Necromancer order: Teeth, Bone Spear and Bone Spirit lock a unit; Bone Armor is a self cast (skills/necromancer.ts). */
-const NECRO_SINGLE = ['teeth', 'bone-spear', 'bone-spirit'];
+/** Necromancer order: Teeth, Bone Spear, Bone Spirit and Blood Splash lock a unit; Bone Armor is a self cast (skills/necromancer.ts). */
+const NECRO_SINGLE = ['teeth', 'bone-spear', 'bone-spirit', 'blood-splash'];
 
 /** Barbarian, Amazon, Paladin, Sorceress and Necromancer skills. Leap is the ground cast; bash and the Amazon arrows lock a unit. */
 export function skillAimKind(id: string): SkillAim {
@@ -69,6 +69,7 @@ export function skillReach(id: string, attackRange: number): number {
   if (id === 'teeth') return attackRange + 40; // skills/necromancer.ts TEETH_REACH_BONUS [TEMP]
   if (id === 'bone-spear') return attackRange + 80; // skills/necromancer.ts SPEAR_REACH_BONUS [TEMP]
   if (id === 'bone-spirit') return attackRange + 120; // skills/necromancer.ts SPIRIT_REACH_BONUS [TEMP]
+  if (id === 'blood-splash') return attackRange + 80; // skills/necromancer.ts SPLASH_REACH_BONUS [TEMP]
   return attackRange;
 }
 

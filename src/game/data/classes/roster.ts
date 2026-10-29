@@ -10,11 +10,11 @@ export interface ClassSlot {
  * Only entries with a ClassDef and playable: true can be chosen.
  */
 export const ROSTER: ClassSlot[] = [
-  { id: 'amazon', name: 'Amazon', playable: true, blurb: 'Magic Arrow path, ranged.' },
+  { id: 'amazon', name: 'Amazon', playable: true, blurb: 'Bow skills and Strafe, ranged.' },
   { id: 'barbarian', name: 'Barbarian', playable: true, blurb: 'The only class in the match today.' },
-  { id: 'necromancer', name: 'Necromancer', playable: true, blurb: 'Teeth path, caster.' },
-  { id: 'paladin', name: 'Paladin', playable: true, blurb: 'One path, melee.' },
-  { id: 'sorceress', name: 'Sorceress', playable: true, blurb: 'Cold path, caster.' },
+  { id: 'necromancer', name: 'Necromancer', playable: true, blurb: 'Bone skills and Blood Splash, caster.' },
+  { id: 'paladin', name: 'Paladin', playable: true, blurb: 'Holy melee and Blessed Hammer.' },
+  { id: 'sorceress', name: 'Sorceress', playable: true, blurb: 'Frost, lightning and fire, caster.' },
 ];
 
 export function playableIds(): string[] {

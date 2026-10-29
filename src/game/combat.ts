@@ -11,6 +11,7 @@ import {
   STRUCTURE_LOCAL_RADIUS,
   SHARE_RADIUS,
   assistGold,
+  botMaxHp,
   championBounty,
   championKillXp,
   expectedLevel,
@@ -131,8 +132,18 @@ export function syncChampionLevels(sim: Sim): void {
   const clock = expectedLevel(sim.time);
   for (const unit of sim.units) {
     if (unit.kind !== 'champion') continue;
+    const was = unit.level;
     if (unit.id === sim.playerId) unit.level = sim.level;
     else unit.level = clock;
+    // Skill rework order item 6 [JOSEPH]: bot life grows with its level (economy.botMaxHp); keep the HP
+    // fraction. Only on a level change, so other HP edits between levels stand.
+    if (unit.bot && unit.level !== was) {
+      const max = botMaxHp(unit.look ?? unit.defId, unit.level);
+      if (max !== unit.maxHp) {
+        unit.hp = unit.alive ? unit.hp * (max / unit.maxHp) : max;
+        unit.maxHp = max;
+      }
+    }
   }
 }
 
@@ -212,13 +223,13 @@ export function autoLearnUnlocked(sim: Sim): void {
 
 /** Put a learned skill (rank 1 or higher) into the first empty Q W E R slot. */
 export function fillEmptyBelt(sim: Sim): void {
-  // Economy order: the top-tier skill now opens at 5, before the level-7 path skill. Keep the old
-  // belt result (the four path skills on Q W E R, top tier placed by hand) by not auto-slotting a
-  // top-tier skill while the path skills alone can fill the belt.
-  const pathSkills = sim.classDef.skills.filter((skill) => !skill.rankLevels).length;
+  // Economy order: the top-tier skill can open before the level-7 skill. Keep the old belt result
+  // (the four other skills on Q W E R, top tier placed by hand) by not auto-slotting a top-tier
+  // skill while the other skills alone can fill the belt (skill rework: SkillDef.topTier).
+  const otherSkills = sim.classDef.skills.filter((skill) => !skill.topTier).length;
   for (const skill of sim.classDef.skills) {
     if ((sim.skillRanks[skill.id] ?? 0) < 1) continue;
-    if (skill.rankLevels && pathSkills >= sim.belt.length) continue;
+    if (skill.topTier && otherSkills >= sim.belt.length) continue;
     if (sim.belt.includes(skill.id)) continue;
     const slot = sim.belt.findIndex((entry) => !entry);
     if (slot < 0) return;
@@ -653,16 +664,12 @@ export function tryPotion(sim: Sim, kind: PotionKind): void {
 }
 
 /**
- * Economy order [JOSEPH]: a top-tier skill's ranks open at fixed levels (5/9/13, SkillDef.rankLevels).
- * Other skills have no per-rank level gate (only unlockLevel).
+ * Skill rework order [JOSEPH]: "ALL SKILLS MAX RANK 3, no special top-tier rank levels at 9/13".
+ * The only level gate is unlockLevel (the economy order's rankLevels were removed).
  */
-export function rankLevel(def: SkillDef, rank: number): number {
-  return def.rankLevels?.[rank - 1] ?? def.unlockLevel;
-}
-
 export function canRankUp(sim: Sim, def: SkillDef): boolean {
   const rank = sim.skillRanks[def.id] ?? 0;
-  return sim.skillPoints > 0 && rank < def.maxRank && sim.level >= def.unlockLevel && sim.level >= rankLevel(def, rank + 1);
+  return sim.skillPoints > 0 && rank < def.maxRank && sim.level >= def.unlockLevel;
 }
 
 export function tryUpgrade(sim: Sim, id: string): boolean {
@@ -672,11 +679,6 @@ export function tryUpgrade(sim: Sim, id: string): boolean {
   if (rank >= def.maxRank) return false;
   if (sim.level < def.unlockLevel) {
     banner(sim, `${def.name} unlocks at level ${def.unlockLevel}.`);
-    return false;
-  }
-  const gate = rankLevel(def, rank + 1);
-  if (sim.level < gate) {
-    banner(sim, `${def.name} rank ${rank + 1} unlocks at level ${gate}.`);
     return false;
   }
   for (const req of def.prereqs) {

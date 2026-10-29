@@ -19,7 +19,7 @@ import { grantXp, heroNumbers, manaCost, MAX_LEVEL, tryUpgrade, xpToNext } from 
 import { comebackMul } from '../src/game/pace';
 import { createMatch, PASSIVE_GOLD, spawnMinion } from '../src/game/sim';
 import { SKILLS } from '../src/game/skills';
-import { BLIZZARD, ICE_BOLT_SLOW, NOVA, ORB, TELEPORT } from '../src/game/skills/sorceress';
+import { BLIZZARD, FIRE_BLAST, ICE_BOLT_SLOW, TELEPORT } from '../src/game/skills/sorceress';
 import { skillAimKind, skillReach } from '../src/game/mobileInput';
 import { CLASS_COLS, CLASS_SHEET, CLASS_SHEET_IDS, classSheetCol, classSheetRow, hasClassSheet } from '../src/game/art/sheet-frames';
 import { cellHasFigure, readPng } from './png';
@@ -40,13 +40,13 @@ assert.deepEqual(
 assert.deepEqual(STARTING_STATS.sorceress, { str: 10, dex: 15, vit: 10, energy: 35 });
 // [DOC] "Sorceress 2 energy, 2 vitality, 1 strength, 0 dexterity".
 assert.deepEqual(STAT_GROWTH.sorceress, { energy: 2, vit: 2, str: 1, dex: 0 });
-// [DOC] "Cold: ice bolt, frozen nova, blizzard, frozen orb." + "Teleport can be chosen on any path."
-assert.deepEqual(sorceress.skills.map((s) => s.name), ['Ice Bolt', 'Frozen Nova', 'Blizzard', 'Frozen Orb', 'Teleport']);
-assert.equal(sorceress.skills.length, 5, 'one path of four + Teleport; no invented skill');
-// [DOC] 1/3/5/7; economy order [JOSEPH] top tier 5/9/13 applied to Teleport (the fifth skill; was 10).
-assert.deepEqual(sorceress.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 5]);
-assert.deepEqual(sorceress.skills[4].rankLevels, [5, 9, 13]);
-assert.deepEqual(sorceress.skills.map((s) => s.maxRank), [5, 5, 5, 5, 3]);
+// Skill rework order [JOSEPH]: "Frost Bolt (L1), Lightning (L3), Teleport (L5), Fire Blast (L7), Blizzard (L9)".
+assert.deepEqual(sorceress.skills.map((s) => s.name), ['Frost Bolt', 'Lightning', 'Teleport', 'Fire Blast', 'Blizzard']);
+assert.equal(sorceress.skills.length, 5);
+assert.deepEqual(sorceress.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 9]);
+assert.deepEqual(sorceress.skills.map((s) => !!s.topTier), [false, false, false, false, true]);
+assert.deepEqual(sorceress.skills.map((s) => s.maxRank), [3, 3, 3, 3, 3]);
+assert.ok(!sorceress.skills.some((s) => /frozen|meteor/.test(s.id)), 'no Frozen Nova/Orb or Meteor');
 assert.ok(sorceress.skills.every((s) => !s.passive));
 assert.deepEqual(sorceress.startingBelt, ['ice-bolt', '', '', '']);
 assert.equal(sorceress.role, 'ranged');
@@ -54,7 +54,7 @@ assert.equal(sorceress.token, 'SO');
 // [DOC][P] energy >= 10 -> 2% step: 10/12/14/16/18% (kits-final table). She starts at 35 >= 10.
 assert.ok(sorceress.stats.energy >= SORC_ENERGY_STEP_AT);
 assert.equal(SORC_MANA_STEP, 0.02);
-assert.deepEqual([1, 2, 3, 4, 5].map((r) => manaCost(sorceress.skills[0], r, 500)), [50, 60, 70, 80, 90]);
+assert.deepEqual([1, 2, 3].map((r) => manaCost(sorceress.skills[0], r, 500)), [50, 60, 70]);
 for (const s of sorceress.skills) assert.equal(s.manaStep, 0.02);
 // Other kits keep the shared 5% step.
 for (const k of [barbarian, amazon, paladin]) {
@@ -64,7 +64,7 @@ for (const k of [barbarian, amazon, paladin]) {
 assert.equal(barbarian.stats.moveSpeed, 345);
 assert.deepEqual(barbarian.skills.map((s) => s.id), ['bash', 'shout', 'leap-attack', 'battle-orders', 'whirlwind']);
 assert.equal(amazon.stats.moveSpeed, 340);
-assert.deepEqual(amazon.skills.map((s) => s.id), ['magic-arrow', 'multi-shot', 'ice-shot', 'fire-shot']);
+assert.deepEqual(amazon.skills.map((s) => s.id), ['magic-arrow', 'multi-shot', 'ice-shot', 'fire-shot', 'strafe']);
 assert.equal(paladin.stats.moveSpeed, 335);
 assert.deepEqual(paladin.skills.map((s) => s.id), ['zeal', 'smite', 'charge', 'holy-shield', 'battle-hammers']);
 // Economy order [JOSEPH]: top tier at 5 (was 10).
@@ -109,10 +109,10 @@ assert.ok(Math.abs(totalMS(325) - 325) < 0.01, `325 -> ${totalMS(325)} px/s`);
   assert.equal(sim.attributes.dex, 15);
   assert.ok(sim.skillPoints > 0);
   const before = sim.skillPoints;
-  assert.ok(tryUpgrade(sim, 'frozen-nova'));
+  assert.ok(tryUpgrade(sim, 'lightning'));
   assert.equal(rank(1), 2);
   assert.equal(sim.skillPoints, before - 1);
-  assert.deepEqual(sim.belt.slice(0, 4), ['ice-bolt', 'frozen-nova', 'blizzard', 'frozen-orb']);
+  assert.deepEqual(sim.belt.slice(0, 4), ['ice-bolt', 'lightning', 'teleport', 'fire-blast']);
 }
 
 // --- Skill handlers use existing mechanics.
@@ -122,13 +122,13 @@ assert.ok(Math.abs(totalMS(325) - 325) < 0.01, `325 -> ${totalMS(325)} px/s`);
   const hero = sim.units.find((u) => u.id === sim.playerId)!;
   for (const s of sorceress.skills) assert.ok(SKILLS[s.id], `${s.id} handler registered`);
   assert.equal(skillAimKind('ice-bolt'), 'single');
-  assert.equal(skillAimKind('frozen-orb'), 'single');
-  assert.equal(skillAimKind('frozen-nova'), 'self');
+  assert.equal(skillAimKind('lightning'), 'single');
+  assert.equal(skillAimKind('fire-blast'), 'single');
   assert.equal(skillAimKind('blizzard'), 'ground');
   assert.equal(skillAimKind('teleport'), 'ground');
   assert.equal(skillReach('ice-bolt', 200), 240);
   const ctx = (rank: number, aimX = hero.x, aimY = hero.y, focusId: number | null = null) => ({ sim, hero, rank, aimX, aimY, focusId });
-  for (const id of ['ice-bolt', 'frozen-orb']) assert.equal(SKILLS[id](ctx(1)), false, `${id}: nobody in reach`);
+  for (const id of ['ice-bolt', 'lightning', 'fire-blast']) assert.equal(SKILLS[id](ctx(1)), false, `${id}: nobody in reach`);
   const foe = spawnMinion(sim, waveMob(1), 'enemy', hero.x + 100, hero.y);
   foe.maxHp = foe.hp = 1e6;
   const shots = sim.projectiles.length;
@@ -136,18 +136,17 @@ assert.ok(Math.abs(totalMS(325) - 325) < 0.01, `325 -> ${totalMS(325)} px/s`);
   assert.equal(sim.projectiles.length, shots + 1, 'ice bolt fires the existing projectile');
   assert.ok(foe.slows.some((s) => s.pct === ICE_BOLT_SLOW.pct));
   let hp = foe.hp;
-  foe.x = hero.x + NOVA.radius - 10;
-  assert.ok(SKILLS['frozen-nova'](ctx(1)));
-  assert.ok(foe.hp < hp && foe.slows.some((s) => s.pct === NOVA.pct), 'nova hits and slows');
+  assert.ok(SKILLS.lightning(ctx(1)));
+  assert.ok(foe.hp < hp, 'lightning hits at once');
   hp = foe.hp;
   assert.ok(SKILLS.blizzard(ctx(1, foe.x, foe.y)));
   assert.ok(foe.hp < hp && foe.slows.some((s) => s.pct === BLIZZARD.pct), 'blizzard hits and slows');
   hp = foe.hp;
-  const near = spawnMinion(sim, waveMob(1), 'enemy', foe.x + ORB.radius - 20, foe.y);
+  const near = spawnMinion(sim, waveMob(1), 'enemy', foe.x + FIRE_BLAST.radius - 20, foe.y);
   near.maxHp = near.hp = 1e6;
   const h2 = near.hp;
-  assert.ok(SKILLS['frozen-orb'](ctx(1, hero.x, hero.y, foe.id)));
-  assert.ok(foe.hp < hp && near.hp < h2, 'orb bursts on the foe and around it');
+  assert.ok(SKILLS['fire-blast'](ctx(1, hero.x, hero.y, foe.id)));
+  assert.ok(foe.hp < hp && near.hp < h2, 'fire blast bursts on the foe and around it');
   const x0 = hero.x, y0 = hero.y;
   assert.ok(SKILLS.teleport(ctx(1, hero.x + 1000, hero.y)));
   const moved = Math.hypot(hero.x - x0, hero.y - y0);

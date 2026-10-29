@@ -14,7 +14,7 @@ function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' |
     key: '',
     digit: '',
     minMana: 0,
-    maxRank: 5,
+    maxRank: 3, // Skill rework order [JOSEPH]: all skills max rank 3.
     reqLevel: partial.unlockLevel,
     tab: 1,
     tabName: 'Skills',
@@ -39,7 +39,8 @@ function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' |
  * points after level 7." -> zeal 1, smite 3, charge 5, holy shield 7 [DOC].
  * [TEMP] NEEDS JOSEPH Battle hammers: the doc only says "after level 7"; the Barbarian's top-tier
  * Whirlwind uses level 10, so Battle Hammers uses 10 too (NEEDS JOSEPH).
- * Doc: "Skills max at level 5." -> maxRank 5 [DOC]. Mana cost is the shared % rule (combat.manaCost) [DOC].
+ * Superseded: economy order moved it to 5; skill rework order keeps 5, renames it Blessed Hammer, no rank gates.
+ * Skill rework order [JOSEPH]: "ALL SKILLS MAX RANK 3" -> maxRank 3 (was doc "Skills max at level 5" -> 5) [DOC]. Mana cost is the shared % rule (combat.manaCost) [DOC].
  * [TEMP] Cooldowns and effects are unset in the doc ([U]); the handlers in skills/paladin.ts use existing
  * mechanics (melee hit, stun, leap, armor buff, area damage) with fixed placeholder numbers.
  * `mana`/`manaPerRank` mirror the Barbarian's fields and are not used by the % mana rule.
@@ -97,12 +98,13 @@ const skillList: SkillDef[] = [
   }),
   skill({
     id: 'battle-hammers',
-    name: 'Battle Hammers',
+    // Skill rework order [JOSEPH]: "keep Blessed Hammer" -> display name; id unchanged.
+    name: 'Blessed Hammer',
     short: 'Hammer',
-    // Economy order [JOSEPH]: top-tier skill unlocks at 5, ranks at 9 and 13 (was unlockLevel 10, 5 ranks).
+    // Skill rework order [JOSEPH]: top tier, unlock level kept at 5 (economy order); max rank 3 with no
+    // rank gates (the 9/13 rank levels are removed).
     unlockLevel: 5,
-    maxRank: 3,
-    rankLevels: [5, 9, 13],
+    topTier: true,
     mana: 22,
     manaPerRank: 4,
     cooldown: 11, // [TEMP]
@@ -123,7 +125,7 @@ export const paladin: ClassDef = {
   // [TEMP] Zeal/Smite/Charge are melee skills -> melee basic attacks.
   role: 'melee',
   blurb:
-    'Zeal, Smite, Charge, Holy Shield, and Battle Hammers. Skills learn themselves at levels 1, 3, 5, 7 and 10. Press T to spend extra points.',
+    'Zeal, Smite, Charge, Holy Shield, and Blessed Hammer. Skills learn themselves at levels 1, 3, 5 and 7, and Blessed Hammer at 5. Press T to spend extra points.',
   token: row.token || 'PA',
   startingBelt: ['zeal', '', '', ''],
   stats: {

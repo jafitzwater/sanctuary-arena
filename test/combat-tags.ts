@@ -1,4 +1,4 @@
-import { expectedLevel } from '../src/game/economy';
+import { botMaxHp, expectedLevel } from '../src/game/economy';
 import assert from 'node:assert/strict';
 import { sanctuary } from '../src/game/data/acts/sanctuary';
 import { barbarian } from '../src/game/data/classes/barbarian';
@@ -135,7 +135,9 @@ clock.time = 400;
 syncChampionLevels(clock);
 assert.equal(enemyOf(clock).level, expectedLevel(400));
 assert.ok(enemyOf(clock).level > 1);
-assert.equal(enemyOf(clock).maxHp, hp);
+// Skill rework order item 6 [JOSEPH]: bot HP now grows with level (0.85x the player's growth); AD/speed unchanged.
+assert.equal(enemyOf(clock).maxHp, botMaxHp(enemyOf(clock).look ?? 'barbarian', enemyOf(clock).level));
+assert.ok(enemyOf(clock).maxHp > hp);
 assert.equal(enemyOf(clock).ad, ad);
 assert.equal(enemyOf(clock).moveSpeed, speed);
 assert.equal(enemyOf(clock).radius, radius);

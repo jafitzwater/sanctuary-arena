@@ -23,7 +23,7 @@ function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' |
     key: '',
     digit: '',
     minMana: 0,
-    maxRank: 5,
+    maxRank: 3, // Skill rework order [JOSEPH]: all skills max rank 3.
     reqLevel: partial.unlockLevel,
     tab: 1,
     tabName: 'Skills',
@@ -42,26 +42,21 @@ function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' |
 }
 
 /**
- * ORDER "Make Sorceress playable" (kits-final.md, Sorceress).
- * Doc: "Cold, fire, or lightning. Only 1 path. Teleport can be chosen on any path."
- * Doc: "Cold: ice bolt, frozen nova, blizzard, frozen orb." Built here, as the Amazon PR built one
- * path: Cold (the first path the doc lists) [TEMP]. Fire and Lightning are not built and there is
- * no path picker yet (NEEDS JOSEPH).
- * Doc: "Skills unlock at level 1, level 3, level 5, and level 7. More than 4 skills use the remaining
- * points after level 7." -> ice bolt 1, frozen nova 3, blizzard 5, frozen orb 7 [DOC].
- * [TEMP] NEEDS JOSEPH Teleport: the doc gives no unlock level; kits-final says it "falls under 'more
- * than 4 skills use the remaining points after level 7' if chosen as a fifth skill". It uses 10, the
- * level the Barbarian's Whirlwind and the Paladin's Battle Hammers use.
- * Doc: "Skills max at level 5." -> maxRank 5 [DOC]. Mana cost is the % rule with the 2% step [DOC][P].
- * [TEMP] Cooldowns and effects are unset in the doc ([U]); the handlers in skills/sorceress.ts use
- * existing mechanics (projectile, slow stack, area damage, instant reposition) with fixed placeholder numbers.
+ * ORDER "Skill rework (no paths)" (2026-10-29) item 2 [JOSEPH]: one flat list, in this order:
+ * "Frost Bolt (L1), Lightning (L3), Teleport (L5), Fire Blast (L7), Blizzard (L9)".
+ * Frost Bolt is the existing Ice Bolt (id 'ice-bolt' kept, display renamed) and Blizzard reuses its
+ * handler. Lightning and Fire Blast are new [TEMP] placeholders in the same style (skills/sorceress.ts).
+ * Frozen Nova and Frozen Orb are not in the list and were deleted (data and handlers).
+ * Teleport moves from the top tier (unlock 5, ranks 5/9/13) to a normal L5 skill; Blizzard (was L5) is
+ * the top tier at L9. All skills max rank 3 [JOSEPH]; mana cost is the % rule with the 2% step [DOC][P].
+ * [TEMP] Cooldowns and effects are unset in the doc ([U]); handlers use existing mechanics.
  * `mana`/`manaPerRank` mirror the Barbarian's fields and are not used by the % mana rule.
  */
 const skillList: SkillDef[] = [
   skill({
     id: 'ice-bolt',
-    name: 'Ice Bolt',
-    short: 'Bolt',
+    name: 'Frost Bolt', // [JOSEPH] display name; id kept
+    short: 'Frost',
     unlockLevel: 1,
     mana: 8,
     manaPerRank: 2,
@@ -69,58 +64,56 @@ const skillList: SkillDef[] = [
     starter: true,
     row: 1,
     d2Id: 39,
-    description: 'A bolt of ice at one foe that slows it 25% for 1.5 s. Rank 1 deals 110% of a basic hit, and each rank adds 10%.',
+    description: 'A bolt of frost at one foe that slows it 25% for 1.5 s. Rank 1 deals 110% of a basic hit, and each rank adds 10%.',
   }),
   skill({
-    id: 'frozen-nova',
-    name: 'Frozen Nova',
-    short: 'Nova',
-    unlockLevel: 3,
+    id: 'lightning',
+    name: 'Lightning',
+    short: 'Light',
+    unlockLevel: 3, // [JOSEPH]
     mana: 12,
     manaPerRank: 2,
-    cooldown: 9, // [TEMP]
+    cooldown: 7, // [TEMP]
     row: 2,
-    d2Id: 44,
-    description: 'A ring of frost around you hits every foe nearby and slows them 30% for 2 s. Rank 1 deals 70% of a basic hit, and each rank adds 10%.',
-  }),
-  skill({
-    id: 'blizzard',
-    name: 'Blizzard',
-    short: 'Blizz',
-    unlockLevel: 5,
-    mana: 14,
-    manaPerRank: 2,
-    cooldown: 12, // [TEMP]
-    row: 3,
-    d2Id: 59,
-    description: 'Ice falls on a chosen spot, hitting every foe there and slowing them 35% for 2 s. Rank 1 deals 120% of a basic hit, and each rank adds 15%.',
-  }),
-  skill({
-    id: 'frozen-orb',
-    name: 'Frozen Orb',
-    short: 'Orb',
-    unlockLevel: 7,
-    mana: 18,
-    manaPerRank: 2,
-    cooldown: 14, // [TEMP]
-    row: 4,
-    d2Id: 64,
-    description: 'An orb bursts on one foe, hitting every foe around it and slowing them 40% for 2 s. Rank 1 deals 150% of a basic hit, and each rank adds 15%.',
+    d2Id: 49,
+    description: 'A lightning strike hits one foe at once. Rank 1 deals 130% of a basic hit, and each rank adds 12%.', // [TEMP]
   }),
   skill({
     id: 'teleport',
     name: 'Teleport',
     short: 'Tele',
-    // Economy order [JOSEPH]: top-tier skill unlocks at 5, ranks at 9 and 13 (was unlockLevel 10, 5 ranks).
-    unlockLevel: 5,
-    maxRank: 3,
-    rankLevels: [5, 9, 13],
+    unlockLevel: 5, // [JOSEPH]
     mana: 22,
     manaPerRank: 0,
     cooldown: 12, // [TEMP]
-    row: 5,
+    row: 3,
     d2Id: 54,
     description: 'Instantly move to a chosen spot up to 260 away, plus 20 per rank.',
+  }),
+  skill({
+    id: 'fire-blast',
+    name: 'Fire Blast',
+    short: 'Fire',
+    unlockLevel: 7, // [JOSEPH]
+    mana: 16,
+    manaPerRank: 2,
+    cooldown: 10, // [TEMP]
+    row: 4,
+    d2Id: 36,
+    description: 'Fire bursts on one foe and burns every foe around it. Rank 1 deals 140% of a basic hit, and each rank adds 15%.', // [TEMP]
+  }),
+  skill({
+    id: 'blizzard',
+    name: 'Blizzard',
+    short: 'Blizz',
+    unlockLevel: 9, // [JOSEPH] top tier (was 5)
+    topTier: true,
+    mana: 14,
+    manaPerRank: 2,
+    cooldown: 12, // [TEMP]
+    row: 5,
+    d2Id: 59,
+    description: 'Ice falls on a chosen spot, hitting every foe there and slowing them 35% for 2 s. Rank 1 deals 120% of a basic hit, and each rank adds 15%.',
   }),
 ];
 
@@ -135,7 +128,7 @@ export const sorceress: ClassDef = {
   // projectile basic attack (as the Amazon), so 'ranged' in the sim.
   role: 'ranged',
   blurb:
-    'Cold path: Ice Bolt, Frozen Nova, Blizzard, Frozen Orb, and Teleport. Skills learn themselves at levels 1, 3, 5, 7 and 10. Press T to spend extra points.',
+    'Frost Bolt, Lightning, Teleport, Fire Blast, and Blizzard. Skills learn themselves at levels 1, 3, 5, 7 and 9. Press T to spend extra points.',
   token: row.token || 'SO',
   startingBelt: ['ice-bolt', '', '', ''],
   stats: {

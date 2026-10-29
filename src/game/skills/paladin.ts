@@ -21,7 +21,7 @@ export const ZEAL_HITS = 3;
 export const SMITE_STUN = 0.8;
 /** [TEMP] Holy Shield: self armor and seconds. */
 export const HOLY_SHIELD = { armor: 15, perRank: 5, t: 8 };
-/** [TEMP] Battle Hammers radius. */
+/** [TEMP] Blessed Hammer (id battle-hammers) radius. */
 export const HAMMER_RADIUS = 150;
 
 function gapTo(hero: Unit, unit: Unit): number {

@@ -1,5 +1,6 @@
 /**
- * ORDER "Make Sorceress playable": Cold path handlers plus Teleport.
+ * ORDER "Make Sorceress playable" handlers, reworked by the "Skill rework (no paths)" order: Frost Bolt
+ * (ice-bolt), Lightning [TEMP], Teleport, Fire Blast [TEMP], Blizzard. Frozen Nova and Frozen Orb were deleted.
  * kits-final.md leaves every Sorceress effect and cooldown unset ([U]). These use only existing
  * mechanics: the existing projectile (as ranged basic attacks and the Amazon arrows), the existing
  * slow stack (as Ice Shot), magic area damage (as Battle Hammers) and an instant reposition (as the
@@ -15,9 +16,10 @@ import type { CastContext, SkillHandler } from './types';
 export const SORC_SKILL_REACH_BONUS = 40;
 /** [TEMP] Slows (pct, seconds), pushed on the existing slow stack. */
 export const ICE_BOLT_SLOW = { pct: 0.25, t: 1.5 };
-export const NOVA = { radius: 150, pct: 0.3, t: 2 };
 export const BLIZZARD = { range: 320, radius: 110, pct: 0.35, t: 2 };
-export const ORB = { radius: 120, pct: 0.4, t: 2 };
+/** [TEMP] Skill rework placeholders: Lightning (instant single hit), Fire Blast (burst around the target). */
+export const LIGHTNING = { mult: 1.3, perRank: 0.12 };
+export const FIRE_BLAST = { radius: 100, mult: 1.4, perRank: 0.15 };
 /** [TEMP] Teleport range: base plus per rank. */
 export const TELEPORT = { range: 260, perRank: 20 };
 
@@ -44,12 +46,12 @@ function chill(foe: Unit, slow: { pct: number; t: number }): void {
   foe.slowPct = Math.max(foe.slowPct, slow.pct);
 }
 
-function area(ctx: CastContext, x: number, y: number, r: number, damage: number, slow: { pct: number; t: number }, color: string): number {
+function area(ctx: CastContext, x: number, y: number, r: number, damage: number, slow: { pct: number; t: number } | null, color: string): number {
   const { sim, hero } = ctx;
   const hit = foesNear(sim, hero, x, y, r);
   for (const u of hit) {
     damageUnit(sim, u, damage, hero, 'magic');
-    chill(u, slow);
+    if (slow) chill(u, slow);
   }
   ring(sim, x, y, r, color);
   return hit.length;
@@ -83,12 +85,19 @@ export const iceBolt: SkillHandler = (ctx) => {
   return true;
 };
 
-export const frozenNova: SkillHandler = (ctx) => {
+/** [TEMP] Lightning: an instant magic hit on one foe (no projectile), as Smite's direct hit. */
+export const lightning: SkillHandler = (ctx) => {
   const { sim, hero } = ctx;
-  hero.castT = 0.4;
-  const hits = area(ctx, hero.x, hero.y, NOVA.radius, hero.ad * (0.7 + (ctx.rank - 1) * 0.1), NOVA, '#bfe8ff');
-  sfx(sim, 'cry');
-  if (!hits) banner(sim, 'The nova hits nothing.');
+  const foe = target(ctx);
+  if (!foe) {
+    banner(sim, 'Nobody in reach.');
+    return false;
+  }
+  hero.facing = Math.atan2(foe.y - hero.y, foe.x - hero.x);
+  hero.castT = 0.3;
+  damageUnit(sim, foe, hero.ad * (LIGHTNING.mult + (ctx.rank - 1) * LIGHTNING.perRank), hero, 'magic');
+  ring(sim, foe.x, foe.y, 26, '#fff4a0');
+  sfx(sim, 'swing');
   return true;
 };
 
@@ -113,7 +122,8 @@ export const blizzard: SkillHandler = (ctx) => {
   return true;
 };
 
-export const frozenOrb: SkillHandler = (ctx) => {
+/** [TEMP] Fire Blast: a burst on one foe that hits every foe around it (the old Frozen Orb shape, no slow). */
+export const fireBlast: SkillHandler = (ctx) => {
   const { sim, hero } = ctx;
   const foe = target(ctx);
   if (!foe) {
@@ -122,7 +132,7 @@ export const frozenOrb: SkillHandler = (ctx) => {
   }
   hero.facing = Math.atan2(foe.y - hero.y, foe.x - hero.x);
   hero.castT = 0.4;
-  area(ctx, foe.x, foe.y, ORB.radius, hero.ad * (1.5 + (ctx.rank - 1) * 0.15), ORB, '#8fd8ff');
+  area(ctx, foe.x, foe.y, FIRE_BLAST.radius, hero.ad * (FIRE_BLAST.mult + (ctx.rank - 1) * FIRE_BLAST.perRank), null, '#ff8a3c');
   sfx(sim, 'whirl');
   return true;
 };
@@ -153,8 +163,8 @@ export const teleport: SkillHandler = (ctx) => {
 
 export const HANDLERS: Record<string, SkillHandler> = {
   'ice-bolt': iceBolt,
-  'frozen-nova': frozenNova,
-  blizzard,
-  'frozen-orb': frozenOrb,
+  lightning,
   teleport,
+  'fire-blast': fireBlast,
+  blizzard,
 };

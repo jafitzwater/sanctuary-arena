@@ -13,7 +13,7 @@ function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' |
     key: '',
     digit: '',
     minMana: 0,
-    maxRank: 5,
+    maxRank: 3, // Skill rework order [JOSEPH]: all skills max rank 3.
     reqLevel: partial.unlockLevel,
     tab: 1,
     tabName: 'Skills',
@@ -34,7 +34,7 @@ function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' |
  * Gap-list items 11 and 12 (kits-final.md, Barbarian).
  * Doc: "One path. Top tier skill is whirlwind. In order: bash, shout, leap attack, battle orders, whirlwind."
  * Doc: "Skills unlock at level 1, level 3, level 5, and level 7. More than 4 skills use the remaining points after level 7."
- * Doc: "Skills max at level 5." -> maxRank 5.
+ * Skill rework order [JOSEPH]: "ALL SKILLS MAX RANK 3" -> maxRank 3 (was doc "Skills max at level 5" -> 5).
  * Whirlwind's unlock level is not set by the doc ("after level 7"); the repo's existing 10 is kept (NEEDS JOSEPH).
  * Skill effects and cooldowns are unset in the doc ([U]); the repo's existing handlers are kept.
  */
@@ -94,10 +94,10 @@ const skillList: SkillDef[] = [
     id: 'whirlwind',
     name: 'Whirlwind',
     short: 'Whirl',
-    // Economy order [JOSEPH]: top-tier skill unlocks at 5, ranks at 9 and 13 (was unlockLevel 10, 5 ranks).
+    // Skill rework order [JOSEPH]: top tier, unlock level kept at 5 (economy order); max rank 3 with no
+    // rank gates (the 9/13 rank levels are removed).
     unlockLevel: 5,
-    maxRank: 3,
-    rankLevels: [5, 9, 13],
+    topTier: true,
     mana: 22,
     manaPerRank: 4,
     cooldown: 11,

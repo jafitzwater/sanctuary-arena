@@ -3,6 +3,8 @@
  * Pure numbers and formulas for gold, XP, respawn and the item pace model. Values written in the
  * order are [JOSEPH]; everything else is [TEMP]. Spec: sanctuary-canon/wild-rift-economy-spec.md.
  */
+import { CLASSES } from './data/classes';
+import { STAT_GROWTH } from './data/classes/statGrowth';
 import { WAVE_INTERVAL, WAVE_SIZE, waveMob } from './data/waves';
 
 // ---------- GOLD ----------
@@ -108,9 +110,6 @@ export function championKillXp(victimLevel: number): number {
 }
 export const ASSIST_XP_PCT = 0.5;
 
-/** [JOSEPH] Top-tier ("ultimate") skill: unlock at 5, ranks at 9 and 13 -> max rank 3. */
-export const TOP_TIER_RANK_LEVELS = [5, 9, 13] as const;
-
 /**
  * [TEMP] Clock level the sim expects at a time: the floor pace model's level (below). Used for
  * bot display levels and the comeback XP multiplier.
@@ -131,6 +130,24 @@ export const RESPAWN_PER_LEVEL = 2;
 export const RESPAWN_CAP = 60;
 export function respawnSeconds(deathCount: number, level = 1): number {
   return Math.min(RESPAWN_CAP, 5 * Math.max(1, deathCount) + RESPAWN_PER_LEVEL * (Math.max(1, level) - 1));
+}
+
+/**
+ * Skill rework order item 6 [JOSEPH]: "BOT HEALTH scales with level like players of the same class but
+ * 15% less: use the champion hpPerLevel/vit growth x 0.85." A player's per-level life growth is
+ * hpPerLevel plus the auto-placed vitality (STAT_GROWTH vit x hpPerVit); bots get 0.85 of it per level.
+ * [TEMP] The level-1 base stays the existing bot life (240, sim.spawnHero); only the growth is new.
+ * Bots keep their existing class mapping (seat classId -> unit.look); unknown ids use the Barbarian.
+ */
+export const BOT_HP_GROWTH_MUL = 0.85;
+export const BOT_BASE_HP = 240;
+export function playerHpGrowthPerLevel(classId: string): number {
+  const def = CLASSES[classId] ?? CLASSES.barbarian;
+  const vit = STAT_GROWTH[def.id]?.vit ?? 0;
+  return def.stats.hpPerLevel + vit * def.stats.hpPerVit;
+}
+export function botMaxHp(classId: string, level: number): number {
+  return Math.round(BOT_BASE_HP + BOT_HP_GROWTH_MUL * playerHpGrowthPerLevel(classId) * (Math.max(1, level) - 1));
 }
 
 // ---------- PACE MODEL (items test) ----------
