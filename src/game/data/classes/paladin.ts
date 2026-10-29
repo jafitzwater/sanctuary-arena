@@ -37,7 +37,7 @@ function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' |
  * Doc: Path restriction: one path only -> one path, five skills (same shape as the Barbarian) [DOC].
  * Doc: "Skills unlock at level 1, level 3, level 5, and level 7. More than 4 skills use the remaining
  * points after level 7." -> zeal 1, smite 3, charge 5, holy shield 7 [DOC].
- * [TEMP][JOSEPH] Battle hammers: the doc only says "after level 7"; the Barbarian's top-tier
+ * [TEMP] NEEDS JOSEPH Battle hammers: the doc only says "after level 7"; the Barbarian's top-tier
  * Whirlwind uses level 10, so Battle Hammers uses 10 too (NEEDS JOSEPH).
  * Doc: "Skills max at level 5." -> maxRank 5 [DOC]. Mana cost is the shared % rule (combat.manaCost) [DOC].
  * [TEMP] Cooldowns and effects are unset in the doc ([U]); the handlers in skills/paladin.ts use existing
@@ -99,7 +99,7 @@ const skillList: SkillDef[] = [
     id: 'battle-hammers',
     name: 'Battle Hammers',
     short: 'Hammer',
-    unlockLevel: 10, // [TEMP][JOSEPH] doc: "after level 7"
+    unlockLevel: 10, // [TEMP] NEEDS JOSEPH doc: "after level 7"
     mana: 22,
     manaPerRank: 4,
     cooldown: 11, // [TEMP]

@@ -40,12 +40,18 @@ const AMAZON_SINGLE = ['magic-arrow', 'multi-shot', 'ice-shot', 'fire-shot'];
 /** Paladin order: Zeal and Smite lock a unit in melee reach, Charge locks a unit to rush (skills/paladin.ts). */
 const PALADIN_MELEE = ['zeal', 'smite'];
 
-/** Barbarian, Amazon and Paladin skills. Leap is the ground cast; bash and the Amazon arrows lock a unit. */
+/** Sorceress order: Ice Bolt and Frozen Orb lock a unit; Blizzard and Teleport aim the ground (skills/sorceress.ts). */
+const SORC_SINGLE = ['ice-bolt', 'frozen-orb'];
+const SORC_GROUND = ['blizzard', 'teleport'];
+
+/** Barbarian, Amazon, Paladin and Sorceress skills. Leap is the ground cast; bash and the Amazon arrows lock a unit. */
 export function skillAimKind(id: string): SkillAim {
   if (id === 'leap-attack') return 'ground';
   if (id === 'bash') return 'single';
   if (AMAZON_SINGLE.includes(id)) return 'single';
   if (PALADIN_MELEE.includes(id) || id === 'charge') return 'single';
+  if (SORC_SINGLE.includes(id)) return 'single';
+  if (SORC_GROUND.includes(id)) return 'ground';
   return 'self';
 }
 
@@ -55,6 +61,7 @@ export function skillReach(id: string, attackRange: number): number {
   if (AMAZON_SINGLE.includes(id)) return attackRange + 40; // skills/amazon.ts AMAZON_SKILL_REACH_BONUS [TEMP]
   if (PALADIN_MELEE.includes(id)) return attackRange + 18; // skills/paladin.ts PALADIN_MELEE_REACH_BONUS [TEMP]
   if (id === 'charge') return 260; // skills/paladin.ts CHARGE_REACH [TEMP]
+  if (SORC_SINGLE.includes(id)) return attackRange + 40; // skills/sorceress.ts SORC_SKILL_REACH_BONUS [TEMP]
   return attackRange;
 }
 

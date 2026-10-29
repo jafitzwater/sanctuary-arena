@@ -125,14 +125,15 @@ export function ring(sim: Sim, x: number, y: number, r: number, color: string): 
 /**
  * Gap-list item 13. Doc: "At skill level 1 the mana cost is 10%, level 2 is 15%, level 3 is 20%, and so on."
  * -> 10/15/20/25/30% [DERIVED]. [TEMP, numbers-table: percent of maximum mana; the doc does not say of what.]
- * Excluded: the sorceress/necromancer 2% step (no kits for those classes yet).
+ * Sorceress order: the sorceress 2% step ([DOC][P]) comes from SkillDef.manaStep; every other kit
+ * keeps the 5% step (the necromancer has no kit yet).
  */
-export function manaPct(rank: number): number {
-  return 0.1 + 0.05 * (Math.max(1, rank) - 1);
+export function manaPct(rank: number, step = 0.05): number {
+  return 0.1 + step * (Math.max(1, rank) - 1);
 }
 
-export function manaCost(_def: SkillDef, rank: number, maxMana: number): number {
-  return Math.round(maxMana * manaPct(rank));
+export function manaCost(def: SkillDef, rank: number, maxMana: number): number {
+  return Math.round(maxMana * manaPct(rank, def.manaStep ?? 0.05));
 }
 
 export function grantXp(sim: Sim, amount: number): void {

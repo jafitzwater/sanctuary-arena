@@ -8,6 +8,11 @@ export interface SkillDef {
   /** Mana at rank 1, already scaled for the match. */
   mana: number;
   manaPerRank: number;
+  /**
+   * Mana % step per rank after rank 1. Missing means the shared 5% step. The Sorceress sets 2%
+   * (doc: "once energy reaches 10, that step drops from 5% to 2%") [DOC][P].
+   */
+  manaStep?: number;
   minMana: number;
   maxRank: number;
   /** Match level required before the first point can be spent. */
