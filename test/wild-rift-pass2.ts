@@ -130,7 +130,10 @@ assert.equal(phone.w, 180);
 assert.equal(phone.h, minimapH(180, W, H));
 assert.equal(phone.goldTop, phone.bottom + MINIMAP.goldGap);
 const big = minimapTouchBox(390, MINIMAP.maxW, W, H);
-assert.equal(big.w, MINIMAP.maxW, 'max size fits at 844x390');
+// Map 12k order: the square map makes the minimap square, so at 844x390 the largest size is capped by the
+// height room (gold label above the stick) instead of maxW; it still never exceeds maxW.
+assert.ok(big.w <= MINIMAP.maxW && big.w >= MINIMAP.defaultW, 'max size fits at 844x390');
+assert.ok(big.goldBottom + MINIMAP.stickGap <= 390 - MINIMAP.stickTop + 1, 'max size keeps gold above the stick');
 const short = minimapTouchBox(300, MINIMAP.maxW, W, H, 20, 20);
 assert.ok(short.w < MINIMAP.maxW, 'shrinks to fit a short screen');
 assert.equal(clampMinimapW(10), MINIMAP.minW);

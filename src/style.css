@@ -292,14 +292,14 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
 }
 
 /* WILD RIFT VIEW: width = --mini-w (view.ts MINIMAP default 180 / min 120 / max 240 css px [TEMP]);
-   height follows the 4400 x 2800 map (11:7). */
+   height follows the map aspect: square since the map 12k order (12000 x 12000, was 4400 x 2800 = 11:7). */
 #minimap-toggle {
   position: absolute;
   top: 4px;
   right: 8px;
   width: var(--mini-w, 180px);
-  max-width: calc((100vh - 170px) * 11 / 7);
-  aspect-ratio: 11 / 7;
+  max-width: calc(100vh - 170px);
+  aspect-ratio: 1 / 1;
   height: auto;
   padding: 0;
   border: 1px solid var(--line);
@@ -963,7 +963,7 @@ body.touch #telemetry {
 body.touch #gold-badge {
   position: absolute;
   left: max(8px, env(safe-area-inset-left));
-  top: calc(max(4px, env(safe-area-inset-top)) + min(var(--mini-w, 180px), (100vh - 156px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 11 / 7) * 7 / 11 + 6px);
+  top: calc(max(4px, env(safe-area-inset-top)) + min(var(--mini-w, 180px), (100vh - 156px - env(safe-area-inset-top) - env(safe-area-inset-bottom))) + 6px);
   z-index: 5;
   flex: none;
   flex-direction: row;
@@ -1039,7 +1039,7 @@ body.touch #minimap-toggle {
   right: auto;
   z-index: 6;
   width: var(--mini-w, 180px);
-  max-width: calc((100vh - 156px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 11 / 7);
+  max-width: calc(100vh - 156px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   height: auto;
   background: rgba(12, 8, 6, 0.72);
   border-color: rgba(199, 179, 119, 0.8);

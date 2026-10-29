@@ -40,8 +40,15 @@ function along(lane: { x: number; y: number }[], t: number): { x: number; y: num
   return lane[lane.length - 1];
 }
 
-const MAP_W = 4400;
-const MAP_H = 2800;
+/**
+ * ORDER "Map size and Diablo 2 theme from reference" item 1 [JOSEPH]: "playable map 12,000 x 12,000 units (square).
+ * Nexus-to-Nexus about 15,000-16,000 (diagonal path length along lane)." Item 2: layout from map-reference.png -
+ * Blue base bottom-left, Red base top-right, top lane up the left edge then along the top edge, bottom lane along the
+ * bottom edge then up the right edge, mid lane on the diagonal, the (lava) river crossing it from top-left to
+ * bottom-right. Counts and combat values are the pre-order ones; only coordinates moved. Was 4400 x 2800.
+ */
+export const MAP_W = 12000;
+export const MAP_H = 12000;
 
 /** Doc: "The three roadways are mirrored end to end." 180-degree turn about the map center. */
 export function mirrorPoint(p: { x: number; y: number }): { x: number; y: number } {
@@ -64,13 +71,22 @@ const north: PathDef = {
   name: 'Barricade',
   road: '#7f8c98',
   edge: '#3c4a56',
+  // Map 12k item 2: up the left edge, round the top-left corner, along the top edge (reference "Top Lane").
+  // The first and last points keep the old offsets from each base (+260,-340 / -260,+120) and the first 400 units
+  // leave the camp in the old directions, so the camp gate and palisade are the same 6-tile slot as before.
   lane: [
-    { x: 780, y: 1760 },
-    { x: 620, y: 980 },
-    { x: 1180, y: 460 },
-    { x: 2100, y: 340 },
-    { x: 3000, y: 420 },
-    { x: 3620, y: 820 },
+    { x: 910, y: 11010 },
+    { x: 830, y: 10620 },
+    { x: 900, y: 9000 },
+    { x: 880, y: 5000 },
+    { x: 900, y: 2400 },
+    { x: 1150, y: 1500 },
+    { x: 1500, y: 1150 },
+    { x: 2400, y: 900 },
+    { x: 5000, y: 880 },
+    { x: 9000, y: 900 },
+    { x: 10754, y: 553 },
+    { x: 11090, y: 770 },
   ],
   ally: [{ unit: 'rogue', count: 1 }],
   enemy: [{ unit: 'fallen', count: 2 }],
@@ -88,12 +104,13 @@ const center: PathDef = {
   name: 'Blood Moor',
   road: '#6a4e38',
   edge: '#3a2b22',
+  // Map 12k item 2: the straight diagonal of the reference "Mid Lane" (first point keeps the old +390,-100 mouth offset after symmetric()).
   lane: symmetric([
-    { x: 980, y: 1960 },
-    { x: 1680, y: 1560 },
-    { x: 2360, y: 1240 },
-    { x: 3040, y: 940 },
-    { x: 3560, y: 760 },
+    { x: 1040, y: 11250 },
+    { x: 1401, y: 11078 },
+    { x: 6000, y: 6000 },
+    { x: 10599, y: 922 },
+    { x: 10960, y: 750 },
   ]),
   ally: [
     { unit: 'rogue', count: 1 },
@@ -208,37 +225,46 @@ export const SANCTUARY_DESIGN: ActDef = {
   lane: center.lane,
   paths: [north, center, south],
   seals,
+  // Map 12k item 2: herald above the river on the top side, dragon below it on the bottom side (as before), mirrored.
   pits: [
-    { id: 'herald', x: 1800, y: 700 },
-    { id: 'dragon', x: 2300, y: 1900 },
+    { id: 'herald', x: 4300, y: 3200 },
+    { id: 'dragon', x: 7700, y: 8800 },
   ],
+  // Map 12k item 2: same 4 shrines, each kept in the same jungle quarter it stood in before
+  // (might: left, guard: right, haste: bottom, mana: right).
   shrines: [
-    { x: 1280, y: 1180, kind: 'might' },
-    { x: 2480, y: 1500, kind: 'guard' },
-    { x: 1760, y: 1760, kind: 'haste' },
-    { x: 3180, y: 1500, kind: 'mana' },
+    { x: 2800, y: 6400, kind: 'might' },
+    { x: 8800, y: 4200, kind: 'guard' },
+    { x: 6000, y: 9400, kind: 'haste' },
+    { x: 9200, y: 5600, kind: 'mana' },
   ],
   // Item 15 [DOC]/[JOSEPH]: the 6 wilderness dens are replaced by 4 cave bosses.
   // Pass 3 order item 2 [TEMP]: caves moved deep into the open middle jungle, clear of every
   // tower's range (+60) and the roads, as two mirrored pairs (W - x, H - y).
+  // Map 12k item 2: same two mirrored pairs in the same quarters as before (Countess + Radament in the left
+  // jungle, Council + Izual in the right jungle), deep in the jungle, far outside every tower's range.
   dens: [
-    { id: 1, x: 1453, y: 1053, unit: 'countess', count: 1, respawn: CAVE_RESPAWN, cave: true },
-    { id: 2, x: 1107, y: 1493, unit: 'radament', count: 1, respawn: CAVE_RESPAWN, cave: true },
-    { id: 3, x: 3293, y: 1307, unit: 'council-member', count: 3, respawn: CAVE_RESPAWN, cave: true },
-    { id: 4, x: 2947, y: 1747, unit: 'izual', count: 1, respawn: CAVE_RESPAWN, cave: true },
+    { id: 1, x: 3200, y: 5600, unit: 'countess', count: 1, respawn: CAVE_RESPAWN, cave: true },
+    { id: 2, x: 2200, y: 7600, unit: 'radament', count: 1, respawn: CAVE_RESPAWN, cave: true },
+    { id: 3, x: 9800, y: 4400, unit: 'council-member', count: 3, respawn: CAVE_RESPAWN, cave: true },
+    { id: 4, x: 8800, y: 6400, unit: 'izual', count: 1, respawn: CAVE_RESPAWN, cave: true },
   ],
-  // Mirrored with the roadways (paint only, item 23).
+  // Mirrored with the roadways (paint only, item 23). Map 12k item 3: drawn as one continuous lava river,
+  // top-left corner to bottom-right corner across the mid lane, as in the reference.
   river: [
-    { x: 180, y: 160 },
-    { x: 1500, y: 860 },
-    { x: 2200, y: 1400 },
-    { x: 2900, y: 1940 },
-    { x: 4220, y: 2640 },
+    { x: 1600, y: 1600 },
+    { x: 3200, y: 2300 },
+    { x: 4800, y: 4600 },
+    { x: 6000, y: 6000 },
+    { x: 7200, y: 7400 },
+    { x: 8800, y: 9700 },
+    { x: 10400, y: 10400 },
   ],
   playerBase: {
     name: 'Blue Worldstone',
-    x: 520,
-    y: 2100,
+    // Map 12k: bottom-left corner of the reference (was 520, 2100 on the 4400 x 2800 map).
+    x: 650,
+    y: 11350,
     hp: 1108,
     ad: 16,
     armor: 20,
@@ -249,10 +275,10 @@ export const SANCTUARY_DESIGN: ActDef = {
     xp: 180,
   },
   enemyBase: {
-    // Item 7: mirror of the player base (520, 2100). Combat values copy the player base.
+    // Item 7: mirror of the player base (650, 11350). Combat values copy the player base.
     name: 'Red Worldstone',
-    x: 3880,
-    y: 700,
+    x: 11350,
+    y: 650,
     hp: 1108,
     ad: 16,
     armor: 20,
