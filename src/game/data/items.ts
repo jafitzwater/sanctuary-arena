@@ -334,6 +334,28 @@ export const CLASS_GATES: Record<string, Record<string, { reqStr?: number; reqDe
     rng: { reqStr: 37 },
     fhl: { reqStr: 37 },
   },
+  /**
+   * ORDER "Make Sorceress playable" [TEMP]: the Sorceress (energy caster) grows str 10 + 1/level and
+   * dex 15 + 0/level, so every Barbarian strength gate and the Two-Handed Sword's dexterity gate are
+   * out of her reach all match, and Quilted Armor (str 12, level 1) is 2 over her starting 10. Her
+   * gates are cut to her own strength/dexterity at the item's level (10/12/14/16 at levels 1/3/5/7;
+   * dex 15); levels and prices are unchanged. No item has an energy or mana gate, so none is added.
+   * Old -> new Sorceress gates: qui reqStr 12 -> 10; ssd/lea/skp reqStr 34 -> 12;
+   * flc/stu/hlm/mbl reqStr 38 -> 14; rng/fhl reqStr 42 -> 16; 2hs reqStr 42 -> 16 and reqDex 26 -> 15.
+   */
+  sorceress: {
+    qui: { reqStr: 10 },
+    ssd: { reqStr: 12 },
+    lea: { reqStr: 12 },
+    skp: { reqStr: 12 },
+    flc: { reqStr: 14 },
+    stu: { reqStr: 14 },
+    hlm: { reqStr: 14 },
+    mbl: { reqStr: 14 },
+    '2hs': { reqStr: 16, reqDex: 15 },
+    rng: { reqStr: 16 },
+    fhl: { reqStr: 16 },
+  },
 };
 
 /** Stat gate for a class: the class override when one exists, else the item's own reqStr/reqDex. */
