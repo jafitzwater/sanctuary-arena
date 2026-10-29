@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { totalMS } from '../src/game/data/moveSpeed';
+/** [JOSEPH] Barbarian 345 in world px/s, derived from UNIT_SCALE (Option B: 345). */
+const HERO_PXS = totalMS(345);
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -147,9 +150,9 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   const hero = player(sim);
   assert.equal(hero.maxHp, 240);
   assert.equal(hero.ad, 15);
-  // [JOSEPH] single MS: Barbarian base 345 -> 345 * 144/345 = 144 px/s (the old walk speed).
+  // [JOSEPH] single MS: Barbarian base 345 -> 345 * UNIT_SCALE px/s (Option B: UNIT_SCALE 1.0 -> 345).
   assert.equal(barbarian.stats.moveSpeed, 345);
-  assert.ok(Math.abs(hero.moveSpeed - 144) < 1e-9);
+  assert.ok(Math.abs(hero.moveSpeed - HERO_PXS) < 1e-9);
   const raven = sim.units.find((unit) => unit.defId === 'blood-raven');
   assert.equal(raven?.moveSpeed, 93);
   assert.ok(raven && hero.moveSpeed > raven.moveSpeed, 'the hero should still catch Blood Raven');
@@ -672,7 +675,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
     const elevens = seen.filter((frame) => frame === 11).length;
     assert.ok(zeros >= 2 && elevens >= 2, `dir ${dir} frames ${seen.join(',')}`);
     const travelled = Math.hypot(hero.x - open.x, hero.y - open.y);
-    // [JOSEPH] single MS 144 px/s over 25 x 40 ms ticks (~144px); was > 180 at the old 216 run.
+    // [JOSEPH] single MS (HERO_PXS px/s) over 25 x 40 ms ticks (~1 s of travel); floor kept at 130px.
     assert.ok(travelled > 130, `dir ${dir} only moved ${travelled.toFixed(1)}px`);
   }
   let slideCase = false;
@@ -1004,8 +1007,8 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   const y0 = hero.y;
   updateSim(sim, camp, 0.05);
   const campSpeed = Math.hypot(hero.x - x0, hero.y - y0) / 0.05;
-  // [JOSEPH] one MS everywhere: full stick in camp is the single current MS (144), never a run.
-  assert.ok(Math.abs(campSpeed - 144) < 1, `full stick in camp was ${campSpeed.toFixed(1)}`);
+  // [JOSEPH] one MS everywhere: full stick in camp is the single current MS (HERO_PXS), never a run.
+  assert.ok(Math.abs(campSpeed - HERO_PXS) < 1, `full stick in camp was ${campSpeed.toFixed(1)}`);
 
   const click = pastOpening(createMatch(sanctuary, barbarian, 1));
   const walker = player(click);
@@ -1016,7 +1019,7 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   const wy = walker.y;
   updateSim(click, dest, 0.05);
   const walkSpeed = Math.hypot(walker.x - wx, walker.y - wy) / 0.05;
-  assert.ok(Math.abs(walkSpeed - 144) < 1, `town click-to-move was ${walkSpeed.toFixed(1)}`);
+  assert.ok(Math.abs(walkSpeed - HERO_PXS) < 1, `town click-to-move was ${walkSpeed.toFixed(1)}`);
 
   let elapsed = 0;
   let compass: number | null = null;
@@ -1073,8 +1076,8 @@ function campSpeed(gait: 'idle' | 'walk', tilt = 1): number {
   const lightTilt = campSpeed('walk', 0.3);
   const fullTilt = campSpeed('walk', 1);
   assert.ok(idleSpeed < 1, `idle tilt moved at ${idleSpeed.toFixed(1)}`);
-  assert.ok(Math.abs(lightTilt - 144) < 1, `light tilt in camp was ${lightTilt.toFixed(1)}`);
-  assert.ok(Math.abs(fullTilt - 144) < 1, `full tilt in camp was ${fullTilt.toFixed(1)}`);
+  assert.ok(Math.abs(lightTilt - HERO_PXS) < 1, `light tilt in camp was ${lightTilt.toFixed(1)}`);
+  assert.ok(Math.abs(fullTilt - HERO_PXS) < 1, `full tilt in camp was ${fullTilt.toFixed(1)}`);
 
   const inputSrc = readFileSync(new URL('../src/game/input.ts', import.meta.url), 'utf8');
   assert.ok(inputSrc.includes("addEventListener('touchstart'"));

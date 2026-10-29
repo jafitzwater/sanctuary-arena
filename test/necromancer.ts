@@ -74,7 +74,7 @@ assert.deepEqual(sorceress.skills.map((s) => s.id), ['ice-bolt', 'frozen-nova', 
 assert.equal(BASE_MS.necromancer, 330);
 assert.equal(necromancer.stats.moveSpeed, 330);
 assert.ok(Math.abs(totalMS(330) - 330 * UNIT_SCALE) < 1e-9);
-assert.ok(Math.abs(totalMS(330) - 137.739) < 0.01, `330 -> ${totalMS(330)} px/s`);
+assert.ok(Math.abs(totalMS(330) - 330) < 0.01, `330 -> ${totalMS(330)} px/s`);
 {
   const sim = createMatch(sanctuary, necromancer, 1);
   const hero = sim.units.find((u) => u.id === sim.playerId)!;

@@ -4,15 +4,19 @@
  *   "League of Legends has just one movement speed. No walk vs run. Champions move at their current calculated MS."
  *   "totalMS(base, flat, addPct, multis, slows) = (base + flat) * (1 + sum addPct) * product(multis) * (1 - max slow)"
  *   "Soft caps: ms > 490 -> 415 + 75*0.8 + (ms-490)*0.5; 415-490 -> excess over 415 at 80%;
- *    floor: if ms < 220 then ms = 110 + ms*0.5." "Result * UNIT_SCALE (144/345)." "Only the strongest slow applies."
+ *    floor: if ms < 220 then ms = 110 + ms*0.5." "Result * UNIT_SCALE (144/345)." [superseded: Option B, UNIT_SCALE 1.0] "Only the strongest slow applies."
  *   "Base MS at level 1: Barbarian 345, Amazon 340, Paladin 335, Necromancer 330, Sorceress 325."
  * Implemented: the pure calculation, the base MS table, and the unit scale. Phaser-free so tests can import it.
  * Excluded: no new skills, buffs or items; class speed bursts (Frenzy/Whirlwind/War Cry, Evade, Vigor aura,
  * Frozen Armor at spec values) are NOT wired here ("needs skill wiring").
  */
 
-/** [JOSEPH] Barbarian 345 maps to the old walk speed of 144 px/s, so walk feel is unchanged. */
-export const UNIT_SCALE = 144 / 345;
+/**
+ * [JOSEPH] Order 2026-10-29 "Movement speed scale, Option B" [JOSEPH t211u]: "Change ONLY the movement speed conversion
+ * (px/s relative to nominal 335) so mid base-to-base lands at 44-47 s at average MS". 1 LoL unit = 1 world px, so
+ * 335 -> 335 px/s and Barbarian 345 -> 345 px/s; measured mid base-to-base at 335 is ~45.7 s. (Was 144/345.)
+ */
+export const UNIT_SCALE = 1.0;
 
 /** [JOSEPH] Base MS at level 1, in LoL units. */
 export const BASE_MS: Readonly<Record<string, number>> = {

@@ -126,7 +126,7 @@ export const necromancer: ClassDef = {
     mana: moba.mana, // CharStats import, as the Barbarian
     ad: 15, // [TEMP] same as the Barbarian
     armor: moba.baseArmor,
-    // [JOSEPH] movement-speed-spec.md: "Necromancer 330"; 330 * UNIT_SCALE (144/345) ≈ 137.7 px/s.
+    // [JOSEPH] movement-speed-spec.md: "Necromancer 330"; 330 * UNIT_SCALE (1.0) = 330 px/s.
     moveSpeed: BASE_MS.necromancer,
     attackRange: 200, // [TEMP] same as the Amazon/Sorceress range
     attackInterval: 0.78, // [TEMP] same as the Barbarian

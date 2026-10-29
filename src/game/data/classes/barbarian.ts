@@ -141,7 +141,7 @@ export const barbarian: ClassDef = {
     mana: moba.mana,
     ad: 15,
     armor: moba.baseArmor,
-    // [JOSEPH] Base MS 345 (LoL units); 345 * UNIT_SCALE (144/345) = 144, the old walk speed.
+    // [JOSEPH] Base MS 345 (LoL units); 345 * UNIT_SCALE (1.0) = 345 px/s (Option B; was 144).
     moveSpeed: BASE_MS.barbarian,
     attackRange: 74,
     attackInterval: 0.78,

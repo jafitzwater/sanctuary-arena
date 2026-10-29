@@ -256,9 +256,9 @@ function expect(ok, message) {
   if (!ok) throw new Error(message);
 }
 expect(idle.states?.length === 1 && idle.states[0] === 'IDLE' && idle.speed === 0, `idle gait ${JSON.stringify(idle)}`);
-expect(walk.states?.includes('WALK') && Math.abs(walk.speed - 144) < 8, `walk gait ${JSON.stringify(walk)}`);
-// [JOSEPH] single MS: a full tilt is the same 144 walk, never RUN.
-expect(!run.states?.includes('RUN') && Math.abs(run.speed - 144) < 8, `full-tilt gait ${JSON.stringify(run)}`);
+expect(walk.states?.includes('WALK') && Math.abs(walk.speed - 345) < 8, `walk gait ${JSON.stringify(walk)}`);
+// [JOSEPH] single MS: a full tilt is the same 345 px/s MS (Option B), never RUN.
+expect(!run.states?.includes('RUN') && Math.abs(run.speed - 345) < 8, `full-tilt gait ${JSON.stringify(run)}`);
 expect(heights.every((height) => height === 108), `hero height ${heights}`);
 expect(geometry?.corridorTiles === 5 && geometry?.gateTiles === 6, `geometry ${JSON.stringify(geometry)}`);
 expect(backing.dpr === 3 && backing.ratioW === 3 && backing.imageRendering === 'pixelated', `canvas ${JSON.stringify(backing)}`);

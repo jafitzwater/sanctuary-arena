@@ -57,7 +57,7 @@ assert.equal(barbarian.stats.adPerDex, undefined);
 assert.equal(BASE_MS.amazon, 340);
 assert.equal(amazon.stats.moveSpeed, 340);
 assert.ok(Math.abs(totalMS(340) - 340 * UNIT_SCALE) < 1e-9);
-assert.ok(Math.abs(totalMS(340) - 141.913) < 0.01, `340 -> ${totalMS(340)} px/s`);
+assert.ok(Math.abs(totalMS(340) - 340) < 0.01, `340 -> ${totalMS(340)} px/s`);
 {
   const sim = createMatch(sanctuary, amazon, 1);
   const hero = sim.units.find((u) => u.id === sim.playerId)!;

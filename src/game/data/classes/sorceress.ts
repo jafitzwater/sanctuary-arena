@@ -143,7 +143,7 @@ export const sorceress: ClassDef = {
     mana: moba.mana, // CharStats import, as the Barbarian
     ad: 15, // [TEMP] same as the Barbarian
     armor: moba.baseArmor,
-    // [JOSEPH] movement-speed-spec.md: "Sorceress 325"; 325 * UNIT_SCALE (144/345) ≈ 135.7 px/s.
+    // [JOSEPH] movement-speed-spec.md: "Sorceress 325"; 325 * UNIT_SCALE (1.0) = 325 px/s.
     moveSpeed: BASE_MS.sorceress,
     attackRange: 200, // [TEMP] same as the Amazon bow range
     attackInterval: 0.78, // [TEMP] same as the Barbarian

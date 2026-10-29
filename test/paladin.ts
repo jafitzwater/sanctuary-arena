@@ -62,7 +62,7 @@ assert.deepEqual(amazon.skills.map((s) => s.id), ['magic-arrow', 'multi-shot', '
 assert.equal(BASE_MS.paladin, 335);
 assert.equal(paladin.stats.moveSpeed, 335);
 assert.ok(Math.abs(totalMS(335) - 335 * UNIT_SCALE) < 1e-9);
-assert.ok(Math.abs(totalMS(335) - 139.826) < 0.01, `335 -> ${totalMS(335)} px/s`);
+assert.ok(Math.abs(totalMS(335) - 335) < 0.01, `335 -> ${totalMS(335)} px/s`);
 {
   const sim = createMatch(sanctuary, paladin, 1);
   const hero = sim.units.find((u) => u.id === sim.playerId)!;

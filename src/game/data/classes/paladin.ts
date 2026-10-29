@@ -131,7 +131,7 @@ export const paladin: ClassDef = {
     mana: moba.mana, // CharStats import, as the Barbarian
     ad: 15, // [TEMP] same as the Barbarian
     armor: moba.baseArmor,
-    // [JOSEPH] movement-speed-spec.md: "Paladin 335"; 335 * UNIT_SCALE (144/345) ≈ 139.8 px/s.
+    // [JOSEPH] movement-speed-spec.md: "Paladin 335"; 335 * UNIT_SCALE (1.0) = 335 px/s.
     moveSpeed: BASE_MS.paladin,
     attackRange: 74, // [TEMP] same as the Barbarian (melee)
     attackInterval: 0.78, // [TEMP] same as the Barbarian
