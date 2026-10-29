@@ -42,12 +42,14 @@ assert.deepEqual(STARTING_STATS.necromancer, { str: 15, dex: 15, vit: 15, energy
 // [DOC] "Necromancer | same as the sorceress" (2 energy, 2 vitality, 1 strength, 0 dexterity).
 assert.deepEqual(STAT_GROWTH.necromancer, { energy: 2, vit: 2, str: 1, dex: 0 });
 // [DOC] "Teeth: teeth, bone spear, bone armor, bone spirit." One path built (Teeth); Minions not built.
-assert.deepEqual(necromancer.skills.map((s) => s.name), ['Teeth', 'Bone Spear', 'Bone Armor', 'Bone Spirit']);
-assert.equal(necromancer.skills.length, 4, 'one path of four; no invented skill');
+// Skill rework order [JOSEPH]: top skill Blood Splash (L9 [TEMP]); Bone Spear stays L3.
+assert.deepEqual(necromancer.skills.map((s) => s.name), ['Teeth', 'Bone Spear', 'Bone Armor', 'Bone Spirit', 'Blood Splash']);
+assert.equal(necromancer.skills.length, 5);
+assert.ok(necromancer.skills[4].topTier);
 for (const s of necromancer.skills) assert.ok(!/skeleton|mage|wall/i.test(s.name), 'no Minions skill mixed in');
 // [DOC] 1/3/5/7.
-assert.deepEqual(necromancer.skills.map((s) => s.unlockLevel), [1, 3, 5, 7]);
-assert.ok(necromancer.skills.every((s) => s.maxRank === 5 && !s.passive));
+assert.deepEqual(necromancer.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 9]);
+assert.ok(necromancer.skills.every((s) => s.maxRank === 3 && !s.passive));
 assert.deepEqual(necromancer.startingBelt, ['teeth', '', '', '']);
 assert.equal(necromancer.role, 'ranged');
 assert.equal(necromancer.token, 'NE');
@@ -64,11 +66,11 @@ for (const s of sorceress.skills) assert.equal(s.manaStep, 0.02);
 assert.equal(barbarian.stats.moveSpeed, 345);
 assert.deepEqual(barbarian.skills.map((s) => s.id), ['bash', 'shout', 'leap-attack', 'battle-orders', 'whirlwind']);
 assert.equal(amazon.stats.moveSpeed, 340);
-assert.deepEqual(amazon.skills.map((s) => s.id), ['magic-arrow', 'multi-shot', 'ice-shot', 'fire-shot']);
+assert.deepEqual(amazon.skills.map((s) => s.id), ['magic-arrow', 'multi-shot', 'ice-shot', 'fire-shot', 'strafe']);
 assert.equal(paladin.stats.moveSpeed, 335);
 assert.deepEqual(paladin.skills.map((s) => s.id), ['zeal', 'smite', 'charge', 'holy-shield', 'battle-hammers']);
 assert.equal(sorceress.stats.moveSpeed, 325);
-assert.deepEqual(sorceress.skills.map((s) => s.id), ['ice-bolt', 'frozen-nova', 'blizzard', 'frozen-orb', 'teleport']);
+assert.deepEqual(sorceress.skills.map((s) => s.id), ['ice-bolt', 'lightning', 'teleport', 'fire-blast', 'blizzard']);
 
 // --- Movement speed: [JOSEPH] Necromancer 330 through the existing single-MS formula.
 assert.equal(BASE_MS.necromancer, 330);
@@ -153,6 +155,11 @@ assert.ok(Math.abs(totalMS(330) - 330) < 0.01, `330 -> ${totalMS(330)} px/s`);
   assert.ok(SKILLS['bone-armor'](ctx(2)));
   assert.equal(hero.buffArmor, Math.max(armor0, BONE_ARMOR.armor + BONE_ARMOR.perRank));
   assert.ok(hero.buffT >= BONE_ARMOR.t);
+  // Skill rework order [JOSEPH]: Blood Splash, magic blast around the target ([TEMP] values).
+  foes.forEach((f, i) => { f.x = hero.x + 100 + i * 10; f.y = hero.y + i * 8; });
+  const hp0 = foes.map((f) => f.hp);
+  assert.ok(SKILLS['blood-splash'](ctx(1, foes[0].id)));
+  assert.ok(foes.every((f, i) => f.hp < hp0[i]), 'blood splash hits the target and foes around it');
 }
 
 // --- Item gates: Barbarian gates unchanged; every gear item reachable for the Necromancer at its own

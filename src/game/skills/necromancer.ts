@@ -5,7 +5,7 @@
  * existing armor buff (as Shout and Holy Shield). Every multiplier, count, reach and duration is [TEMP].
  * The Minions path is not built (no summon system; NEEDS JOSEPH).
  */
-import { banner, ring, sfx } from '../combat';
+import { banner, damageUnit, ring, sfx } from '../combat';
 import type { Unit } from '../types';
 import type { CastContext, SkillHandler } from './types';
 
@@ -96,9 +96,36 @@ export const boneArmor: SkillHandler = (ctx) => {
   return true;
 };
 
+/** [TEMP] Blood Splash (skill rework, top skill [JOSEPH]): magic blast around one foe in reach. */
+export const SPLASH_REACH_BONUS = 80;
+export const BLOOD_SPLASH = { radius: 110, mult: 1.6, perRank: 0.15 };
+
+export const bloodSplash: SkillHandler = (ctx) => {
+  const { sim, hero } = ctx;
+  const foe = foesInReach(ctx, hero.attackRange + SPLASH_REACH_BONUS)[0];
+  if (!foe) {
+    banner(sim, 'Nobody in reach.');
+    return false;
+  }
+  hero.facing = Math.atan2(foe.y - hero.y, foe.x - hero.x);
+  hero.castT = 0.4;
+  const damage = hero.ad * (BLOOD_SPLASH.mult + (ctx.rank - 1) * BLOOD_SPLASH.perRank);
+  const cx = foe.x;
+  const cy = foe.y;
+  for (const u of sim.units) {
+    if (!u.alive || u.team === hero.team || u.kind === 'base') continue;
+    if (Math.hypot(u.x - cx, u.y - cy) - u.radius > BLOOD_SPLASH.radius) continue;
+    damageUnit(sim, u, damage, hero, 'magic');
+  }
+  ring(sim, cx, cy, BLOOD_SPLASH.radius, '#a01818');
+  sfx(sim, 'whirl');
+  return true;
+};
+
 export const HANDLERS: Record<string, SkillHandler> = {
   teeth,
   'bone-spear': boneSpear,
   'bone-armor': boneArmor,
   'bone-spirit': boneSpirit,
+  'blood-splash': bloodSplash,
 };

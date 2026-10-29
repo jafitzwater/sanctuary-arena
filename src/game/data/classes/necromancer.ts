@@ -23,7 +23,7 @@ function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' |
     key: '',
     digit: '',
     minMana: 0,
-    maxRank: 5,
+    maxRank: 3, // Skill rework order [JOSEPH]: all skills max rank 3.
     reqLevel: partial.unlockLevel,
     tab: 1,
     tabName: 'Skills',
@@ -50,7 +50,9 @@ function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' |
  * and no path picker yet (NEEDS JOSEPH).
  * Doc: "Skills unlock at level 1, level 3, level 5, and level 7." -> teeth 1, bone spear 3, bone armor 5,
  * bone spirit 7 [DOC]. The Teeth path has four skills and no fifth, so nothing unlocks after level 7.
- * Doc: "Skills max at level 5." -> maxRank 5 [DOC]. Mana cost is the % rule with the 2% step [DOC][P].
+ * Skill rework order (2026-10-29) [JOSEPH]: no paths; one flat list. Bone Spear stays L3 [JOSEPH]; the other
+ * levels are unchanged. Top skill Blood Splash [JOSEPH]: area blast around the target, unlock L9 [TEMP].
+ * Skill rework order [JOSEPH]: "ALL SKILLS MAX RANK 3" -> maxRank 3 (was doc "Skills max at level 5" -> 5) [DOC]. Mana cost is the % rule with the 2% step [DOC][P].
  * [TEMP] Cooldowns and effects are unset in the doc ([U]); the handlers in skills/necromancer.ts use
  * existing mechanics (projectile, armor buff) with fixed placeholder numbers.
  * `mana`/`manaPerRank` mirror the Barbarian's fields and are not used by the % mana rule.
@@ -105,6 +107,19 @@ const skillList: SkillDef[] = [
     d2Id: 93,
     description: 'A spirit that seeks one foe at long reach. Rank 1 deals 180% of a basic hit, and each rank adds 15%.',
   }),
+  skill({
+    id: 'blood-splash',
+    name: 'Blood Splash', // [JOSEPH] top skill
+    short: 'Blood',
+    unlockLevel: 9, // [TEMP]
+    topTier: true,
+    mana: 20,
+    manaPerRank: 2,
+    cooldown: 12, // [TEMP]
+    row: 5,
+    d2Id: 0,
+    description: 'Blood bursts on one foe and hits every foe around it. Rank 1 deals 160% of a basic hit, and each rank adds 15%.', // [TEMP]
+  }),
 ];
 
 /** [TEMP] Life scale the Barbarian uses (240 match life for the 780 CharStats life), applied to the Necromancer's 360. */
@@ -118,7 +133,7 @@ export const necromancer: ClassDef = {
   // projectile basic attack (as the Amazon and Sorceress), so 'ranged' in the sim.
   role: 'ranged',
   blurb:
-    'Teeth path: Teeth, Bone Spear, Bone Armor, and Bone Spirit. Skills learn themselves at levels 1, 3, 5 and 7. Press T to spend extra points.',
+    'Teeth, Bone Spear, Bone Armor, Bone Spirit, and Blood Splash. Skills learn themselves at levels 1, 3, 5, 7 and 9. Press T to spend extra points.',
   token: row.token || 'NE',
   startingBelt: ['teeth', '', '', ''],
   stats: {

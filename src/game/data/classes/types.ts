@@ -17,8 +17,12 @@ export interface SkillDef {
   maxRank: number;
   /** Match level required before the first point can be spent. */
   unlockLevel: number;
-  /** Economy order [JOSEPH]: top-tier skill ranks open at these levels (rank n at rankLevels[n-1]). */
-  rankLevels?: number[];
+  /**
+   * Skill rework order [JOSEPH]: the class's top-tier skill (last in the flat list). No rank gates:
+   * the 5/9/13 rank levels from the economy order are removed. Only used to keep the four other
+   * skills on Q W E R (combat.fillEmptyBelt).
+   */
+  topTier?: boolean;
   /** Diablo II reqlevel, before the match-length scale. */
   reqLevel: number;
   description: string;

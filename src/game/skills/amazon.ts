@@ -95,9 +95,25 @@ export const fireShot: SkillHandler = (ctx) => {
   return true;
 };
 
+/** [TEMP] Strafe (skill rework, top tier [JOSEPH]): one arrow at each of up to 5 foes in reach. */
+export const STRAFE = { targets: 5, mult: 0.8, perRank: 0.1 };
+
+export const strafe: SkillHandler = (ctx) => {
+  const foes = foesInReach(ctx, amazonReach(ctx.hero.attackRange)).slice(0, STRAFE.targets);
+  if (!foes.length) {
+    banner(ctx.sim, 'Nobody in reach.');
+    return false;
+  }
+  const mult = STRAFE.mult + (ctx.rank - 1) * STRAFE.perRank;
+  for (const foe of foes) arrow(ctx, foe, ctx.hero.ad * mult, '#f0e0a0');
+  sfx(ctx.sim, 'swing');
+  return true;
+};
+
 export const HANDLERS: Record<string, SkillHandler> = {
   'magic-arrow': magicArrow,
   'multi-shot': multiShot,
   'ice-shot': iceShot,
   'fire-shot': fireShot,
+  strafe,
 };

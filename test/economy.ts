@@ -6,11 +6,11 @@ import { CLASSES } from '../src/game/data/classes';
 import { barbarian } from '../src/game/data/classes/barbarian';
 import { itemById } from '../src/game/data/items';
 import { unitDef } from '../src/game/data/units';
-import { canRankUp, grantXp, kill, netGearPrice, rankLevel, tryBuy, tryUpgrade, xpToNext } from '../src/game/combat';
+import { canRankUp, grantXp, kill, netGearPrice, syncChampionLevels, tryBuy, tryUpgrade, xpToNext } from '../src/game/combat';
 import {
   LOW_GOLD_BONUS, MAX_LEVEL, MINION_GOLD, PASSIVE_GOLD, SELL_PCT, START_GOLD, assistGold, championBounty,
   championKillXp, expectedLevel, lowestGoldIds, minionRole, paceModel, passiveGoldRate, respawnSeconds, sellValue, shareGold,
-  totalXpToLevel,
+  totalXpToLevel, BOT_BASE_HP, botMaxHp, playerHpGrowthPerLevel,
 } from '../src/game/economy';
 import { player } from '../src/game/query';
 import { createMatch, spawnMinion, updateSim } from '../src/game/sim';
@@ -144,31 +144,48 @@ assert.ok(at(15) >= 15 * 60 && at(15) <= 20 * 60, `level 15 in 15-20 min on the 
 assert.ok(at(5) <= 6 * 60 && at(9) <= 10 * 60 && at(13) <= 16 * 60, 'top-tier ranks reachable in time');
 assert.equal(expectedLevel(0), 1);
 assert.equal(expectedLevel(at(9)), 9);
+// Skill rework order [JOSEPH]: no paths; every class has one flat list with one top-tier skill; all
+// skills max rank 3 with no 9/13 rank gates (removed from the economy order). Unlocks: Barbarian/Paladin
+// top tier kept at 5; Sorceress/Amazon/Necromancer top tier at 9.
+const TOP_UNLOCK: Record<string, number> = { barbarian: 5, paladin: 5, sorceress: 9, amazon: 9, necromancer: 9 };
 for (const def of Object.values(CLASSES)) {
-  const top = def.skills.filter((s) => s.rankLevels);
-  if (def.id === 'amazon' || def.id === 'necromancer') { assert.equal(top.length, 0, `${def.id} has no top tier`); continue; }
+  const top = def.skills.filter((s) => s.topTier);
   assert.equal(top.length, 1, `${def.id} one top tier`);
+  assert.equal(def.skills.length, 5, `${def.id} five skills`);
   const ult = top[0];
-  assert.equal(ult.unlockLevel, 5);
-  assert.equal(ult.maxRank, 3);
-  assert.deepEqual([1, 2, 3].map((r) => rankLevel(ult, r)), [5, 9, 13]);
-  assert.deepEqual(def.skills.filter((s) => !s.rankLevels).map((s) => s.unlockLevel), [1, 3, 5, 7]);
-  // Rank caps: rank 2 waits for level 9, rank 3 for 13, no rank 4.
+  assert.equal(ult.unlockLevel, TOP_UNLOCK[def.id]);
+  assert.ok(def.skills.every((s) => s.maxRank === 3), `${def.id} max rank 3`);
+  assert.deepEqual(def.skills.filter((s) => !s.topTier).map((s) => s.unlockLevel), [1, 3, 5, 7]);
   const sim = createMatch(sanctuary, def, 1);
-  while (sim.level < 8) grantXp(sim, xpToNext(sim.level));
-  assert.equal(sim.skillRanks[ult.id], 1, `${def.id} top tier auto-learned at 5`);
+  while (sim.level < ult.unlockLevel) grantXp(sim, xpToNext(sim.level));
+  assert.equal(sim.skillRanks[ult.id], 1, `${def.id} top tier auto-learned at ${ult.unlockLevel}`);
   sim.skillPoints = 5;
-  assert.equal(canRankUp(sim, ult), false);
-  assert.equal(tryUpgrade(sim, ult.id), false, 'rank 2 locked before 9');
-  while (sim.level < 9) grantXp(sim, xpToNext(sim.level));
+  assert.ok(canRankUp(sim, ult), 'rank 2 open right away (no level gate)');
   assert.ok(tryUpgrade(sim, ult.id));
-  assert.equal(tryUpgrade(sim, ult.id), false, 'rank 3 locked before 13');
-  while (sim.level < 13) grantXp(sim, xpToNext(sim.level));
   assert.ok(tryUpgrade(sim, ult.id));
-  sim.skillPoints = 3;
   assert.equal(tryUpgrade(sim, ult.id), false, 'max rank 3');
   assert.equal(sim.skillRanks[ult.id], 3);
-  assert.ok(!sim.belt.includes(ult.id), 'top tier is not auto-slotted over the level-7 path skill');
+  const first = def.skills[0];
+  assert.ok(tryUpgrade(sim, first.id) && tryUpgrade(sim, first.id));
+  assert.equal(tryUpgrade(sim, first.id), false, 'every skill caps at 3');
+  while (sim.level < 9) grantXp(sim, xpToNext(sim.level));
+  assert.ok(!sim.belt.includes(ult.id), 'top tier is not auto-slotted over the other four skills');
+}
+
+// ---- BOT HP (skill rework item 6 [JOSEPH]) ----
+{
+  for (const id of Object.keys(CLASSES)) {
+    const g = playerHpGrowthPerLevel(id);
+    assert.equal(botMaxHp(id, 1), BOT_BASE_HP);
+    assert.equal(botMaxHp(id, 10), Math.round(BOT_BASE_HP + 0.85 * g * 9), `${id} bot growth is 0.85x the player's`);
+  }
+  const sim = createMatch(sanctuary, barbarian, 1);
+  const bot = sim.units.find((u) => u.bot && u.kind === 'champion')!;
+  assert.equal(bot.maxHp, 240);
+  sim.time = 14 * 60;
+  syncChampionLevels(sim);
+  assert.ok(bot.level > 1);
+  assert.equal(bot.maxHp, botMaxHp(bot.look ?? 'barbarian', bot.level), 'bot HP follows its level');
 }
 
 // ---- HEALTH ----

@@ -40,12 +40,14 @@ assert.deepEqual(STARTING_STATS.paladin, { str: 25, dex: 20, vit: 25, energy: 15
 // [DOC] "Paladin 2 strength, 2 dexterity, 1 vitality, 0 energy".
 assert.deepEqual(STAT_GROWTH.paladin, { str: 2, dex: 2, vit: 1, energy: 0 });
 // [DOC] kits-final: "One path. In order: zeal, smite, charge, holy shield. Battle hammers is the top tier skill."
-assert.deepEqual(paladin.skills.map((s) => s.name), ['Zeal', 'Smite', 'Charge', 'Holy Shield', 'Battle Hammers']);
+// Skill rework order [JOSEPH]: "keep Blessed Hammer" -> display name Blessed Hammer (id battle-hammers).
+assert.deepEqual(paladin.skills.map((s) => s.name), ['Zeal', 'Smite', 'Charge', 'Holy Shield', 'Blessed Hammer']);
 assert.equal(paladin.skills.length, 5, 'doc names exactly five Paladin skills, no invented extra');
 // [DOC] 1/3/5/7; economy order [JOSEPH]: top tier unlocks at 5 with ranks at 9 and 13 (was 10).
 assert.deepEqual(paladin.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 5]);
-assert.deepEqual(paladin.skills[4].rankLevels, [5, 9, 13]);
-assert.deepEqual(paladin.skills.map((s) => s.maxRank), [5, 5, 5, 5, 3]);
+// Skill rework order [JOSEPH]: all skills max rank 3, no rank gates; top tier keeps unlock 5.
+assert.ok(paladin.skills[4].topTier);
+assert.deepEqual(paladin.skills.map((s) => s.maxRank), [3, 3, 3, 3, 3]);
 assert.ok(paladin.skills.every((s) => !s.passive));
 assert.deepEqual(paladin.startingBelt, ['zeal', '', '', '']);
 assert.equal(paladin.role, 'melee');
@@ -56,7 +58,7 @@ assert.deepEqual([1, 2, 3, 4, 5].map((r) => manaCost(paladin.skills[0], r, 200))
 assert.equal(barbarian.stats.moveSpeed, 345);
 assert.deepEqual(barbarian.skills.map((s) => s.id), ['bash', 'shout', 'leap-attack', 'battle-orders', 'whirlwind']);
 assert.equal(amazon.stats.moveSpeed, 340);
-assert.deepEqual(amazon.skills.map((s) => s.id), ['magic-arrow', 'multi-shot', 'ice-shot', 'fire-shot']);
+assert.deepEqual(amazon.skills.map((s) => s.id), ['magic-arrow', 'multi-shot', 'ice-shot', 'fire-shot', 'strafe']);
 
 // --- Movement speed: [JOSEPH] Paladin 335 through the existing single-MS formula.
 assert.equal(BASE_MS.paladin, 335);

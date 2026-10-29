@@ -18,7 +18,7 @@ import { grantXp, heroNumbers, manaCost, MAX_LEVEL, tryUpgrade, xpToNext } from 
 import { comebackMul } from '../src/game/pace';
 import { createMatch, PASSIVE_GOLD, spawnMinion } from '../src/game/sim';
 import { SKILLS } from '../src/game/skills';
-import { ICE_SHOT_SLOW } from '../src/game/skills/amazon';
+import { ICE_SHOT_SLOW, STRAFE } from '../src/game/skills/amazon';
 import { skillAimKind } from '../src/game/mobileInput';
 import { CLASS_COLS, CLASS_SHEET, CLASS_SHEET_IDS, classSheetCol, classSheetRow, hasClassSheet } from '../src/game/art/sheet-frames';
 import { cellHasFigure, readPng } from './png';
@@ -40,9 +40,11 @@ assert.deepEqual(STARTING_STATS.amazon, { str: 20, dex: 25, vit: 20, energy: 15 
 // [DOC] "Amazon 2 dexterity, 2 vitality, 1 strength, 0 energy".
 assert.deepEqual(STAT_GROWTH.amazon, { dex: 2, vit: 2, str: 1, energy: 0 });
 // [DOC] kits-final Magic Arrow path, in order at levels 1/3/5/7, max rank 5.
-assert.deepEqual(amazon.skills.map((s) => s.name), ['Magic Arrow', 'Multi Shot', 'Ice Shot', 'Fire Shot']);
-assert.deepEqual(amazon.skills.map((s) => s.unlockLevel), [1, 3, 5, 7]);
-assert.ok(amazon.skills.every((s) => s.maxRank === 5 && !s.passive));
+// Skill rework order [JOSEPH]: top-tier Strafe (unlock 9 [TEMP]); all skills max rank 3.
+assert.deepEqual(amazon.skills.map((s) => s.name), ['Magic Arrow', 'Multi Shot', 'Ice Shot', 'Fire Shot', 'Strafe']);
+assert.deepEqual(amazon.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 9]);
+assert.ok(amazon.skills.every((s) => s.maxRank === 3 && !s.passive));
+assert.ok(amazon.skills[4].topTier);
 assert.deepEqual(amazon.startingBelt, ['magic-arrow', '', '', '']);
 assert.equal(amazon.role, 'ranged');
 // [DOC] shared mana rule 10/15/20/25/30%.
@@ -132,6 +134,10 @@ assert.ok(Math.abs(totalMS(340) - 340) < 0.01, `340 -> ${totalMS(340)} px/s`);
   assert.ok(foes[4].slows.some((s) => s.pct === ICE_SHOT_SLOW.pct && s.t === ICE_SHOT_SLOW.t));
   assert.ok(SKILLS['fire-shot'](ctx(1)));
   assert.ok(Math.abs(sim.projectiles.at(-1)!.damage - hero.ad * 1.4) < 1e-9);
+  // Skill rework order [JOSEPH]: top-tier Strafe fires one arrow at each of up to STRAFE.targets foes.
+  n = shots();
+  assert.ok(SKILLS.strafe(ctx(1)));
+  assert.equal(shots(), n + Math.min(STRAFE.targets, foes.length));
 }
 
 // --- Item gates: Barbarian gates unchanged; every gear item reachable for the Amazon at its own
