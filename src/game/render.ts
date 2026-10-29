@@ -654,7 +654,8 @@ export class Renderer {
     const screen = Math.atan2(ahead.y - p.y, ahead.x - p.x);
     const swing = Math.sin(pose.phase * Math.PI * 2);
     const attack = attackPose(unit);
-    const hero = unit.defId === 'barbarian';
+    // Amazon order: any playable class body (class sheet id) draws as a hero, not just the Barbarian.
+    const hero = unit.kind === 'champion' && hasClassSheet(unit.defId);
     const boss = bossLook(unit);
     const height = (hero ? heroDrawHeight(pose.state) : this.unitHeight(unit)) * u;
     const bob = swing * (pose.state === 'idle' ? 1.5 : pose.state === 'run' ? 5 : 3.5) * u;
@@ -798,8 +799,8 @@ export class Renderer {
     pose: Pose,
   ): { kind: 'class' | 'mob'; id: string; row: number; col: number } | null {
     const sheetAnim: SheetAnim = anim === 'die' ? 'death' : anim === 'attack' ? 'attack' : anim === 'idle' ? 'idle' : 'move';
-    if (unit.defId === 'barbarian') {
-      const id = unit.look ?? 'barbarian';
+    if (unit.kind === 'champion' && hasClassSheet(unit.defId)) {
+      const id = unit.look ?? unit.defId;
       if (!hasClassSheet(id) || !classSheetReady(id)) return null;
       const motion = id === 'barbarian' ? this.barbarianMotionCol(unit, anim, pose) : null;
       if (motion != null) return { kind: 'class', id, row: classSheetRow(pose.compass), col: motion };

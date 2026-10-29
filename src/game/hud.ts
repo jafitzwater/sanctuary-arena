@@ -1,8 +1,9 @@
 import portraitUrl from '../assets/art/d2/portrait.webp';
 import { clampMinimapW, MINIMAP } from './view';
 import { ROSTER } from './data/classes/roster';
+import { DEFAULT_CLASS_ID } from './data/classes';
 import { itemIcon, plateIcons, skillIcon } from './art/icons';
-import { isBetterGear, isShopItem, itemById, ITEMS, potionCap, type ItemDef } from './data/items';
+import { isBetterGear, isShopItem, itemById, itemGate, ITEMS, potionCap, type ItemDef } from './data/items';
 import { inShopRange, manaCost, MAX_LEVEL, xpToNext } from './combat';
 import { player } from './query';
 import type { Sim } from './types';
@@ -43,6 +44,8 @@ export class Hud {
   beltSlot = 0;
   pendingSkill: string | null = null;
   private built = false;
+  // Amazon order: the class can change on the title screen, so class-specific panels rebuild when it does.
+  private builtClass = '';
   private sawTree = false;
   private sawShop = false;
   private shopCat: ShopCat = 'recommended';
@@ -265,6 +268,12 @@ export class Hud {
       this.buildTree(sim);
       this.fillTitle(sim);
       this.built = true;
+      this.builtClass = sim.classDef.id;
+    } else if (this.builtClass !== sim.classDef.id) {
+      this.buildSkills(sim);
+      this.buildTree(sim);
+      this.fillTitle(sim);
+      this.builtClass = sim.classDef.id;
     }
     const title = this.q('#title');
     const hud = this.q('#hud');
@@ -387,7 +396,7 @@ export class Hud {
       button.dataset.class = entry.id;
       button.disabled = !entry.playable;
       button.textContent = entry.playable ? entry.name : `${entry.name} — coming soon`;
-      if (entry.playable) button.classList.add('on');
+      if (entry.id === DEFAULT_CLASS_ID) button.classList.add('on');
       button.addEventListener('click', () => {
         if (!entry.playable) return;
         this.markClass(entry.id);
@@ -408,7 +417,7 @@ export class Hud {
       '#title-skills',
       keyed.length
         ? keyed.map((skill) => `${skill.key} ${skill.name}`).join('   ')
-        : 'Bash starts on Q. Press T to spend points. Learn a skill before it can go on the belt.',
+        : `${sim.classDef.skills[0]?.name ?? 'Bash'} starts on Q. Press T to spend points. Learn a skill before it can go on the belt.`,
     );
   }
 
@@ -622,8 +631,8 @@ export class Hud {
     const quote = pick ? this.quote(sim, pick) : null;
     const bits = pick && quote
       ? [
-          pick.reqStr ? `Str ${pick.reqStr}` : '',
-          pick.reqDex ? `Dex ${pick.reqDex}` : '',
+          itemGate(pick, sim.classDef.id).reqStr ? `Str ${itemGate(pick, sim.classDef.id).reqStr}` : '',
+          itemGate(pick, sim.classDef.id).reqDex ? `Dex ${itemGate(pick, sim.classDef.id).reqDex}` : '',
           (pick.unlockLevel ?? 1) > 1 ? `Level ${pick.unlockLevel}` : '',
           quote.owned ? 'Equipped' : `${quote.price} gold`,
         ].filter(Boolean)
@@ -667,16 +676,22 @@ export class Hud {
     return [...gear, ...pots];
   }
 
+  /** Class whose item gates the shop labels show (set by quote). */
+  private gateClass = 'barbarian';
+
   private quote(sim: Sim, item: ItemDef): { price: number; owned: boolean; broke: boolean; needStr: boolean; needDex: boolean; locked: boolean; full: boolean } {
     const owned = this.owned(sim, item);
+    // Amazon order [TEMP]: per-class stat gates (data/items.ts CLASS_GATES).
+    this.gateClass = sim.classDef.id;
+    const gate = itemGate(item, sim.classDef.id);
     // Item 19 [JOSEPH]/doc: "An item cannot be sold." No sell-back refund in the quote.
     const price = item.cost;
     return {
       price,
       owned,
       broke: sim.gold < price,
-      needStr: (item.reqStr ?? 0) > sim.attributes.str,
-      needDex: (item.reqDex ?? 0) > sim.attributes.dex,
+      needStr: gate.reqStr > sim.attributes.str,
+      needDex: gate.reqDex > sim.attributes.dex,
       locked: (item.unlockLevel ?? 1) > sim.level,
       full: item.consumable ? sim.potions[item.consumable] >= potionCap(sim.loadout.belt) : false,
     };
@@ -689,8 +704,8 @@ export class Hud {
   private buyLabel(item: ItemDef, quote: { price: number; owned: boolean; broke: boolean; needStr: boolean; needDex: boolean; locked: boolean; full: boolean }, near: boolean): string {
     if (quote.owned) return 'Owned';
     if (quote.locked) return `Lv ${item.unlockLevel}`;
-    if (quote.needStr) return `Str ${item.reqStr}`;
-    if (quote.needDex) return `Dex ${item.reqDex}`;
+    if (quote.needStr) return `Str ${itemGate(item, this.gateClass).reqStr}`;
+    if (quote.needDex) return `Dex ${itemGate(item, this.gateClass).reqDex}`;
     if (quote.full) return 'Full';
     if (!near) return 'Camp';
     return `Buy ${quote.price}g`;
@@ -699,8 +714,8 @@ export class Hud {
   private shortPrice(item: ItemDef, quote: { price: number; owned: boolean; needStr: boolean; needDex: boolean; locked: boolean; full: boolean }): string {
     if (quote.owned) return 'Have';
     if (quote.locked) return `Lv ${item.unlockLevel}`;
-    if (quote.needStr) return `Str ${item.reqStr}`;
-    if (quote.needDex) return `Dex ${item.reqDex}`;
+    if (quote.needStr) return `Str ${itemGate(item, this.gateClass).reqStr}`;
+    if (quote.needDex) return `Dex ${itemGate(item, this.gateClass).reqDex}`;
     if (quote.full) return 'Full';
     return `${quote.price}g`;
   }
