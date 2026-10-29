@@ -15,7 +15,7 @@
 import type { ActDef, BaseSpawn } from './acts/types';
 
 /** [TEMP] [JOSEPH] One global map factor. 1 = the pre-pass-2 map. */
-export const MAP_SCALE = 0.75;
+export const MAP_SCALE = 1.0;
 
 /** A fixed map-layout length (world units, designed at scale 1) at the current MAP_SCALE. */
 export function mapLen(designUnits: number, scale = MAP_SCALE): number {
