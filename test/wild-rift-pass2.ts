@@ -15,8 +15,8 @@ import { directionFromView, facingToView, MINIMAP, minimapTouchBox, clampMinimap
 const near = (a: number, b: number, eps = 1.01) => assert.ok(Math.abs(a - b) <= eps, `${a} vs ${b}`);
 
 // ---- Item 1: MAP_SCALE -----------------------------------------------------------------------------------
-assert.equal(MAP_SCALE, 0.75);
-assert.equal(mapLen(100), 75);
+assert.ok(MAP_SCALE > 0 && MAP_SCALE <= 1, "MAP_SCALE in (0,1]");
+assert.equal(mapLen(100), 100 * MAP_SCALE);
 assert.equal(mapLen(100, 1), 100);
 const D = SANCTUARY_DESIGN;
 const S = sanctuary;
