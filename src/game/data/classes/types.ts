@@ -55,6 +55,8 @@ export interface ClassStats {
   manaPerEnergy: number;
   statPointsPerLevel: number;
   adPerStr: number;
+  /** Flat AD per extra dexterity point (ranged classes). Missing means 0. */
+  adPerDex?: number;
   armorPerDex: number;
 }
 
@@ -83,4 +85,6 @@ export interface ClassDef {
   /** PlrMode animation token, such as BA for the Barbarian. */
   token: string;
   colors: ClassColors;
+  /** Arrow speed for a ranged class's basic attacks (role 'ranged'). */
+  projectileSpeed?: number;
 }

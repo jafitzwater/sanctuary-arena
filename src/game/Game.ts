@@ -63,6 +63,8 @@ export class Game {
       if (!playableIds().includes(id)) return;
       this.classId = id;
       this.hud.markClass(id);
+      // Amazon order: the title screen shows the picked class (name, blurb, skills).
+      if (this.mode === 'title') this.sim = createMatch(sanctuary, getClass(id));
     };
     this.hud.onPlay = () => this.begin();
     this.hud.onAgain = () => this.begin();

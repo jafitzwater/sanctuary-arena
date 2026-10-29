@@ -294,6 +294,35 @@ export function isBetterGear(next: ItemDef, current: ItemDef | undefined): boole
 
 export const ITEMS: ItemDef[] = [...POTIONS, ...GEAR.map((item) => ({ ...item, cost: gearPrice(item) }))];
 
+/**
+ * ORDER "Make Amazon playable" [TEMP]: per-class stat gates. The Amazon (dex/bow build) grows
+ * str 20 + 1/level and dex 25 + 2/level, so the Barbarian's strength gates (34/38/42 at levels
+ * 3/5/7) are out of her reach all match. Her strength gate is cut to her own strength at the
+ * item's level (22/24/26); levels, dexterity gates and prices are unchanged. Barbarian gates
+ * are the ItemDef values and are not touched. Old -> new Amazon reqStr:
+ * ssd/lea/skp 34 -> 22, flc/stu/hlm/mbl 38 -> 24, 2hs/rng/fhl 42 -> 26 (2hs dex 26 unchanged).
+ */
+export const CLASS_GATES: Record<string, Record<string, { reqStr?: number; reqDex?: number }>> = {
+  amazon: {
+    ssd: { reqStr: 22 },
+    lea: { reqStr: 22 },
+    skp: { reqStr: 22 },
+    flc: { reqStr: 24 },
+    stu: { reqStr: 24 },
+    hlm: { reqStr: 24 },
+    mbl: { reqStr: 24 },
+    '2hs': { reqStr: 26 },
+    rng: { reqStr: 26 },
+    fhl: { reqStr: 26 },
+  },
+};
+
+/** Stat gate for a class: the class override when one exists, else the item's own reqStr/reqDex. */
+export function itemGate(item: ItemDef, classId: string): { reqStr: number; reqDex: number } {
+  const over = CLASS_GATES[classId]?.[item.id];
+  return { reqStr: over?.reqStr ?? item.reqStr ?? 0, reqDex: over?.reqDex ?? item.reqDex ?? 0 };
+}
+
 /** Not sold. The shop only lists base items from ITEMS. */
 export const FUTURE_ITEMS: ItemDef[] = [
   {

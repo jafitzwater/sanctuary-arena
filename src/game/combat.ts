@@ -1,6 +1,6 @@
 import { totalMS } from './data/moveSpeed';
 import { STAT_GROWTH } from './data/classes/statGrowth';
-import { isBetterGear, itemById, potionCap, type ItemDef, type PotionKind } from './data/items';
+import { isBetterGear, itemById, itemGate, potionCap, type ItemDef, type PotionKind } from './data/items';
 import type { SkillDef } from './data/classes/types';
 import { dist } from './math';
 import { comebackMul, xpShare } from './pace';
@@ -387,7 +387,7 @@ export function heroNumbers(sim: Sim, timers: { bo: boolean; berserk: boolean })
   const extraDex = sim.attributes.dex - stats.dex;
   let hp = stats.hp + lvl * stats.hpPerLevel + extraVit * stats.hpPerVit;
   let mana = stats.mana + lvl * stats.manaPerLevel + extraEn * stats.manaPerEnergy;
-  let ad = stats.ad + extraStr * stats.adPerStr;
+  let ad = stats.ad + extraStr * stats.adPerStr + extraDex * (stats.adPerDex ?? 0);
   let armor = stats.armor + extraDex * stats.armorPerDex;
   let move = stats.moveSpeed;
   let interval = stats.attackInterval;
@@ -456,8 +456,7 @@ export function inShopRange(sim: Sim, unit: Unit): boolean {
 }
 
 function meetsReq(sim: Sim, item: ItemDef): boolean {
-  const needStr = item.reqStr ?? 0;
-  const needDex = item.reqDex ?? 0;
+  const { reqStr: needStr, reqDex: needDex } = itemGate(item, sim.classDef.id);
   if (sim.attributes.str < needStr) {
     banner(sim, `Need ${needStr} strength.`);
     return false;

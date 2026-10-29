@@ -340,7 +340,9 @@ function spawnPlayer(sim: Sim): Unit {
     aggro: 360,
     gold: 0,
     xp: 0,
-    ranged: false,
+    // Amazon order [TEMP]: a 'ranged' class fires the existing projectile basic attack.
+    ranged: sim.classDef.role === 'ranged',
+    projectileSpeed: sim.classDef.projectileSpeed,
     facing: 0,
     color: sim.classDef.colors.cloth,
     accent: sim.classDef.colors.metal,

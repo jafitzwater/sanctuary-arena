@@ -34,16 +34,21 @@ export const MOBILE_ZONE: TouchZoneConfig = { maxRadius: 45, dragSlop: 12 };
 
 export type SkillAim = 'single' | 'ground' | 'self';
 
-/** Existing barbarian skills only. Leap is the ground cast; bash locks a unit. */
+/** Amazon order: the four Magic Arrow path skills aim at a unit (handlers in skills/amazon.ts). */
+const AMAZON_SINGLE = ['magic-arrow', 'multi-shot', 'ice-shot', 'fire-shot'];
+
+/** Barbarian and Amazon skills. Leap is the ground cast; bash and the Amazon arrows lock a unit. */
 export function skillAimKind(id: string): SkillAim {
   if (id === 'leap-attack') return 'ground';
   if (id === 'bash') return 'single';
+  if (AMAZON_SINGLE.includes(id)) return 'single';
   return 'self';
 }
 
 /** Reach used by the single-target skills, matching their handlers. */
 export function skillReach(id: string, attackRange: number): number {
   if (id === 'bash') return attackRange + 18;
+  if (AMAZON_SINGLE.includes(id)) return attackRange + 40; // skills/amazon.ts AMAZON_SKILL_REACH_BONUS [TEMP]
   return attackRange;
 }
 
