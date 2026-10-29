@@ -98,7 +98,7 @@ export const boneArmor: SkillHandler = (ctx) => {
 
 /** [TEMP] Blood Splash (skill rework, top skill [JOSEPH]): magic blast around one foe in reach. */
 export const SPLASH_REACH_BONUS = 80;
-export const BLOOD_SPLASH = { radius: 110, mult: 1.6, perRank: 0.15 };
+export const BLOOD_SPLASH = { radius: 110, mult: 1.7, perRank: 0.2 }; // [TEMP] skill follow-ups balance band
 
 export const bloodSplash: SkillHandler = (ctx) => {
   const { sim, hero } = ctx;

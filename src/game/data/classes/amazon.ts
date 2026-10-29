@@ -41,7 +41,7 @@ function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' |
  * "dex/bow build". There is no path-choice system, so the Lance path (jab, charged strike, poison strike,
  * multi strike) is not playable yet. Each path has 4 skills in the doc; there is no fifth Amazon skill.
  * Skill rework order (2026-10-29) [JOSEPH]: no paths; one flat list. The four bow skills keep 1/3/5/7 and
- * Strafe is the top-tier skill [JOSEPH], unlock L9 [TEMP] (same slot as the other new fifth skills).
+ * Strafe is the top-tier skill [JOSEPH], unlock L9 [JOSEPH] (skill follow-ups order; values [TEMP], skills/amazon.ts).
  * [TEMP] Cooldowns and effects are unset in the doc ([U]); the handlers in skills/amazon.ts use existing
  * mechanics (arrows = the existing projectile, ice = the existing slow) with fixed placeholder numbers.
  * `mana`/`manaPerRank` mirror the Barbarian's fields and are not used by the % mana rule.
@@ -100,14 +100,14 @@ const skillList: SkillDef[] = [
     id: 'strafe',
     name: 'Strafe', // [JOSEPH] top-tier skill
     short: 'Strafe',
-    unlockLevel: 9, // [TEMP]
+    unlockLevel: 9, // [JOSEPH] skill follow-ups order
     topTier: true,
-    mana: 20,
-    manaPerRank: 2,
-    cooldown: 12, // [TEMP]
+    mana: 22, // [TEMP] mirror field, as the other top tiers (cost is the % rule)
+    manaPerRank: 4,
+    cooldown: 11, // [TEMP] skill follow-ups balance band
     row: 5,
     d2Id: 26,
-    description: 'A volley of arrows at up to 5 foes in reach. Each deals 80% of a basic hit, and each rank adds 10%.', // [TEMP]
+    description: 'A volley of arrows at up to 5 foes in reach. Each deals 90% of a basic hit, and each rank adds 10%.', // [TEMP]
   }),
 ];
 

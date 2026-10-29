@@ -40,7 +40,7 @@ assert.deepEqual(STARTING_STATS.amazon, { str: 20, dex: 25, vit: 20, energy: 15 
 // [DOC] "Amazon 2 dexterity, 2 vitality, 1 strength, 0 energy".
 assert.deepEqual(STAT_GROWTH.amazon, { dex: 2, vit: 2, str: 1, energy: 0 });
 // [DOC] kits-final Magic Arrow path, in order at levels 1/3/5/7, max rank 5.
-// Skill rework order [JOSEPH]: top-tier Strafe (unlock 9 [TEMP]); all skills max rank 3.
+// Skill rework order [JOSEPH]: top-tier Strafe; skill follow-ups order: unlock 9 [JOSEPH]; all skills max rank 3.
 assert.deepEqual(amazon.skills.map((s) => s.name), ['Magic Arrow', 'Multi Shot', 'Ice Shot', 'Fire Shot', 'Strafe']);
 assert.deepEqual(amazon.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 9]);
 assert.ok(amazon.skills.every((s) => s.maxRank === 3 && !s.passive));

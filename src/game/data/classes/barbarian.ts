@@ -35,7 +35,7 @@ function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' |
  * Doc: "One path. Top tier skill is whirlwind. In order: bash, shout, leap attack, battle orders, whirlwind."
  * Doc: "Skills unlock at level 1, level 3, level 5, and level 7. More than 4 skills use the remaining points after level 7."
  * Skill rework order [JOSEPH]: "ALL SKILLS MAX RANK 3" -> maxRank 3 (was doc "Skills max at level 5" -> 5).
- * Whirlwind's unlock level is not set by the doc ("after level 7"); the repo's existing 10 is kept (NEEDS JOSEPH).
+ * Whirlwind's unlock level is not set by the doc ("after level 7"); skill follow-ups order [JOSEPH]: level 9.
  * Skill effects and cooldowns are unset in the doc ([U]); the repo's existing handlers are kept.
  */
 const skillList: SkillDef[] = [
@@ -94,9 +94,9 @@ const skillList: SkillDef[] = [
     id: 'whirlwind',
     name: 'Whirlwind',
     short: 'Whirl',
-    // Skill rework order [JOSEPH]: top tier, unlock level kept at 5 (economy order); max rank 3 with no
-    // rank gates (the 9/13 rank levels are removed).
-    unlockLevel: 5,
+    // Skill follow-ups order [JOSEPH]: top tier unlocks at 9 (was 5) so all five top tiers match; max rank 3
+    // with no rank gates; rank 1 auto-learns at unlock.
+    unlockLevel: 9,
     topTier: true,
     mana: 22,
     manaPerRank: 4,

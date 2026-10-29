@@ -73,10 +73,10 @@ const skillList: SkillDef[] = [
     unlockLevel: 3, // [JOSEPH]
     mana: 12,
     manaPerRank: 2,
-    cooldown: 7, // [TEMP]
+    cooldown: 7, // [TEMP] skill follow-ups balance band
     row: 2,
     d2Id: 49,
-    description: 'A lightning strike hits one foe at once. Rank 1 deals 130% of a basic hit, and each rank adds 12%.', // [TEMP]
+    description: 'A lightning strike hits one foe at once. Rank 1 deals 130% of a basic hit, and each rank adds 13%.', // [TEMP]
   }),
   skill({
     id: 'teleport',
@@ -95,9 +95,9 @@ const skillList: SkillDef[] = [
     name: 'Fire Blast',
     short: 'Fire',
     unlockLevel: 7, // [JOSEPH]
-    mana: 16,
+    mana: 18, // [TEMP] mirror field, as the other level-7 skills (cost is the % rule)
     manaPerRank: 2,
-    cooldown: 10, // [TEMP]
+    cooldown: 11, // [TEMP] skill follow-ups balance band
     row: 4,
     d2Id: 36,
     description: 'Fire bursts on one foe and burns every foe around it. Rank 1 deals 140% of a basic hit, and each rank adds 15%.', // [TEMP]
