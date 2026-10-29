@@ -1,3 +1,5 @@
+import { expectedLevel } from './economy';
+
 export type PaceName = 'Normal' | 'Nightmare' | 'Hell';
 
 /** Monster life, damage, and extra lane bodies as the match runs. */
@@ -14,9 +16,12 @@ export function xpShare(heroes: number): number {
   return 0.45;
 }
 
-/** Heroes a level or more behind the clock earn up to half again. */
+/**
+ * Heroes a level or more behind the clock earn up to half again.
+ * Economy order [TEMP]: the clock is now economy.expectedLevel (the new XP pace), not 1 per 45 s capped at 10.
+ */
 export function comebackMul(level: number, time: number): number {
-  const expected = Math.min(10, 1 + Math.floor(time / 45));
+  const expected = expectedLevel(time);
   const behind = expected - level;
   if (behind <= 1) return 1;
   return 1 + Math.min(0.5, (behind - 1) * 0.12);

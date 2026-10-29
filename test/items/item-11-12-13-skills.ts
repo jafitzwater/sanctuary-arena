@@ -13,8 +13,11 @@ import { SKILLS } from '../../src/game/skills';
 const skills = barbarian.skills;
 assert.deepEqual(skills.map((s) => s.id), ['bash', 'shout', 'leap-attack', 'battle-orders', 'whirlwind']);
 assert.deepEqual(skills.slice(0, 4).map((s) => s.unlockLevel), [1, 3, 5, 7]);
-assert.ok(skills[4].unlockLevel > 7, 'whirlwind comes after level 7');
-assert.ok(skills.every((s) => s.maxRank === 5));
+// Economy order [JOSEPH]: "top-tier skill unlocks at level 5, ranks at 9 and 13" (was > 7).
+assert.equal(skills[4].unlockLevel, 5, 'whirlwind (top tier) unlocks at 5');
+assert.deepEqual(skills[4].rankLevels, [5, 9, 13]);
+assert.equal(skills[4].maxRank, 3);
+assert.ok(skills.slice(0, 4).every((s) => s.maxRank === 5));
 assert.ok(skills.every((s) => SKILLS[s.id]), 'every doc skill has a handler');
 assert.equal(MAX_LEVEL, 15);
 

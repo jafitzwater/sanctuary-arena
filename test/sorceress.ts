@@ -43,9 +43,11 @@ assert.deepEqual(STAT_GROWTH.sorceress, { energy: 2, vit: 2, str: 1, dex: 0 });
 // [DOC] "Cold: ice bolt, frozen nova, blizzard, frozen orb." + "Teleport can be chosen on any path."
 assert.deepEqual(sorceress.skills.map((s) => s.name), ['Ice Bolt', 'Frozen Nova', 'Blizzard', 'Frozen Orb', 'Teleport']);
 assert.equal(sorceress.skills.length, 5, 'one path of four + Teleport; no invented skill');
-// [DOC] 1/3/5/7; Teleport [TEMP] 10 (kits-final: "after level 7" if chosen as a fifth skill).
-assert.deepEqual(sorceress.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 10]);
-assert.ok(sorceress.skills.every((s) => s.maxRank === 5 && !s.passive));
+// [DOC] 1/3/5/7; economy order [JOSEPH] top tier 5/9/13 applied to Teleport (the fifth skill; was 10).
+assert.deepEqual(sorceress.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 5]);
+assert.deepEqual(sorceress.skills[4].rankLevels, [5, 9, 13]);
+assert.deepEqual(sorceress.skills.map((s) => s.maxRank), [5, 5, 5, 5, 3]);
+assert.ok(sorceress.skills.every((s) => !s.passive));
 assert.deepEqual(sorceress.startingBelt, ['ice-bolt', '', '', '']);
 assert.equal(sorceress.role, 'ranged');
 assert.equal(sorceress.token, 'SO');
@@ -65,7 +67,8 @@ assert.equal(amazon.stats.moveSpeed, 340);
 assert.deepEqual(amazon.skills.map((s) => s.id), ['magic-arrow', 'multi-shot', 'ice-shot', 'fire-shot']);
 assert.equal(paladin.stats.moveSpeed, 335);
 assert.deepEqual(paladin.skills.map((s) => s.id), ['zeal', 'smite', 'charge', 'holy-shield', 'battle-hammers']);
-assert.deepEqual(paladin.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 10], 'Paladin tag fix is comment-only');
+// Economy order [JOSEPH]: top tier at 5 (was 10).
+assert.deepEqual(paladin.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 5], 'Paladin top tier at 5');
 
 // --- Movement speed: [JOSEPH] Sorceress 325 through the existing single-MS formula.
 assert.equal(BASE_MS.sorceress, 325);

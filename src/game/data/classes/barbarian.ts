@@ -94,7 +94,10 @@ const skillList: SkillDef[] = [
     id: 'whirlwind',
     name: 'Whirlwind',
     short: 'Whirl',
-    unlockLevel: 10,
+    // Economy order [JOSEPH]: top-tier skill unlocks at 5, ranks at 9 and 13 (was unlockLevel 10, 5 ranks).
+    unlockLevel: 5,
+    maxRank: 3,
+    rankLevels: [5, 9, 13],
     mana: 22,
     manaPerRank: 4,
     cooldown: 11,

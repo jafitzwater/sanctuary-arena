@@ -4,7 +4,7 @@ import { ROSTER } from './data/classes/roster';
 import { DEFAULT_CLASS_ID } from './data/classes';
 import { itemIcon, plateIcons, skillIcon } from './art/icons';
 import { isBetterGear, isShopItem, itemById, itemGate, ITEMS, potionCap, type ItemDef } from './data/items';
-import { inShopRange, manaCost, MAX_LEVEL, xpToNext } from './combat';
+import { canRankUp, inShopRange, netGearPrice, manaCost, MAX_LEVEL, xpToNext } from './combat';
 import { player } from './query';
 import type { Sim } from './types';
 
@@ -486,7 +486,7 @@ export class Hud {
       const dry = !!skill && rank > 0 && hero.mana < cost;
       const ready = !!skill && rank > 0 && cd <= 0.05 && !dry;
       const fraction = skill && cd > 0.05 && rank > 0 ? cd / Math.max(0.1, skill.cooldown) : 0;
-      const canLearn = !!skill && sim.skillPoints > 0 && sim.level >= skill.unlockLevel && rank < skill.maxRank;
+      const canLearn = !!skill && canRankUp(sim, skill);
       const cdLabel = fraction > 0 ? String(Math.ceil(cd)) : '';
       const sig = [
         id,
@@ -684,8 +684,8 @@ export class Hud {
     // Amazon order [TEMP]: per-class stat gates (data/items.ts CLASS_GATES).
     this.gateClass = sim.classDef.id;
     const gate = itemGate(item, sim.classDef.id);
-    // Item 19 [JOSEPH]/doc: "An item cannot be sold." No sell-back refund in the quote.
-    const price = item.cost;
+    // Economy order [TEMP 70%]: the quote is net of the 70% sell-back of the item it replaces.
+    const price = netGearPrice(sim, item);
     return {
       price,
       owned,
@@ -802,7 +802,7 @@ export class Hud {
       node?.classList.toggle('on-belt', where >= 0);
       node?.classList.toggle('picked', this.pendingSkill === skill.id);
       const plus = node?.querySelector<HTMLElement>('[data-upgrade]');
-      if (plus) plus.hidden = !(sim.skillPoints > 0 && unlocked && rank < skill.maxRank);
+      if (plus) plus.hidden = !canRankUp(sim, skill);
     }
   }
 

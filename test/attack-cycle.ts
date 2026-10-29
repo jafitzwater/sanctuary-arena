@@ -395,6 +395,9 @@ function attackInput(): FrameInput {
   rival.hp = 80;
   rival.maxHp = 80;
   quiet(sim, [hero.id, rival.id]);
+  // Economy order: champion kills now pay XP; at the level cap the kill cannot level up and
+  // restore the hero mid-trade, so this stays a pure attack-cycle check.
+  sim.level = 15;
   const heroWind = attackProfile(hero.attackInterval, hero.attackRange).windupMs;
   const rivalWind = attackProfile(rival.attackInterval, rival.attackRange).windupMs;
   hero.attackCycle = {

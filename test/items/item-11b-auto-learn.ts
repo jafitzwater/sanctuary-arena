@@ -19,13 +19,14 @@ function kit(id: string, names: string[]): ClassDef {
   };
 }
 const classes: ClassDef[] = [
-  barbarian, // bash 1, shout 3, leap 5, battle orders 7, whirlwind (ult) 10
+  barbarian, // bash 1, shout 3, leap 5, battle orders 7, whirlwind (ult) 5
   kit('amazon', ['Jab', 'Charged strike', 'Poison strike', 'Multi strike']),
   kit('necromancer', ['Teeth', 'Bone spear', 'Bone armor', 'Bone spirit']),
   kit('paladin', ['Zeal', 'Smite', 'Charge', 'Holy shield']),
   kit('sorceress', ['Ice bolt', 'Frozen nova', 'Blizzard', 'Frozen orb']),
 ];
-assert.deepEqual(barbarian.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 10], 'barbarian kit levels incl. the ult');
+// Economy order [JOSEPH]: the ult (top tier) unlocks at 5 (was 10).
+assert.deepEqual(barbarian.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 5], 'barbarian kit levels incl. the ult');
 
 for (const def of classes) {
   const sim = createMatch(sanctuary, def, 1);

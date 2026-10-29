@@ -4,15 +4,29 @@ import { isBetterGear, itemById, itemGate, potionCap, type ItemDef, type PotionK
 import type { SkillDef } from './data/classes/types';
 import { dist } from './math';
 import { comebackMul, xpShare } from './pace';
+import {
+  ASSIST_XP_PCT,
+  MAX_LEVEL,
+  STRUCTURE_GLOBAL,
+  STRUCTURE_LOCAL_RADIUS,
+  SHARE_RADIUS,
+  assistGold,
+  championBounty,
+  championKillXp,
+  expectedLevel,
+  respawnSeconds,
+  sellValue,
+  shareGold,
+  xpToNext,
+} from './economy';
 import { player } from './query';
 import type { Fx, Sim, Unit } from './types';
 
-/** Doc: "The level cap is 15." (item 11). Exp per level is not in the doc; the repo curve below is kept. */
-export const MAX_LEVEL = 15;
-
-export function xpToNext(level: number): number {
-  return 60 + (level - 1) * 55;
-}
+/**
+ * Doc: "The level cap is 15." (item 11); economy order [JOSEPH] "max level 15".
+ * Economy order [TEMP]: the XP curve moved to economy.ts (was 60 + 55/level, now 120 + 30/level).
+ */
+export { MAX_LEVEL, xpToNext, respawnSeconds };
 
 export function mitigated(amount: number, armor: number): number {
   if (amount <= 0) return 0;
@@ -28,11 +42,13 @@ export function sfx(sim: Sim, name: string): void {
   if (sim.sfx.length > 24) sim.sfx.shift();
 }
 
-function creditChampion(sim: Sim, unit: Unit, killer: Unit | null): void {
+/** Counts the kill and returns the assisting champions (not the killer). */
+function creditChampion(sim: Sim, unit: Unit, killer: Unit | null): Unit[] {
   const team = killer?.team;
   if (team === 'ally') sim.allyKills += 1;
   else if (team === 'enemy') sim.enemyKills += 1;
-  if (!killer || (team !== 'ally' && team !== 'enemy')) return;
+  const assisters: Unit[] = [];
+  if (!killer || (team !== 'ally' && team !== 'enemy')) return assisters;
   const seen = new Set<number>([killer.id]);
   for (const mark of unit.threats) {
     if (sim.time - mark.t > ASSIST_WINDOW) continue;
@@ -40,8 +56,10 @@ function creditChampion(sim: Sim, unit: Unit, killer: Unit | null): void {
     seen.add(mark.id);
     const mate = sim.units.find((other) => other.id === mark.id);
     if (!mate || mate.kind !== 'champion') continue;
+    assisters.push(mate);
     if (mate.id === sim.playerId) sim.assists += 1;
   }
+  return assisters;
 }
 
 function fxCap(): number {
@@ -105,16 +123,16 @@ export function noteDebuff(sim: Sim, target: Unit, attacker: Unit | null): void 
 }
 
 /**
- * Player level follows the xp track. Enemy champions show a clock level
- * (one step each 45s, capped) that does not change their stats.
+ * Player level follows the xp track. Bot champions show a clock level that does not change
+ * their stats. Economy order [TEMP]: the clock is economy.expectedLevel (the new XP pace) and
+ * now applies to ally bots too (they stayed at 1), so both sides' frames read alike.
  */
 export function syncChampionLevels(sim: Sim): void {
-  const clock = 1 + Math.min(MAX_LEVEL - 1, Math.floor(sim.time / 45));
+  const clock = expectedLevel(sim.time);
   for (const unit of sim.units) {
     if (unit.kind !== 'champion') continue;
     if (unit.id === sim.playerId) unit.level = sim.level;
-    else if (unit.team === 'enemy') unit.level = clock;
-    else if (!unit.level) unit.level = 1;
+    else unit.level = clock;
   }
 }
 
@@ -194,8 +212,13 @@ export function autoLearnUnlocked(sim: Sim): void {
 
 /** Put a learned skill (rank 1 or higher) into the first empty Q W E R slot. */
 export function fillEmptyBelt(sim: Sim): void {
+  // Economy order: the top-tier skill now opens at 5, before the level-7 path skill. Keep the old
+  // belt result (the four path skills on Q W E R, top tier placed by hand) by not auto-slotting a
+  // top-tier skill while the path skills alone can fill the belt.
+  const pathSkills = sim.classDef.skills.filter((skill) => !skill.rankLevels).length;
   for (const skill of sim.classDef.skills) {
     if ((sim.skillRanks[skill.id] ?? 0) < 1) continue;
+    if (skill.rankLevels && pathSkills >= sim.belt.length) continue;
     if (sim.belt.includes(skill.id)) continue;
     const slot = sim.belt.findIndex((entry) => !entry);
     if (slot < 0) return;
@@ -238,10 +261,14 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
   unit.targetId = null;
   if (unit.kind === 'minion') unit.corpse = 4.5;
   let goldMul = 1;
+  let victimStreak = 0;
+  let assisters: Unit[] = [];
   if (unit.kind === 'champion') {
     // Doc: "The first death takes 5 seconds. Each death after that adds 5 seconds."
+    // Economy order [TEMP]: plus 2 s per level past 1 (cap 60 s).
     unit.deathCount += 1;
-    unit.respawn = respawnSeconds(unit.deathCount);
+    unit.respawn = respawnSeconds(unit.deathCount, unit.level);
+    victimStreak = unit.streak;
     unit.streak = 0;
     if (killer && killer.kind === 'champion' && killer.team !== unit.team) {
       killer.streak += 1;
@@ -255,10 +282,12 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
       banner(sim, 'You have been slain');
       sfx(sim, 'death');
     } else {
+      // Economy order: bot purses follow the same 25% death loss as the player.
+      unit.purse = (unit.purse ?? 0) - deathGoldLoss(unit.purse ?? 0);
       banner(sim, `${unit.name} has fallen`);
       sfx(sim, 'death');
     }
-    creditChampion(sim, unit, killer);
+    assisters = creditChampion(sim, unit, killer);
   }
   if (unit.kind === 'tower' || unit.kind === 'seal') {
     banner(sim, `${unit.name} has fallen`);
@@ -301,29 +330,35 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
     }
     banner(sim, `${unit.affix || 'Fire'} power fills your side.`);
   }
+  payKill(sim, unit, killer, goldMul, victimStreak, assisters);
   const worth = unit.team === 'enemy' || unit.team === 'wild';
   if (!worth) return;
   const hero = player(sim);
   const playerKill = killer?.id === sim.playerId;
   const structure = unit.kind === 'tower' || unit.kind === 'base' || unit.kind === 'seal';
   if (playerKill) {
-    awardGold(sim, unit, goldMul);
     if (unit.kind === 'minion') sim.cs += 1;
     if (unit.kind === 'champion') sim.kills += 1;
-  } else if (structure && killer && killer.team === 'ally') {
-    awardGold(sim, unit);
   }
   if (structure && killer && killer.team === 'ally') {
     grantXp(sim, unit.xp);
     return;
   }
   if (killer && killer.team === 'enemy') return;
+  if (unit.kind === 'champion') {
+    // Economy order [TEMP]: champion kill XP by victim level; assists get half; otherwise the
+    // proximity share below uses the same base.
+    const base = championKillXp(unit.level);
+    if (playerKill) { grantXp(sim, base); return; }
+    if (assisters.some((mate) => mate.id === sim.playerId)) { grantXp(sim, Math.round(base * ASSIST_XP_PCT)); return; }
+    unit.xp = base;
+  }
   const near = sim.units.filter(
     (other) =>
       other.alive &&
       other.kind === 'champion' &&
       other.team === 'ally' &&
-      dist(other, unit) <= 520,
+      dist(other, unit) <= SHARE_RADIUS,
   );
   if (playerKill && hero.alive && !near.some((other) => other.id === hero.id)) near.push(hero);
   if (!near.some((other) => other.id === sim.playerId)) return;
@@ -339,10 +374,6 @@ export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {
  * Doc: "A streak is 3 kills in a row, and that kill also pays 50% more gold." -> x1.5 on the 3rd kill.
  * Excluded (NEEDS JOSEPH): timer cap, base kill gold/exp, whether the streak bonus repeats.
  */
-export function respawnSeconds(deathCount: number): number {
-  return 5 * Math.max(1, deathCount);
-}
-
 export function deathGoldLoss(gold: number): number {
   return Math.floor(Math.max(0, gold) * 0.25);
 }
@@ -354,16 +385,59 @@ export function killGoldMul(firstKillOfMatch: boolean, streak: number): number {
   return mul;
 }
 
-function awardGold(sim: Sim, unit: Unit, mul = 1): void {
-  const hero = player(sim);
-  let gold = Math.round(unit.gold * mul);
-  if (hero.findGold > 0 && unit.kind === 'minion') {
-    gold += hero.findGold;
-    hero.findGold = 0;
+/**
+ * Economy order: gold to one champion. The player's goes to sim.gold with the coin floater;
+ * a bot's goes to its purse (bots never shop; the purse only feeds the lowest-gold bonus).
+ */
+export function payChampion(sim: Sim, champ: Unit, gold: number, at?: Unit): void {
+  if (gold <= 0) return;
+  if (champ.id === sim.playerId) {
+    sim.gold += gold;
+    const spot = at ?? champ;
+    floater(sim, spot.x, spot.y - 24, `+${gold}`, '#e6c864');
+    sfx(sim, 'coin');
+  } else champ.purse = (champ.purse ?? 0) + gold;
+}
+
+/**
+ * Economy order gold on a kill:
+ * - champion: [TEMP] bounty 300 + streak bonus, x the doc's first-kill/streak multiplier, to the
+ *   killing champion; [TEMP] 150 to each assisting champion.
+ * - structure: local = its existing bounty to the killer champion and same-side champions within
+ *   900 [TEMP]; global [TEMP] tower 50 / seal 75 to every champion on that side.
+ * - minion/camp/objective: the unit's gold (lane minions: [JOSEPH] 65/40/85 by role) to the
+ *   last-hitting champion; [TEMP] 20% to each other same-side champion within 520 (lane minions).
+ * Kills by minions or towers pay no last-hit gold (as before).
+ */
+function payKill(sim: Sim, unit: Unit, killer: Unit | null, mul: number, victimStreak: number, assisters: Unit[]): void {
+  const side = killer?.team;
+  if (!killer || (side !== 'ally' && side !== 'enemy') || unit.team === side) return;
+  const champs = sim.units.filter((other) => other.kind === 'champion' && other.team === side);
+  if (unit.kind === 'champion') {
+    if (killer.kind === 'champion') payChampion(sim, killer, Math.round(championBounty(victimStreak) * mul), unit);
+    for (const mate of assisters) payChampion(sim, mate, assistGold(), unit);
+    return;
   }
-  sim.gold += gold;
-  floater(sim, unit.x, unit.y - 24, `+${gold}`, '#e6c864');
-  sfx(sim, 'coin');
+  if (unit.kind === 'tower' || unit.kind === 'seal' || unit.kind === 'base') {
+    for (const champ of champs) {
+      const local = champ.id === killer.id || (champ.alive && dist(champ, unit) <= STRUCTURE_LOCAL_RADIUS);
+      payChampion(sim, champ, (local ? unit.gold : 0) + STRUCTURE_GLOBAL[unit.kind], unit);
+    }
+    return;
+  }
+  if (killer.kind !== 'champion') return;
+  let gold = Math.round(unit.gold * mul);
+  if (killer.id === sim.playerId && killer.findGold > 0 && unit.kind === 'minion') {
+    gold += killer.findGold;
+    killer.findGold = 0;
+  }
+  payChampion(sim, killer, gold, unit);
+  if (unit.kind !== 'minion' || unit.team === 'wild') return;
+  const share = shareGold(unit.gold);
+  for (const champ of champs) {
+    if (champ.id === killer.id || !champ.alive || dist(champ, unit) > SHARE_RADIUS) continue;
+    payChampion(sim, champ, share, unit);
+  }
 }
 
 function swingTime(wsm: number): number {
@@ -471,6 +545,15 @@ function meetsReq(sim: Sim, item: ItemDef): boolean {
 
 const GEAR_SLOTS = ['weapon', 'armor', 'helm', 'belt'] as const;
 
+/** Net gear price: cost minus the sell-back of the item it overwrites (economy order). */
+export function netGearPrice(sim: Sim, item: ItemDef): number {
+  if (item.consumable) return item.cost;
+  const slot = item.slot as (typeof GEAR_SLOTS)[number];
+  const oldId = GEAR_SLOTS.includes(slot) ? sim.loadout[slot] : null;
+  const old = oldId && oldId !== item.id ? itemById(oldId as string) : undefined;
+  return Math.max(0, item.cost - (old ? sellValue(old.cost) : 0));
+}
+
 export function tryBuy(sim: Sim, id: string): void {
   const item = itemById(id);
   if (!item) return;
@@ -507,18 +590,20 @@ export function tryBuy(sim: Sim, id: string): void {
   }
   if (!meetsReq(sim, item)) return;
   const old = sim.loadout[slot] ? itemById(sim.loadout[slot] as string) : undefined;
-  // Item 19 [JOSEPH]/doc: "An item cannot be sold. It can only be overwritten for a better item."
-  // No sell-back refund; a slot only takes a better item (isBetterGear).
+  // Item 19 [JOSEPH]/doc: a slot only takes a better item (isBetterGear).
   if (!isBetterGear(item, old)) {
     banner(sim, `${item.name} is not better than your ${old?.name ?? 'gear'}.`);
     return;
   }
-  const price = item.cost;
+  // Economy order [TEMP 70%]: the overwritten item sells back for 70% of its cost.
+  // NEEDS JOSEPH: replaces the doc's "An item cannot be sold" (no refund before).
+  const price = netGearPrice(sim, item);
   if (sim.gold < price) {
     banner(sim, 'Not enough gold.');
     return;
   }
   sim.gold -= price;
+  if (old) floater(sim, hero.x, hero.y - 40, `Sold ${old.name} +${sellValue(old.cost)}`, '#e6c864');
   sim.loadout[slot] = item.id;
   recomputeHero(sim);
   sfx(sim, 'coin');
@@ -567,6 +652,19 @@ export function tryPotion(sim: Sim, kind: PotionKind): void {
   sfx(sim, 'potion');
 }
 
+/**
+ * Economy order [JOSEPH]: a top-tier skill's ranks open at fixed levels (5/9/13, SkillDef.rankLevels).
+ * Other skills have no per-rank level gate (only unlockLevel).
+ */
+export function rankLevel(def: SkillDef, rank: number): number {
+  return def.rankLevels?.[rank - 1] ?? def.unlockLevel;
+}
+
+export function canRankUp(sim: Sim, def: SkillDef): boolean {
+  const rank = sim.skillRanks[def.id] ?? 0;
+  return sim.skillPoints > 0 && rank < def.maxRank && sim.level >= def.unlockLevel && sim.level >= rankLevel(def, rank + 1);
+}
+
 export function tryUpgrade(sim: Sim, id: string): boolean {
   const def = sim.classDef.skills.find((skill) => skill.id === id);
   if (!def) return false;
@@ -574,6 +672,11 @@ export function tryUpgrade(sim: Sim, id: string): boolean {
   if (rank >= def.maxRank) return false;
   if (sim.level < def.unlockLevel) {
     banner(sim, `${def.name} unlocks at level ${def.unlockLevel}.`);
+    return false;
+  }
+  const gate = rankLevel(def, rank + 1);
+  if (sim.level < gate) {
+    banner(sim, `${def.name} rank ${rank + 1} unlocks at level ${gate}.`);
     return false;
   }
   for (const req of def.prereqs) {

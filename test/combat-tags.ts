@@ -1,3 +1,4 @@
+import { expectedLevel } from '../src/game/economy';
 import assert from 'node:assert/strict';
 import { sanctuary } from '../src/game/data/acts/sanctuary';
 import { barbarian } from '../src/game/data/classes/barbarian';
@@ -114,7 +115,7 @@ assert.equal(self.alive, false);
 
 const ranks = match();
 const before = player(ranks).maxHp;
-grantXp(ranks, 60);
+grantXp(ranks, 120); // economy order [TEMP] curve
 assert.equal(ranks.level, 2);
 assert.equal(ranks.skillPoints, 1);
 assert.equal(player(ranks).level, 2);
@@ -129,9 +130,11 @@ const radius = clockEnemy.radius;
 assert.equal(clockEnemy.level, 1);
 updateSim(clock, emptyInput(), 0.05);
 assert.equal(enemyOf(clock).level, 1);
-clock.time = 90;
+// Economy order [TEMP]: the clock level follows economy.expectedLevel (new XP pace).
+clock.time = 400;
 syncChampionLevels(clock);
-assert.equal(enemyOf(clock).level, 3);
+assert.equal(enemyOf(clock).level, expectedLevel(400));
+assert.ok(enemyOf(clock).level > 1);
 assert.equal(enemyOf(clock).maxHp, hp);
 assert.equal(enemyOf(clock).ad, ad);
 assert.equal(enemyOf(clock).moveSpeed, speed);

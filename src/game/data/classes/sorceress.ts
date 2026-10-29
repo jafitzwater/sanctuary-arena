@@ -111,7 +111,10 @@ const skillList: SkillDef[] = [
     id: 'teleport',
     name: 'Teleport',
     short: 'Tele',
-    unlockLevel: 10, // [TEMP] NEEDS JOSEPH doc: "after level 7"
+    // Economy order [JOSEPH]: top-tier skill unlocks at 5, ranks at 9 and 13 (was unlockLevel 10, 5 ranks).
+    unlockLevel: 5,
+    maxRank: 3,
+    rankLevels: [5, 9, 13],
     mana: 22,
     manaPerRank: 0,
     cooldown: 12, // [TEMP]

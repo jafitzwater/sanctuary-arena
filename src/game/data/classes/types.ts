@@ -17,6 +17,8 @@ export interface SkillDef {
   maxRank: number;
   /** Match level required before the first point can be spent. */
   unlockLevel: number;
+  /** Economy order [JOSEPH]: top-tier skill ranks open at these levels (rank n at rankLevels[n-1]). */
+  rankLevels?: number[];
   /** Diablo II reqlevel, before the match-length scale. */
   reqLevel: number;
   description: string;
