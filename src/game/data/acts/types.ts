@@ -181,6 +181,13 @@ export interface TowerTier {
   xp: number;
 }
 
+/**
+ * Remember-list batch 1 item 2 [JOSEPH t223u: "a bit less damage"]: towers deal 15% less.
+ * [TEMP] placeholder. Applied once to tower attack damage at spawn (sim.ts spawnTower); range,
+ * attack speed, HP, targeting and aggro are unchanged. The Worldstone (base) and seals do not use it.
+ */
+export const TOWER_DAMAGE_MULT = 0.85; // [TEMP]
+
 export const TOWER_TIERS: Record<1 | 2 | 3, TowerTier> = {
   1: { hp: 677, ad: 30, armor: 18, range: 330, interval: 0.95, radius: 40, gold: 220, xp: 140 },
   2: { hp: 492, ad: 23, armor: 12, range: 300, interval: 1.05, radius: 36, gold: 160, xp: 90 },

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { WAVE_STAGGER } from '../src/game/data/waves';
 import { totalMS } from '../src/game/data/moveSpeed';
 /** [JOSEPH] Barbarian 345 in world px/s, derived from UNIT_SCALE (Option B: 345). */
 const HERO_PXS = totalMS(345);
@@ -186,7 +187,8 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
 
 {
   const sim = createMatch(act1, barbarian, 1);
-  step(sim, emptyInput(), act1.waves.first + 0.25);
+  // Remember-list batch 1 item 1: wave minions arrive 0.5 s apart, so wait for the whole stagger.
+  step(sim, emptyInput(), act1.waves.first + 0.25 + 10 * WAVE_STAGGER);
   const minions = sim.units.filter((unit) => unit.kind === 'minion' && unit.alive);
   assert.ok(minions.length >= 8, `expected a full wave, saw ${minions.length}`);
 }

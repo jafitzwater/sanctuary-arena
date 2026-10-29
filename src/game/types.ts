@@ -188,6 +188,8 @@ export interface Sim {
   waveIn: number;
   /** Waves spawned so far (item 2). */
   waveNo: number;
+  /** Remember-list batch 1 item 1: wave minions waiting for their stagger slot (seconds left in `delay`). */
+  waveQueue: { team: Team; unit: string; x: number; y: number; path: number; strength?: number; delay: number }[];
   announcedWave: boolean;
   pace: 'Normal' | 'Nightmare' | 'Hell';
   /** Seconds until each wilderness den respawns. Indexed by den id. */
