@@ -91,7 +91,8 @@ near(fp[0].x + fp[2].x, fp[1].x + fp[3].x);
 near(fp[0].y + fp[2].y, fp[1].y + fp[3].y);
 
 // 6. Icon size ordering and minimap size clamp.
-assert.ok(ICONS.nexus > ICONS.guardTower && ICONS.guardTower > ICONS.laneTower, 'nexus > guard > lane');
+// Four UI/size changes item 3 [JOSEPH t250u]: all structure icons are 8 px now (was nexus > guard > lane).
+assert.ok(ICONS.nexus === 8 && ICONS.guardTower === 8 && ICONS.laneTower === 8, 'structures 8 px');
 assert.equal(towerIconSize('inner'), ICONS.guardTower);
 assert.equal(towerIconSize('outer'), ICONS.laneTower);
 assert.ok(ICONS.laneTower > ICONS.minion && ICONS.wallLine <= 1, 'lane towers above minion dots; walls are thin lines');

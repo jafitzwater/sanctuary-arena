@@ -148,13 +148,12 @@ assert.ok(MINIMAP.defaultW >= MINIMAP.minW && MINIMAP.defaultW <= MINIMAP.maxW);
 const petal = (n: number) => {
   const m = css.match(new RegExp(`body\\.touch \\.skill:nth-child\\(${n}\\) \\{ right: (\\d+)px; bottom: (\\d+)px; \\}`));
   assert.ok(m, `petal ${n}`);
-  return { x: Number(m[1]) + 24, y: Number(m[2]) + 24 };
+  // Four UI/size changes item 4 [JOSEPH t250u]: petals are 64 px now (half 32, was 48 / 24); centers unchanged.
+  return { x: Number(m[1]) + 32, y: Number(m[2]) + 32 };
 };
 const centers = [1, 2, 3, 4].map(petal);
 for (const c of centers) near(Math.hypot(c.x - 36, c.y - 36), 106, 1);
-for (let i = 1; i < 4; i++) {
-  const gap = Math.hypot(centers[i].x - centers[i - 1].x, centers[i].y - centers[i - 1].y) - 48;
-  assert.ok(gap >= 5 && gap <= 9, `even petal gap ${gap}`);
-}
+const spans = [1, 2, 3].map((i) => Math.hypot(centers[i].x - centers[i - 1].x, centers[i].y - centers[i - 1].y));
+for (const d of spans) near(d, spans[0], 1.5); // still one even arc (center spacing ~55 px as before)
 
 console.log('wild rift pass 2 ok');
