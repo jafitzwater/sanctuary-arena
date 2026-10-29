@@ -53,12 +53,23 @@ import {
 import { stampBloodPool } from './decals';
 import { drawOutlinedLive, drawStructureStamp } from './art/outline';
 import {
+  BASE_DRAW_H,
+  BITMAP_CONTRAST,
+  TOWER_DRAW_H,
+  bitmapRect,
+  preloadStructureBitmaps,
+  structureBitmap,
+  structureBitmapKey,
+  structureBitmapScale,
+} from './art/structure-bitmaps';
+import {
   BASE_OUTLINE_PX,
   BASE_PLATFORM_W,
   CHARACTER_OUTLINE_PX,
   LANE_EDGE_BAND,
   LANE_EDGE_DARKEN,
   STRUCTURE_CONTRAST,
+  BASE_VISUAL_SCALE,
   STRUCTURE_SHADOW_ALPHA,
   STRUCTURE_SHADOW_GROW,
   TOWER_OUTLINE_PX,
@@ -312,6 +323,7 @@ export class Renderer {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Canvas 2D is unavailable');
     this.ctx = ctx;
+    preloadStructureBitmaps();
     if (STICK_LOG) {
       (globalThis as { __geometry?: unknown }).__geometry = {
         floorStep: FLOOR_STEP,
@@ -1056,8 +1068,13 @@ export class Renderer {
   private paintStructure(
     ctx: CanvasRenderingContext2D, kind: 'tower' | 'base', x: number, y: number, height: number, ally: boolean, alive: boolean,
   ): void {
-    const h = alive ? height : height * 0.55;
     const tower = kind === 'tower';
+    // Hook in tower bitmaps [JOSEPH t263u/t266u]: bitmap when loaded, else the code-drawn fallback below.
+    const bmp = structureBitmap(kind, ally, alive);
+    const u = this.spriteScale();
+    const s = structureBitmapScale(kind, u);
+    // Bitmap ruins keep the alive footprint (manifest), so shadow + platform keep the alive size too.
+    const h = bmp ? (tower ? TOWER_DRAW_H : BASE_DRAW_H * BASE_VISUAL_SCALE) * u : alive ? height : height * 0.55;
     const sw = h * (tower ? 0.28 : 0.4) * STRUCTURE_SHADOW_GROW;
     const sh = h * (tower ? 0.1 : 0.12) * STRUCTURE_SHADOW_GROW;
     const alpha = ctx.globalAlpha;
@@ -1089,6 +1106,18 @@ export class Renderer {
     ctx.stroke();
     ctx.globalAlpha = alpha;
     const outline = tower ? TOWER_OUTLINE_PX : BASE_OUTLINE_PX;
+    if (bmp) {
+      const { image, def } = bmp;
+      const r = bitmapRect(def, 0, 0, s);
+      const halfW = Math.max(-r.dx, r.dx + r.dw);
+      // Outline kept (#87 2 px / 2.5 px, reads against the ground); contrast + glow skipped: painted into the art.
+      drawStructureStamp(ctx, `bmp:${structureBitmapKey(kind, ally, alive)}`, x, y, halfW, -r.dy, outline, BITMAP_CONTRAST, (g) => {
+        g.imageSmoothingEnabled = true;
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(image, r.dx, r.dy, r.dw, r.dh);
+      });
+      return;
+    }
     const key = `${kind}:${ally ? 'a' : 'e'}:${alive ? 1 : 0}`;
     drawStructureStamp(ctx, key, x, y, h * 0.56, h * 1.02, outline, STRUCTURE_CONTRAST, (g) => {
       collectGroundMarks(() => (tower ? drawSpire : drawStronghold)(g, 0, 0, height, ally, alive));
