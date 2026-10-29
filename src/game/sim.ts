@@ -5,6 +5,7 @@ import { CAVE_RESET } from './data/caves';
 import { grassPatches, hiddenUnits } from './data/grass';
 import { TOWER_DAMAGE_MULT, TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
+import { botAd } from './data/classes/damageMult';
 import { MINION_GOLD, MINION_XP, PASSIVE_GOLD, START_GOLD, botMaxHp, lowestGoldIds, minionRole, passiveGoldRate } from './economy';
 import { dealTeams } from './teams';
 import { barbarian, STICK_IDLE_TILT } from './data/classes/barbarian';
@@ -1334,7 +1335,7 @@ export function spawnHero(sim: Sim, team: Team, x: number, y: number, name: stri
     maxHp: hp,
     mana: 80,
     maxMana: 80,
-    ad: 15,
+    ad: botAd(classId, 1), // Item 5 follow-up [TEMP]: 15 for non-casters; casters get the level-based bonus
     armor: 8,
     moveSpeed: totalMS(barbarian.stats.moveSpeed),
     msBase: barbarian.stats.moveSpeed,

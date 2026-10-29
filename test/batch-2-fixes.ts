@@ -2,7 +2,6 @@
 import assert from 'node:assert/strict';
 import { sanctuary } from '../src/game/data/acts/sanctuary';
 import { getClass } from '../src/game/data/classes';
-import { CASTER_DAMAGE_MULT } from '../src/game/data/classes/damageMult';
 import { itemById, itemGate, ITEMS } from '../src/game/data/items';
 import { grantXp, heroNumbers, kill, recomputeHero, TWO_HAND_REACH, weaponRange } from '../src/game/combat';
 import { clearCommandsWhileDead } from '../src/game/input';
@@ -130,9 +129,8 @@ const DT = 1 / 60;
     assert.equal(withWeapon(classId, '2hs').attackRange, 200, `${classId} keeps 200 with 2HS`);
     assert.equal(withWeapon(classId, null).attackRange, 200);
   }
-  // Nothing else changed: 2HS still +22 AD (Item 5 [TEMP]: the Sorceress's total AD carries CASTER_DAMAGE_MULT).
-  assert.equal(itemById('2hs')!.ad ?? itemById('2hs')!.adOne, 22);
-  assert.equal(withWeapon('sorceress', '2hs').ad - withWeapon('sorceress', null).ad, Math.round(37 * CASTER_DAMAGE_MULT) - Math.round(15 * CASTER_DAMAGE_MULT));
+  // Nothing else changed: 2HS still +22 AD.
+  assert.equal(withWeapon('sorceress', '2hs').ad - withWeapon('sorceress', null).ad, 22);
   const club = itemById('clb')!;
   assert.equal(club.ad, 5);
   assert.ok(club.description.includes('+5 attack damage'), club.description);
