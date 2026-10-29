@@ -25,9 +25,9 @@ import {
 } from '../src/game/readability';
 
 // [JOSEPH] values.
-assert.equal(CHARACTER_OUTLINE_PX, 2);
-assert.equal(TOWER_OUTLINE_PX, 2);
-assert.equal(TREE_OUTLINE_PX, 2);
+assert.equal(CHARACTER_OUTLINE_PX, 1);
+assert.equal(TOWER_OUTLINE_PX, 1);
+assert.equal(TREE_OUTLINE_PX, 1);
 assert.equal(BASE_VISUAL_SCALE, 1.1);
 assert.equal(LANE_EDGE_DARKEN, 0.15);
 assert.equal(TREE_GROUND_DARKEN, 0.1);

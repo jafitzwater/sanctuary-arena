@@ -6,8 +6,8 @@
  */
 
 // ---- Item 5: characters ------------------------------------------------------------------------------------
-/** Item 5 [JOSEPH]: dark outline around every character sprite, css px. */
-export const CHARACTER_OUTLINE_PX = 2;
+/** Item 5 [JOSEPH]: dark outline around every character sprite, css px. [TEMP] 1 px (was 2) per Joseph t271u. */
+export const CHARACTER_OUTLINE_PX = 1;
 /** [TEMP] Outline ink (near-black, warm, D2 style). */
 export const OUTLINE_INK = 'rgb(8, 6, 4)';
 /** [TEMP] Outline opacity. */
@@ -20,8 +20,8 @@ export const CHARACTER_TOP_LIGHT = 0.08;
 export const CHARACTER_FOOT_SHADE = 0.12;
 
 // ---- Item 6: towers ----------------------------------------------------------------------------------------
-/** Item 6 [JOSEPH]: dark outline around tower sprites, css px. */
-export const TOWER_OUTLINE_PX = 2;
+/** Item 6 [JOSEPH]: dark outline around tower sprites, css px. [TEMP] 1 px (was 2) per Joseph t271u. */
+export const TOWER_OUTLINE_PX = 1;
 /** [TEMP] Contrast stretch on the tower body so it stands out from the ground. */
 export const STRUCTURE_CONTRAST = 1.22;
 /** [TEMP] Stone platform under each tower: half-width as a fraction of the drawn height. */
@@ -34,8 +34,10 @@ export const STRUCTURE_SHADOW_GROW = 1.25;
 // ---- Item 8: base buildings --------------------------------------------------------------------------------
 /** Item 8 [JOSEPH]: key base buildings drawn +10%. Visual only; unit radius / hitbox / targeting unchanged. */
 export const BASE_VISUAL_SCALE = 1.1;
-/** [TEMP] "Stronger outline" on base buildings, css px. */
-export const BASE_OUTLINE_PX = 2.5;
+/** [TEMP] "Stronger outline" on base buildings, css px. 1.5 px (was 2.5) per Joseph t271u. */
+export const BASE_OUTLINE_PX = 1.5;
+/** [TEMP] Destroyed towers / bases (ruins) draw solid (was the 0.55 dead-unit fade) per Joseph t271u. */
+export const RUIN_ALPHA = 1;
 /** [TEMP] Base platform half-width as a fraction of the drawn height. */
 export const BASE_PLATFORM_W = 0.5;
 /** The key base buildings (the two strongholds). */
@@ -63,8 +65,8 @@ export const TILE_VARIATION = 0.05;
 export const TILE_VARIATION_CELL = 5;
 
 // ---- Item 9: trees -----------------------------------------------------------------------------------------
-/** Item 9 [JOSEPH]: dark outline around tree sprites, screen px (baked at the current view scale). */
-export const TREE_OUTLINE_PX = 2;
+/** Item 9 [JOSEPH]: dark outline around tree sprites, screen px (baked at the current view scale). [TEMP] 1 px (was 2) per Joseph t271u. */
+export const TREE_OUTLINE_PX = 1;
 /** Item 9 [JOSEPH]: ground under tree clusters darkened by 10% (multiply 0.9). */
 export const TREE_GROUND_DARKEN = 0.1;
 /** [TEMP] Tree outline ink. */
