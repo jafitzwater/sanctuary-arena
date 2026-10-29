@@ -1,4 +1,6 @@
 import manifest from './flare-manifest.json';
+import { blitOutlinedCell } from './outline';
+import { CHARACTER_CONTRAST, CHARACTER_OUTLINE_PX } from '../readability';
 
 export type FlareAnim = 'idle' | 'walk' | 'run' | 'attack' | 'die';
 
@@ -68,8 +70,13 @@ export function drawFlare(
   const col = ((frame % meta.cols) + meta.cols) % meta.cols;
   const row = ((compass % meta.rows) + meta.rows) % meta.rows;
   const scale = height / Math.max(1, spec.body);
-  ctx.drawImage(
+  // Visual readability item 5 [JOSEPH t253u]: 2 px dark outline + local contrast (draw only).
+  blitOutlinedCell(
+    ctx,
     image,
+    meta.fh,
+    CHARACTER_CONTRAST,
+    CHARACTER_OUTLINE_PX,
     col * meta.fw,
     row * meta.fh,
     meta.fw,

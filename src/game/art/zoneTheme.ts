@@ -9,6 +9,7 @@
  * are only painted on tiles that are already not walkable (the map border), so nothing new looks like a wall.
  */
 import type { ZoneId } from '../data/mapZones';
+import { TREE_OUTLINE_INK } from '../readability';
 
 function hash(i: number, j: number): number {
   const s = Math.sin(i * 127.1 + j * 311.7) * 43758.5453;
@@ -194,20 +195,34 @@ export function paintZoneDecal(
 }
 
 /** Tall border feature on a not-walkable tile, drawn after the ground in screen-y order. */
-export function paintBorderFeature(ctx: CanvasRenderingContext2D, zone: ZoneId, x: number, y: number, n: number): void {
+export function paintBorderFeature(
+  ctx: CanvasRenderingContext2D, zone: ZoneId, x: number, y: number, n: number, size = 1, outline = 0,
+): void {
   const family = themeFamily(zone);
   if (family === 'forest' || family === 'jungle') {
     const dark = family === 'jungle';
-    const r = 26 + n * 16;
+    // Visual readability item 9: `size` is the paint-only edge tree size factor (1 = unchanged).
+    const r = (26 + n * 16) * size;
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath();
     ctx.ellipse(x, y + 4, r * 0.9, r * 0.38, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = dark ? '#2a1c12' : '#3a2a1a';
-    ctx.fillRect(x - 3, y - r * 0.9, 6, r * 0.9);
     const layers: [number, number, number, string][] = dark
       ? [[0, -r * 1.1, r, '#0c1a0c'], [-r * 0.4, -r * 1.35, r * 0.7, '#123016'], [r * 0.35, -r * 1.45, r * 0.6, '#1a3c1c']]
       : [[0, -r * 1.05, r, '#18260f'], [-r * 0.35, -r * 1.3, r * 0.7, '#22361a'], [r * 0.3, -r * 1.4, r * 0.55, '#2e4422']];
+    if (outline > 0) {
+      // Visual readability item 9 [JOSEPH t253u]: dark outline = the same trunk and canopy grown by `outline` px, behind.
+      ctx.fillStyle = TREE_OUTLINE_INK;
+      ctx.fillRect(x - 3 - outline, y - r * 0.9 - outline, 6 + outline * 2, r * 0.9 + outline);
+      ctx.beginPath();
+      for (const [dx, dy, rr] of layers) {
+        ctx.moveTo(x + dx + rr + outline, y + dy);
+        ctx.ellipse(x + dx, y + dy, rr + outline, rr * 0.8 + outline, 0, 0, Math.PI * 2);
+      }
+      ctx.fill();
+    }
+    ctx.fillStyle = dark ? '#2a1c12' : '#3a2a1a';
+    ctx.fillRect(x - 3, y - r * 0.9, 6, r * 0.9);
     for (const [dx, dy, rr, color] of layers) {
       ctx.fillStyle = color;
       ctx.beginPath();

@@ -17,6 +17,7 @@ import {
   paintSpire,
   paintStronghold,
   paintTileVariation,
+  collectGroundMarks,
   type AttackPose,
   type BossMark,
   type CreatureKind,
@@ -50,6 +51,25 @@ import {
   type SheetAnim,
 } from './art/sheet-frames';
 import { stampBloodPool } from './decals';
+import { drawOutlinedLive, drawStructureStamp } from './art/outline';
+import {
+  BASE_OUTLINE_PX,
+  BASE_PLATFORM_W,
+  CHARACTER_OUTLINE_PX,
+  LANE_EDGE_BAND,
+  LANE_EDGE_DARKEN,
+  STRUCTURE_CONTRAST,
+  STRUCTURE_SHADOW_ALPHA,
+  STRUCTURE_SHADOW_GROW,
+  TOWER_OUTLINE_PX,
+  TOWER_PLATFORM_W,
+  TREE_OUTLINE_PX,
+  shadeHex,
+  structureVisualScale,
+  tileTone,
+  treeEdgeSize,
+  treeSeed,
+} from './readability';
 import { ChunkedBake } from './bakeChunks';
 import { ZONE_MINI, ZONE_SIZES, zoneAt, zoneGrid, zoneGroundPaint, type ZoneId } from './data/mapZones';
 import { paintBorderFeature, paintBridge, paintLavaRibbon, paintZoneDecal, themeFamily } from './art/zoneTheme';
@@ -203,6 +223,12 @@ function diamond(ctx: CanvasRenderingContext2D, sx: number, sy: number): void {
   ctx.closePath();
 }
 
+/** Visual readability item 9: TREE_OUTLINE_PX css px in bake px at this camera zoom, in 0.25 px steps. */
+function treeOutlineBakePx(zoom: number): number {
+  if (!(zoom > 0)) return TREE_OUTLINE_PX;
+  return Math.max(1, Math.round(((TREE_OUTLINE_PX * BAKE_HW) / zoom) * 4) / 4);
+}
+
 function hash(i: number, j: number): number {
   const n = Math.sin(i * 127.1 + j * 311.7) * 43758.5453;
   return n - Math.floor(n);
@@ -231,6 +257,8 @@ export class Renderer {
   /** Blood pools stay on the ground when a chunk is evicted and rebaked. */
   private readonly bloodLog: { x: number; y: number; r: number; ichor: boolean; seed: number }[] = [];
   private mapKey = '';
+  /** Visual readability item 9: tree outline width in bake px for the current bake. */
+  private treeOutline = 0;
   /** Item 7: the CC0 stone floor is loaded and paints both base yards. */
   private floorArt = false;
   private scenery: Prop[] = [];
@@ -503,10 +531,13 @@ export class Renderer {
     viewH = map.height;
     const mirrored = mirroredBases(map);
     const floor = mirrored && baseFloorReady();
-    const key = `${map.id}${floor ? ':floor' : ''}:t${turns}`;
+    // Visual readability item 9: tree outline width in bake px so it lands at 2 css px (re-bakes on a zoom change).
+    const treeOutline = treeOutlineBakePx(this.camera.zoom);
+    const key = `${map.id}${floor ? ':floor' : ''}:t${turns}:o${treeOutline}`;
     if (this.bake && this.mapKey === key) return;
     if (mirrored && !floor) onBaseFloor(() => { this.mapKey = ''; });
     this.floorArt = floor;
+    this.treeOutline = treeOutline;
     const hw = BAKE_HW;
     const width = Math.ceil((map.width + map.height) * hw + PAD * 2);
     const height = Math.ceil((map.width + map.height) * hw * 0.5 + PAD * 2);
@@ -558,7 +589,7 @@ export class Renderer {
       }
     }
     features.sort((a, b) => a.y - b.y);
-    for (const f of features) paintBorderFeature(ctx, f.zone, f.x, f.y, f.n);
+    for (const f of features) paintBorderFeature(ctx, f.zone, f.x, f.y, f.n, f.size, this.treeOutline);
     this.bakeProps(ctx, map, x0, y0, w, h);
     for (const pool of this.bloodLog) {
       if (pool.x + 40 < x0 || pool.x - 40 > x0 + w || pool.y + 40 < y0 || pool.y - 40 > y0 + h) continue;
@@ -642,7 +673,7 @@ export class Renderer {
       // Map 12k item 3: props in the fire / hell zones use the existing hell variant of the same art.
       const hell = (!mirroredBases(map) && Math.hypot(prop.x - map.enemyBase.x, prop.y - map.enemyBase.y)
         < Math.hypot(prop.x - map.playerBase.x, prop.y - map.playerBase.y)) || family === 'fire' || family === 'hell';
-      drawPropArt(ctx, x, y, ph, form, prop.variant, hell);
+      drawPropArt(ctx, x, y, ph, form, prop.variant, hell, form === 'pillar' ? this.treeOutline : 0);
       paintDecorMark(ctx, x, y, prop.variant);
     }
   }
@@ -655,8 +686,14 @@ export class Renderer {
   private stampGround(
     ctx: CanvasRenderingContext2D, map: ActDef, ox: number, oy: number, hw: number,
     x0: number, y0: number, w: number, h: number,
-  ): { x: number; y: number; zone: ZoneId; n: number }[] {
+  ): { x: number; y: number; zone: ZoneId; n: number; size: number }[] {
     const step = 80 / hw;
+    // Visual readability item 7: projected direction of the 4 lattice neighbors (for lane edge sides).
+    const o0 = projectIso(0, 0, hw, ox, oy);
+    const nbr = ([[step, 0], [-step, 0], [0, step], [0, -step]] as const).map(([ddx, ddy]) => {
+      const p = projectIso(ddx, ddy, hw, ox, oy);
+      return { ddx, ddy, sx: Math.sign(Math.round(p.x - o0.x)), sy: Math.sign(Math.round(p.y - o0.y)) };
+    });
     const i1 = Math.ceil(map.width / step) + 2;
     const j1 = Math.ceil(map.height / step) + 2;
     const mx = 100;
@@ -671,7 +708,7 @@ export class Renderer {
     const ib = Math.min(i1, Math.ceil(Math.max(...corners.map((c) => c.x)) / step) + 1);
     const ja = Math.max(-2, Math.floor(Math.min(...corners.map((c) => c.y)) / step) - 1);
     const jb = Math.min(j1, Math.ceil(Math.max(...corners.map((c) => c.y)) / step) + 1);
-    const features: { x: number; y: number; zone: ZoneId; n: number }[] = [];
+    const features: { x: number; y: number; zone: ZoneId; n: number; size: number }[] = [];
     for (let j = ja; j <= jb; j++) {
       for (let i = ia; i <= ib; i++) {
         const wx = i * step;
@@ -688,11 +725,25 @@ export class Renderer {
         const wild = kind === 'grass' || kind === 'edge' || kind === 'bank' || kind === 'dark' || kind === 'river';
         const decor = wild && !walkable(map, wx, wy);
         const mud = kind === 'grass' && this.nearPath(map, wx, wy, step);
-        this.paintTile(ctx, GROUND_BASE, i, j, sx, sy, !overlay && decor, !overlay && mud, zone);
-        if (overlay) this.paintTile(ctx, kind, i, j, sx, sy, false, false, zone);
+        // Visual readability items 7 + 9 (paint only): value per visible tile, darker tree-cluster ground,
+        // and a dark band on lane sides that touch a non-lane tile.
+        const family = themeFamily(zone);
+        const woods = decor && (family === 'forest' || family === 'jungle');
+        const tone = tileTone({ kind, treeGround: woods, i, j });
+        const edges = kind === 'path'
+          ? nbr.filter((d) => groundAt(map, wx + d.ddx, wy + d.ddy) !== 'path').map((d) => [d.sx, d.sy] as [number, number])
+          : null;
+        this.paintTile(ctx, GROUND_BASE, i, j, sx, sy, !overlay && decor, !overlay && mud, zone, overlay ? 1 : tone);
+        if (overlay) this.paintTile(ctx, kind, i, j, sx, sy, false, false, zone, tone, edges);
         const n = hash(i * 13 + 5, j * 17 + 11);
-        if (decor && wx > 0 && wy > 0 && wx < map.width && wy < map.height && n > 0.45) {
-          features.push({ x: sx + (hash(i, j + 1) - 0.5) * 40, y: sy + (hash(i + 1, j) - 0.5) * 16, zone, n: (n - 0.45) / 0.55 });
+        // Item 9: denser jungle edges = woods tiles next to a walkable tile take a lower threshold and varied size.
+        const edge = woods && nbr.some((d) => walkable(map, wx + d.ddx, wy + d.ddy));
+        const seed = decor ? treeSeed(n, edge) : null;
+        if (decor && wx > 0 && wy > 0 && wx < map.width && wy < map.height && seed !== null) {
+          features.push({
+            x: sx + (hash(i, j + 1) - 0.5) * 40, y: sy + (hash(i + 1, j) - 0.5) * 16, zone, n: seed,
+            size: edge ? treeEdgeSize(i, j) : 1,
+          });
         }
       }
     }
@@ -718,6 +769,8 @@ export class Renderer {
     decor: boolean,
     mud: boolean,
     zone: ZoneId = 'blood-moor',
+    tone = 1,
+    edges: [number, number][] | null = null,
   ): void {
     // Map 12k item 3: the Red yard is procedural Pandemonium stone; the Blue yard keeps the CC0 stone floor.
     if (kind === 'town' && this.floorArt && zone !== 'pandemonium-fortress') {
@@ -729,7 +782,9 @@ export class Renderer {
       ctx.restore();
       if (drew) return;
     }
-    const paint = zoneGroundPaint(zone, kind) ?? tilePaint(kind);
+    const base = zoneGroundPaint(zone, kind) ?? tilePaint(kind);
+    // Visual readability item 7: value shift of the visible tile (lane lift, jungle / bank separation, variation).
+    const paint = tone === 1 ? base : { fill: shadeHex(base.fill, tone), joint: shadeHex(base.joint, tone), fleck: shadeHex(base.fleck, tone) };
     diamond(ctx, sx, sy);
     ctx.fillStyle = paint.fill;
     ctx.fill();
@@ -761,6 +816,18 @@ export class Renderer {
     ctx.globalAlpha = 1;
     paintTileVariation(ctx, kind, i, j, sx, sy, decor, mud);
     paintZoneDecal(ctx, zone, kind, i, j, sx, sy);
+    if (edges && edges.length) {
+      // Item 7 [JOSEPH]: lane path edges 15% darker (black at 0.15 over a LANE_EDGE_BAND px band inside the tile).
+      ctx.strokeStyle = `rgba(0,0,0,${LANE_EDGE_DARKEN})`;
+      ctx.lineWidth = LANE_EDGE_BAND * 2;
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      for (const [ex, ey] of edges) {
+        ctx.moveTo(sx + ex * 81, sy);
+        ctx.lineTo(sx, sy + ey * 41);
+      }
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -789,7 +856,9 @@ export class Renderer {
     const hero = unit.kind === 'champion' && hasClassSheet(unit.defId);
     const boss = bossLook(unit);
     // Four UI/size changes item 2 [JOSEPH t250u]: champions (player + bot heroes) drawn 15% larger; sprite only.
-    const height = (hero ? heroDrawHeight(pose.state) : this.unitHeight(unit)) * u * championSpriteScale(unit.kind);
+    // Visual readability item 8 [JOSEPH t253u]: key base buildings drawn 10% larger (visual only; radius unchanged).
+    const height = (hero ? heroDrawHeight(pose.state) : this.unitHeight(unit)) * u * championSpriteScale(unit.kind)
+      * structureVisualScale(unit.defId);
     const bob = swing * (pose.state === 'idle' ? 1.5 : pose.state === 'run' ? 5 : 3.5) * u;
     const melee = !unit.ranged && unit.defId !== 'tower' && unit.kind !== 'base' && unit.kind !== 'seal';
     this.armSlash(unit, melee && (attack === 'swing' || unit.swing > 0.82), screen, playerId);
@@ -980,6 +1049,52 @@ export class Renderer {
     return cycleFrame(pose.phase, frames);
   }
 
+  /**
+   * Visual readability items 6 + 8 [JOSEPH t253u]: tower / base = stronger ground shadow, a stone base platform,
+   * then the cached outlined + contrast-boosted structure stamp. Same art, same foot point, draw only.
+   */
+  private paintStructure(
+    ctx: CanvasRenderingContext2D, kind: 'tower' | 'base', x: number, y: number, height: number, ally: boolean, alive: boolean,
+  ): void {
+    const h = alive ? height : height * 0.55;
+    const tower = kind === 'tower';
+    const sw = h * (tower ? 0.28 : 0.4) * STRUCTURE_SHADOW_GROW;
+    const sh = h * (tower ? 0.1 : 0.12) * STRUCTURE_SHADOW_GROW;
+    const alpha = ctx.globalAlpha;
+    ctx.fillStyle = `rgba(0,0,0,${STRUCTURE_SHADOW_ALPHA})`;
+    ctx.beginPath();
+    ctx.ellipse(x, y + sh * 0.15, sw, sh, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const pw = h * (tower ? TOWER_PLATFORM_W : BASE_PLATFORM_W);
+    const ph = pw * 0.5;
+    const lip = Math.max(2, h * 0.025);
+    const slab = (dy: number, fill: string) => {
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.moveTo(x, y - ph + dy);
+      ctx.lineTo(x + pw, y + dy);
+      ctx.lineTo(x, y + ph + dy);
+      ctx.lineTo(x - pw, y + dy);
+      ctx.closePath();
+      ctx.fill();
+    };
+    slab(lip, '#15120f');
+    slab(0, ally ? '#3b3631' : '#352b2b');
+    ctx.strokeStyle = 'rgba(214, 190, 150, 0.28)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - pw, y);
+    ctx.lineTo(x, y - ph);
+    ctx.lineTo(x + pw, y);
+    ctx.stroke();
+    ctx.globalAlpha = alpha;
+    const outline = tower ? TOWER_OUTLINE_PX : BASE_OUTLINE_PX;
+    const key = `${kind}:${ally ? 'a' : 'e'}:${alive ? 1 : 0}`;
+    drawStructureStamp(ctx, key, x, y, h * 0.56, h * 1.02, outline, STRUCTURE_CONTRAST, (g) => {
+      collectGroundMarks(() => (tower ? drawSpire : drawStronghold)(g, 0, 0, height, ally, alive));
+    });
+  }
+
   private paintFigure(
     ctx: CanvasRenderingContext2D,
     unit: Unit,
@@ -1007,19 +1122,32 @@ export class Renderer {
       ctx.scale(1, 0.45);
       ctx.translate(-dx, -dy);
     }
+    // Visual readability item 5: procedural characters get the same 2 px dark outline (ground marks stay unoutlined).
+    const outlined = (paint: (g: CanvasRenderingContext2D) => void, h: number) => {
+      let marks: ((g: CanvasRenderingContext2D) => void)[] = [];
+      const run = (g: CanvasRenderingContext2D) => { marks = collectGroundMarks(() => paint(g)); };
+      if (ctx.globalAlpha < 0.99) {
+        paint(ctx);
+        return;
+      }
+      // Ground marks are collected during the scratch paint, then replayed under the outlined body.
+      drawOutlinedLive(ctx, dx, dy, h * 0.8, h * 1.4, h * 0.3, CHARACTER_OUTLINE_PX, run, () => {
+        for (const mark of marks) mark(ctx);
+      });
+    };
     if (hero) {
-      drawBarbarian(ctx, dx, dy, height, swing, lean, screen, tier, bob, attack, unit.team === 'ally');
+      outlined((g) => drawBarbarian(g, dx, dy, height, swing, lean, screen, tier, bob, attack, unit.team === 'ally'), height);
     } else if (unit.defId === 'tower') {
-      drawSpire(ctx, dx, dy, height, unit.team === 'ally', unit.alive);
+      this.paintStructure(ctx, 'tower', dx, dy, height, unit.team === 'ally', unit.alive);
     } else if (unit.defId === 'base-ally' || unit.defId === 'base-enemy') {
-      drawStronghold(ctx, dx, dy, height, unit.defId === 'base-ally', unit.alive);
+      this.paintStructure(ctx, 'base', dx, dy, height, unit.defId === 'base-ally', unit.alive);
     } else if (unit.kind === 'seal') {
       drawProp(ctx, dx, dy, height * 0.45, 'rock', 1);
     } else if (boss) {
-      drawBoss(ctx, dx, dy - bob, height, boss, swing, unit.team === 'ally', attack, opts.time);
+      outlined((g) => drawBoss(g, dx, dy - bob, height, boss, swing, unit.team === 'ally', attack, opts.time), height);
     } else {
       const look = tokenLook(unit);
-      drawToken(ctx, dx, dy - bob, height * look.scale, look, swing, unit.team === 'ally', attack);
+      outlined((g) => drawToken(g, dx, dy - bob, height * look.scale, look, swing, unit.team === 'ally', attack), height * look.scale);
     }
     if (unit.whirlT > 0) {
       ctx.strokeStyle = 'rgba(240, 220, 170, 0.8)';

@@ -3,6 +3,7 @@
  * Static torsos are stamped once; legs, weapons, and effects redraw live.
  * Nothing here changes positions, timings, or collision.
  */
+import { TREE_OUTLINE_INK } from '../readability';
 
 export type ArmorTier = 'light' | 'medium' | 'heavy';
 export type AttackPose = 'none' | 'raise' | 'swing' | 'follow';
@@ -69,7 +70,31 @@ function circ(g: CanvasRenderingContext2D, x: number, y: number, r: number, fill
   }
 }
 
+/**
+ * Visual readability items 5/6/8: while set, the ground marks (shadow ellipse, team ring) are recorded instead of
+ * painted, so an outlined body never outlines its own ground marks (the caller replays them first, on the ground).
+ */
+export type GroundMark = (ctx: CanvasRenderingContext2D) => void;
+let groundSink: GroundMark[] | null = null;
+
+/** Run a paint with its ground marks held back; returns them to replay (in the paint's own coordinates). */
+export function collectGroundMarks(fn: () => void): GroundMark[] {
+  const prev = groundSink;
+  const sink: GroundMark[] = [];
+  groundSink = sink;
+  try {
+    fn();
+  } finally {
+    groundSink = prev;
+  }
+  return sink;
+}
+
 function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  if (groundSink) {
+    groundSink.push((g) => shadow(g, x, y, w, h));
+    return;
+  }
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.beginPath();
   ctx.ellipse(x, y, w, h, 0, 0, Math.PI * 2);
@@ -77,6 +102,10 @@ function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, 
 }
 
 function teamRing(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, ally: boolean): void {
+  if (groundSink) {
+    groundSink.push((g) => teamRing(g, x, y, h, ally));
+    return;
+  }
   ctx.save();
   ctx.globalAlpha = 0.4;
   ctx.strokeStyle = ally ? '#6aa7ff' : '#e4553c';
@@ -196,6 +225,7 @@ export function drawPropArt(
   form: PropForm,
   variant: number,
   hell: boolean,
+  outline = 0,
 ): void {
   const h = height;
   const wood = hell ? '#3a2a28' : '#6b4e34';
@@ -203,6 +233,23 @@ export function drawPropArt(
   const cloth = hell ? '#4a3038' : variant % 2 === 0 ? '#8a7a5c' : '#6e5a40';
   shadow(ctx, x, y, h * 0.26, h * 0.09);
   if (form === 'pillar') {
+    if (outline > 0) {
+      // Visual readability item 9 [JOSEPH t253u]: 2 px dark outline around the tree (bake only, same shape grown).
+      const o = outline;
+      ctx.fillStyle = TREE_OUTLINE_INK;
+      ctx.fillRect(x - h * 0.06 - o, y - h * 0.92 - o, h * 0.12 + o * 2, h * 0.92 + o);
+      ctx.strokeStyle = TREE_OUTLINE_INK;
+      ctx.lineWidth = Math.max(2, h * 0.04) + o * 2;
+      ctx.beginPath();
+      ctx.moveTo(x, y - h * 0.7);
+      ctx.lineTo(x - h * 0.28, y - h * 0.95);
+      ctx.moveTo(x, y - h * 0.62);
+      ctx.lineTo(x + h * 0.24, y - h * 0.88);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(x - h * 0.16, y - h * 0.9, h * 0.12 + o, h * 0.06 + o, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.fillStyle = variant % 2 === 0 ? '#3e342c' : '#2c3828';
     ctx.fillRect(x - h * 0.06, y - h * 0.92, h * 0.12, h * 0.92);
     ctx.fillStyle = woodHi;
