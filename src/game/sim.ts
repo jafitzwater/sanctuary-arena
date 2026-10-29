@@ -1,9 +1,9 @@
-import { waveMob, waveStrength, WAVE_SIZE } from './data/waves';
+import { waveMob, waveStrength, WAVE_SIZE, WAVE_STAGGER } from './data/waves';
 import { itemById } from './data/items';
-import { ORB_RADIUS, ORB_REFILL, orbRestore, orbSpots, POOL_RADIUS, POOL_STAND } from './data/orbs';
+import { ORB_RADIUS, ORB_REFILL, orbRestore, orbSpots, poolRestore, POOL_RADIUS, POOL_STAND } from './data/orbs';
 import { CAVE_RESET } from './data/caves';
 import { grassPatches, hiddenUnits } from './data/grass';
-import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
+import { TOWER_DAMAGE_MULT, TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
 import { MINION_GOLD, MINION_XP, PASSIVE_GOLD, START_GOLD, botMaxHp, lowestGoldIds, minionRole, passiveGoldRate } from './economy';
 import { dealTeams } from './teams';
@@ -86,6 +86,7 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     phase: 'playing',
     waveIn: map.waves.first,
     waveNo: 0,
+    waveQueue: [],
     announcedWave: false,
     pace: 'Normal',
     denIn: [],
@@ -302,7 +303,7 @@ function spawnTower(sim: Sim, spec: ActDef['towers'][number]): Unit {
     radius: tier.radius,
     hp: tier.hp,
     maxHp: tier.hp,
-    ad: tier.ad,
+    ad: tier.ad * TOWER_DAMAGE_MULT, // batch 1 item 2 [TEMP]: 15% less tower damage
     armor: tier.armor,
     attackRange: tier.range,
     attackInterval: tier.interval,
@@ -1147,6 +1148,7 @@ function waves(sim: Sim, dt: number): void {
       if (unit.respawn <= 0) reviveChampion(sim, unit);
     }
   }
+  releaseWaveQueue(sim, dt);
   sim.waveIn -= dt;
   if (sim.waveIn > 0) return;
   sim.waveNo += 1;
@@ -1157,6 +1159,18 @@ function waves(sim: Sim, dt: number): void {
     sim.announcedWave = true;
     banner(sim, sim.map.march ?? 'The Fallen march across the Blood Moor.');
   }
+}
+
+/** Batch 1 item 1: spawn queued wave minions whose stagger delay has run out (sim time, deterministic). */
+function releaseWaveQueue(sim: Sim, dt: number): void {
+  if (!sim.waveQueue.length) return;
+  const keep: Sim['waveQueue'] = [];
+  for (const entry of sim.waveQueue) {
+    entry.delay -= dt;
+    if (entry.delay > 1e-6) keep.push(entry);
+    else spawnMinion(sim, entry.unit, entry.team, entry.x, entry.y, entry.path, entry.strength);
+  }
+  sim.waveQueue = keep;
 }
 
 function reviveChampion(sim: Sim, unit: Unit): void {
@@ -1201,7 +1215,9 @@ function spawnWave(sim: Sim, team: Team): void {
     sim.map.paths.forEach((path, index) => spawnOnLane(sim, team, path.lane, index, groups, waveStrength(sim.waveNo)));
     return;
   }
-  const alive = sim.units.filter((unit) => unit.alive && unit.kind === 'minion' && unit.team === team).length;
+  const alive =
+    sim.units.filter((unit) => unit.alive && unit.kind === 'minion' && unit.team === team).length +
+    sim.waveQueue.filter((entry) => entry.team === team).length; // batch 1: queued minions count toward the cap
   if (alive >= 18) return;
   const extra = team === 'enemy' ? paceOf(sim.time).extra : 0;
   if (sim.map.paths?.length) {
@@ -1446,22 +1462,15 @@ function spawnOnLane(
   const mag = Math.hypot(dx, dy) || 1;
   const fx = dx / mag;
   const fy = dy / mag;
-  const px = -fy;
-  const py = fx;
+  // Batch 1 item 1 [JOSEPH t201u]: single file from the lead spawn spot, one minion every WAVE_STAGGER s.
+  // Minion 1 spawns now; the rest wait in sim.waveQueue and are released by the sim step.
+  const x = origin.x + fx * 78;
+  const y = origin.y + fy * 78;
   let index = 0;
   for (const group of groups) {
     for (let n = 0; n < group.count; n++) {
-      const col = (index % 3) - 1;
-      const row = Math.floor(index / 3);
-      spawnMinion(
-        sim,
-        group.unit,
-        team,
-        origin.x + fx * (78 + row * 36) + px * col * 30,
-        origin.y + fy * (78 + row * 36) + py * col * 30,
-        path,
-        strength,
-      );
+      if (index === 0) spawnMinion(sim, group.unit, team, x, y, path, strength);
+      else sim.waveQueue.push({ team, unit: group.unit, x, y, path, strength, delay: index * WAVE_STAGGER });
       index += 1;
     }
   }
@@ -1610,8 +1619,11 @@ function updateOrbs(sim: Sim, dt: number): void {
       stand[unit.id] = (orb.stand[unit.id] ?? 0) + dt;
       if (orb.kind === 'pool' && stand[unit.id] < POOL_STAND) continue;
       // [DOC] "A health orb restores only health. A pool restores health and mana."
-      unit.hp = orbRestore(unit.hp, unit.maxHp);
-      if (orb.kind === 'pool') unit.mana = orbRestore(unit.mana, unit.maxMana);
+      // Batch 1 item 3 [JOSEPH t223u]: a pool restores 75% of max health and max mana (was 50% of current).
+      if (orb.kind === 'pool') {
+        unit.hp = poolRestore(unit.hp, unit.maxHp);
+        unit.mana = poolRestore(unit.mana, unit.maxMana);
+      } else unit.hp = orbRestore(unit.hp, unit.maxHp);
       orb.refill = ORB_REFILL;
       if (unit.id === sim.playerId) banner(sim, orb.kind === 'pool' ? 'The pool restores you.' : 'A health orb restores you.');
       break;

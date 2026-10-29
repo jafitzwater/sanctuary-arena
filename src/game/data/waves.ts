@@ -12,6 +12,11 @@
 export const WAVE_SIZE = 5;
 export const WAVE_INTERVAL = 60;
 export const WAVE_GROWTH = 1.2;
+/**
+ * Remember-list batch 1 item 1 [JOSEPH t201u]: a wave spawns and walks one minion at a time,
+ * 0.5 s apart (minion 1 at 0 s, 2 at 0.5 s ... 5 at 2.0 s). Driven by the sim step, not timers.
+ */
+export const WAVE_STAGGER = 0.5;
 export const WAVE_ROTATION = ['rogue', 'valkyrie', 'act2-mercenary', 'act3-mercenary'] as const;
 
 /** Mob type of wave n (1-based): two waves each, then loop. */

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { sanctuary } from '../../src/game/data/acts/sanctuary';
 import { barbarian } from '../../src/game/data/classes/barbarian';
 import { unitDef } from '../../src/game/data/units';
-import { waveMob, waveStrength, WAVE_INTERVAL, WAVE_SIZE } from '../../src/game/data/waves';
+import { waveMob, waveStrength, WAVE_INTERVAL, WAVE_SIZE, WAVE_STAGGER } from '../../src/game/data/waves';
 import { createMatch, updateSim } from '../../src/game/sim';
 import { emptyInput } from '../../src/game/types';
 
@@ -27,11 +27,17 @@ const fresh = (team: string, defId: string) =>
 const step = (until: number) => {
   while (sim.waveNo < until) updateSim(sim, emptyInput(), 0.05);
 };
+// Remember-list batch 1 item 1: the last minion of a wave arrives (WAVE_SIZE - 1) * WAVE_STAGGER s after the first.
+const settle = () => {
+  for (let t = 0; t < (WAVE_SIZE - 1) * WAVE_STAGGER + 0.1; t += 0.05) updateSim(sim, emptyInput(), 0.05);
+};
 step(1);
 const t1 = sim.time;
+settle();
 for (const team of ['ally', 'enemy']) assert.equal(fresh(team, 'rogue').length, WAVE_SIZE * paths, `${team}: 5 per roadway`);
 step(3);
 assert.ok(Math.abs(sim.time - t1 - 2 * WAVE_INTERVAL) < 0.2, 'waves every 60 s');
+settle();
 for (const team of ['ally', 'enemy']) {
   const valk = fresh(team, 'valkyrie');
   assert.equal(valk.length, WAVE_SIZE * paths, `${team}: wave 3 is valkyries`);

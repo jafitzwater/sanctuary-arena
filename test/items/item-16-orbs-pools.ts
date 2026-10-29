@@ -47,20 +47,24 @@ assert.ok(hero.hp >= 149 && hero.hp <= 152, `orb hp ${hero.hp}`);
 assert.ok(hero.mana < 7, 'orb restores only health');
 assert.ok(orb.refill > ORB_REFILL - 1, 'orb refills after 180 s');
 
-// A pool needs a brief stand, then restores health and mana by 50% of current.
+// A pool needs a brief stand, then restores health and mana by 75% of max
+// (Remember-list batch 1 item 3 [JOSEPH t223u]; was 50% of current).
 const pool = sim.orbs.find((o) => o.kind === 'pool')!;
 hero.x = pool.x;
 hero.y = pool.y;
-hero.hp = 100;
-hero.mana = 20;
+hero.hp = 10;
+hero.mana = 0;
 let t = 0;
 while (t < POOL_STAND * 0.5) { updateSim(sim, emptyInput(), 0.05); t += 0.05; }
 assert.equal(pool.refill, 0, 'pool not taken instantly');
+const before = { hp: hero.hp, mana: hero.mana };
 while (pool.refill === 0 && t < POOL_STAND * 2) { updateSim(sim, emptyInput(), 0.05); t += 0.05; }
 assert.ok(pool.refill > 0, 'pool taken after standing');
-assert.ok(hero.hp >= 148 && hero.hp <= 160, `pool hp ${hero.hp}`);
 // Allows ~1 s of natural regen before the pool triggers.
-assert.ok(hero.mana >= 30 && hero.mana <= 40, `pool mana ${hero.mana}`);
+const hpWant = Math.min(hero.maxHp, before.hp + Math.round(hero.maxHp * 0.75));
+const manaWant = Math.min(hero.maxMana, before.mana + Math.round(hero.maxMana * 0.75));
+assert.ok(hero.hp >= hpWant && hero.hp <= hpWant + 12, `pool hp ${hero.hp} want ~${hpWant}`);
+assert.ok(hero.mana >= manaWant && hero.mana <= manaWant + 12, `pool mana ${hero.mana} want ~${manaWant}`);
 // Refill
 let w = 0;
 const left = orb.refill;

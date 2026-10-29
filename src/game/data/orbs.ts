@@ -28,6 +28,11 @@ export const ORB_RADIUS = 30; // [TEMP] pickup radius ("small pickups")
 export const ORB_SIDE = mapLen(60); // [TEMP] "off to the side", near the road edge; follows MAP_SCALE (pass 2 item 1)
 export const POOL_RADIUS = 70; // [TEMP] "larger"
 export const POOL_SIDE = mapLen(200); // [TEMP] beside the roadway ("off-road areas"); follows MAP_SCALE (pass 2 item 1)
+/**
+ * Remember-list batch 1 item 3 [JOSEPH t223u]: a pool restores health and mana equal to 75% of the
+ * champion's max health and max mana (capped at max). Before: 50% of current (orbRestore), same as orbs.
+ */
+export const POOL_SHARE = 0.75;
 export const POOL_STAND = 1; // [TEMP] seconds ("stand in them briefly")
 
 export type OrbKind = 'orb' | 'pool';
@@ -82,4 +87,9 @@ export function orbSpots(paths: PathDef[]): OrbSpot[] {
 /** [DOC] "Both only do 50% of what that character currently has." Capped at the maximum. */
 export function orbRestore(current: number, max: number): number {
   return Math.min(max, current + Math.round(current * ORB_SHARE));
+}
+
+/** Batch 1 item 3: pool restore, 75% of max on top of current, capped at max. */
+export function poolRestore(current: number, max: number): number {
+  return Math.min(max, current + Math.round(max * POOL_SHARE));
 }
