@@ -1,5 +1,6 @@
 import portraitUrl from '../assets/art/d2/portrait.webp';
-import { clampMinimapW, MINIMAP } from './view';
+import { clampMinimapW, MINIMAP, teamIconsWidth } from './view';
+import { drawClassPortrait } from './art/director-sheets';
 import { ROSTER } from './data/classes/roster';
 import { DEFAULT_CLASS_ID } from './data/classes';
 import { itemIcon, plateIcons, skillIcon } from './art/icons';
@@ -108,8 +109,9 @@ export class Hud {
         e.preventDefault();
         e.stopPropagation();
         const dx = (e.clientX - startX) * (left ? 1 : -1);
-        // Touch card hangs from the top with its grip bottom-right (pass 3): drag down grows it. Desktop unchanged.
-        const dy = document.body.classList.contains('touch') ? e.clientY - startY : startY - e.clientY;
+        // The card hangs from the top-left corner with its grip bottom-right (pass 3 touch; Item 7 desktop too):
+        // drag down grows it.
+        const dy = e.clientY - startY;
         saved = clampMinimapW(startW + Math.max(dx, dy));
         setW(saved);
       };
@@ -302,6 +304,7 @@ export class Hud {
     this.text('#mp-compact', mpLabel);
     this.text('#level', String(sim.level));
     this.text('#gold', String(Math.floor(sim.gold)));
+    this.fillTeamIcons(sim);
     this.text('#cs', `${sim.cs} cs`);
     this.text('#kd', `${sim.kills} / ${sim.deaths} / ${sim.assists}`);
     this.text('#score', `${sim.allyKills}–${sim.enemyKills}`);
@@ -910,6 +913,55 @@ export class Hud {
     if (bag.get(name) === value) return;
     el.setAttribute(name, value);
     bag.set(name, value);
+  }
+
+  /**
+   * Item 7 item 4 [TEMP details, NEEDS JOSEPH]: allied champions (bots on the player's team, the player
+   * excluded as in Wild Rift) as round class portraits with a health bar under each, in spawn order.
+   * Read-only on the sim. A dead ally greys out and shows its respawn seconds.
+   */
+  private teamKey = '';
+  private readonly teamPainted = new Set<number>();
+  private fillTeamIcons(sim: Sim): void {
+    const host = this.root.querySelector<HTMLElement>('#team-icons');
+    if (!host) return;
+    const allies = sim.units.filter((u) => u.kind === 'champion' && u.team === 'ally' && u.id !== sim.playerId).sort((a, b) => a.id - b.id);
+    const key = allies.map((u) => `${u.id}:${u.look ?? u.defId}`).join(',');
+    if (key !== this.teamKey) {
+      this.teamKey = key;
+      this.teamPainted.clear();
+      for (const sel of [...this.barSeen.keys()]) if (sel.startsWith('#team-icons')) this.barSeen.delete(sel);
+      host.replaceChildren();
+      for (const unit of allies) {
+        const cell = document.createElement('div');
+        cell.className = 'ally';
+        cell.dataset.id = String(unit.id);
+        cell.title = `${unit.name}`;
+        const face = document.createElement('canvas');
+        face.width = 60;
+        face.height = 60;
+        const hp = document.createElement('div');
+        hp.className = 'hp';
+        hp.appendChild(document.createElement('span'));
+        const timer = document.createElement('em');
+        cell.append(face, hp, timer);
+        host.appendChild(cell);
+      }
+      document.documentElement.style.setProperty('--team-w', `${teamIconsWidth(allies.length)}px`);
+    }
+    allies.forEach((unit, index) => {
+      const cell = host.children[index] as HTMLElement | undefined;
+      if (!cell) return;
+      if (!this.teamPainted.has(unit.id)) {
+        const face = cell.querySelector('canvas');
+        const ctx = face?.getContext('2d');
+        if (ctx && drawClassPortrait(ctx, unit.look ?? unit.defId, 30, 30, 30)) this.teamPainted.add(unit.id);
+      }
+      cell.classList.toggle('dead', !unit.alive);
+      this.setBar(`#team-icons .ally[data-id="${unit.id}"] .hp span`, unit.alive ? unit.hp / unit.maxHp : 0);
+      const timer = cell.querySelector('em');
+      if (timer) this.writeText(timer, unit.alive ? '' : String(Math.ceil(unit.respawn)));
+    });
   }
 
   private setBar(sel: string, pct: number): void {

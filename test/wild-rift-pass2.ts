@@ -108,10 +108,14 @@ assert.ok(block.includes(`left: max(${MINIMAP.touchLeft}px`), 'css left mirrors 
 assert.ok(block.includes(`var(--mini-w, ${MINIMAP.defaultW}px)`), 'css default width mirrors MINIMAP.defaultW');
 assert.ok(block.includes(`100vh - ${MINIMAP.touchTop + MINIMAP.belowCard}px`), 'css max-width mirrors belowCard');
 assert.equal(MINIMAP.belowCard, MINIMAP.goldGap + MINIMAP.goldH + MINIMAP.stickGap + MINIMAP.stickTop);
-const goldRule = css.slice(css.indexOf('body.touch #gold-badge {'));
+// Item 7: gold is an icon-and-number box under the card on every screen; its top follows --mini-side, which
+// body.touch caps with the same belowCard room as the card's max-width.
+const goldRule = css.slice(css.indexOf('\n#gold-badge {') + 1);
 const goldBlock = goldRule.slice(0, goldRule.indexOf('}'));
-assert.ok(goldBlock.includes('position: absolute') && goldBlock.includes(`left: max(${MINIMAP.touchLeft}px`), 'gold aligned with the card');
-assert.ok(goldBlock.includes(`100vh - ${MINIMAP.touchTop + MINIMAP.belowCard}px`) && goldBlock.includes(`+ ${MINIMAP.goldGap}px)`), 'gold top = card bottom + goldGap');
+assert.ok(goldBlock.includes('position: absolute') && goldBlock.includes('left: calc(6px + env(safe-area-inset-left))'), 'gold on the left side under the card');
+assert.ok(goldBlock.includes(`max(${MINIMAP.touchTop}px, env(safe-area-inset-top)) + var(--mini-side) + ${MINIMAP.goldGap}px)`), 'gold top = card bottom + goldGap');
+const touchSide = css.slice(css.indexOf('body.touch {\n  --mini-side'));
+assert.ok(touchSide.slice(0, touchSide.indexOf('}')).includes(`100vh - ${MINIMAP.touchTop + MINIMAP.belowCard}px`), 'touch --mini-side mirrors belowCard');
 const telRule = css.slice(css.indexOf('body.touch #telemetry {\n'));
 const telBlock = telRule.slice(0, telRule.indexOf('}'));
 assert.ok(telBlock.includes('left: 50%') && telBlock.includes('translateX(-50%)'), 'telemetry centered in the top bar');

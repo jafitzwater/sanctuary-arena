@@ -197,7 +197,10 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
   gap: 8px;
   height: 40px;
   padding: max(4px, env(safe-area-inset-top)) 8px 0 max(8px, env(safe-area-inset-left));
-  padding-right: calc(min(168px, 22vw) + 16px);
+  /* Item 7 [TEMP]: the minimap left the top-right corner, so the bar only clears the top-left corner:
+     minimap + 10px + ally icons (--team-w, default 3 x 30 + 2 x 6 = 102px) + 14px. */
+  padding-left: calc(max(0px, env(safe-area-inset-left)) + var(--mini-side) + 10px + var(--team-w, 102px) + 14px);
+  padding-right: 8px;
   background: linear-gradient(to bottom, rgba(10, 8, 6, 0.78), rgba(10, 8, 6, 0));
   pointer-events: none;
 }
@@ -266,10 +269,18 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
   text-shadow: 1px 1px 0 #000;
 }
 #telemetry span { white-space: nowrap; }
+/* Item 7 item 3 [TEMP]: cog beside the minimap, midway down its right side (view.ts HUD_CORNER gearSize 34,
+   gearGap 8); never higher than 6px under the ally icons (teamTop 4 + icon 30 + 3 + bar 5 = 42). */
 #settings-btn {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
+  position: absolute;
+  left: calc(max(0px, env(safe-area-inset-left)) + var(--mini-side) + 8px);
+  top: max(calc(max(0px, env(safe-area-inset-top)) + var(--mini-side) / 2 - 17px), calc(env(safe-area-inset-top) + 48px));
+  z-index: 6;
+  pointer-events: auto;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
   padding: 0;
   display: grid;
   place-items: center;
@@ -278,7 +289,7 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
   border-color: rgba(199, 179, 119, 0.8);
   box-shadow: 0 0 8px rgba(199, 179, 119, 0.28);
 }
-#settings-btn .cog { width: 18px; height: 18px; display: block; pointer-events: none; }
+#settings-btn .cog { width: 20px; height: 20px; display: block; pointer-events: none; }
 .recall-icon { display: none; width: 22px; height: 22px; }
 .potion-icon { display: none; width: 26px; height: 26px; pointer-events: none; }
 #attack-btn .sword { width: 28px; height: 28px; display: block; margin: 0 auto; pointer-events: none; }
@@ -293,21 +304,30 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
 
 /* WILD RIFT VIEW: width = --mini-w (view.ts MINIMAP default 180 / min 120 / max 240 css px [TEMP]);
    height follows the map aspect: square since the map 12k order (12000 x 12000, was 4400 x 2800 = 11:7). */
+/* Item 7 item 2 [TEMP]: tucked into the top-left corner on every screen (desktop was top-right), with a thin
+   frame on its two open sides and only the bottom-right corner rounded, as in the reference.
+   --mini-side is the card's real side after the height cap (desktop 100vh - 170px, touch below). */
+:root { --mini-side: min(var(--mini-w, 180px), calc(100vh - 170px)); }
+/* Folded to the 52 x 28 "Map" chip: the cog and ally icons follow it in, kept 4px clear of the gold box. */
+body:has(#minimap-toggle.off) { --mini-side: 56px; }
 #minimap-toggle {
   position: absolute;
-  top: 4px;
-  right: 8px;
+  top: max(0px, env(safe-area-inset-top));
+  left: max(0px, env(safe-area-inset-left));
   width: var(--mini-w, 180px);
   max-width: calc(100vh - 170px);
   aspect-ratio: 1 / 1;
   height: auto;
   padding: 0;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(199, 179, 119, 0.7);
+  border-top: 0;
+  border-left: 0;
   background: #120e0b;
   z-index: 4;
   pointer-events: auto;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 0 0 14px 0;
+  box-shadow: 1px 1px 0 #0a0705, 0 0 8px rgba(0, 0, 0, 0.55);
 }
 #minimap-toggle canvas,
 #minimap {
@@ -323,13 +343,93 @@ summary { cursor: pointer; color: var(--gold); margin: 8px 0; }
 #minimap-toggle.off { width: 52px; height: 28px; max-width: none; aspect-ratio: auto; }
 #minimap-grip {
   position: absolute;
-  top: 0;
+  top: auto;
+  bottom: 0;
   right: 0;
   width: 22px;
   height: 22px;
   pointer-events: auto;
   touch-action: none;
-  background: linear-gradient(225deg, rgba(230, 211, 161, 0.75) 0 3px, transparent 3px 6px, rgba(230, 211, 161, 0.55) 6px 8px, transparent 8px);
+  background: linear-gradient(315deg, rgba(230, 211, 161, 0.75) 0 3px, transparent 3px 6px, rgba(230, 211, 161, 0.55) 6px 8px, transparent 8px);
+}
+/* Item 7 item 1 [TEMP]: gold as an icon-and-number box on the left side, under the minimap (view.ts
+   HUD_CORNER goldLeft 6, goldW 54; MINIMAP.goldH 46, goldGap 6). */
+#gold-badge {
+  position: absolute;
+  left: calc(6px + env(safe-area-inset-left));
+  top: calc(max(0px, env(safe-area-inset-top)) + var(--mini-side) + 6px);
+  z-index: 5;
+  box-sizing: border-box;
+  width: 54px;
+  height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #8a7044;
+  border-radius: 3px;
+  background: linear-gradient(#211710, #0c0806);
+  box-shadow: inset 0 0 0 1px #2c2014, 0 0 0 1px #0a0705, 0 2px 6px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+}
+#gold-badge .coins { position: relative; width: 24px; height: 17px; display: block; }
+#gold-badge .coins i {
+  position: absolute;
+  top: 0;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 34%, #fff2b8 0 12%, #f0c850 30%, #b4801e 72%, #6e4810 100%);
+  box-shadow: 0 0 0 1px #4a300a, inset 0 0 0 2px rgba(110, 72, 16, 0.55);
+}
+#gold-badge .coins i:first-child { left: 0; }
+#gold-badge .coins i:last-child { left: 9px; top: 2px; }
+#gold-badge b { font-size: 14px; line-height: 1; color: #f0e0b0; font-weight: normal; text-shadow: 1px 1px 0 #000; }
+/* Item 7 item 4 [TEMP]: allied champion icons with health bars, top row right of the minimap (view.ts
+   HUD_CORNER teamGap 10, teamTop 4, teamIcon 30, teamSpacing 6, bar 5). Display only. */
+#team-icons {
+  position: absolute;
+  left: calc(max(0px, env(safe-area-inset-left)) + var(--mini-side) + 10px);
+  top: calc(4px + env(safe-area-inset-top));
+  z-index: 6;
+  display: flex;
+  gap: 6px;
+  pointer-events: none;
+}
+#team-icons .ally { position: relative; width: 30px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+#team-icons canvas {
+  width: 30px;
+  height: 30px;
+  display: block;
+  border-radius: 50%;
+  background: #120e0b;
+  box-shadow: 0 0 0 1px #0a0705, 0 0 0 2px #8a7044, 0 0 0 3px #1a120c;
+}
+#team-icons .hp {
+  width: 30px;
+  height: 5px;
+  box-sizing: border-box;
+  border: 1px solid #0a0705;
+  background: #1a120e;
+  overflow: hidden;
+}
+#team-icons .hp span { display: block; height: 100%; width: 100%; background: linear-gradient(#7ed06a, #2f7a24); }
+#team-icons .ally.dead canvas { filter: grayscale(1) brightness(0.45); }
+#team-icons .ally em {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-size: 13px;
+  color: #f0e0b0;
+  text-shadow: 1px 1px 0 #000;
 }
 #minimap-toggle.off #minimap-grip { display: none; }
 #minimap-toggle.off canvas { display: none; }
@@ -960,27 +1060,7 @@ body.touch #telemetry {
   white-space: nowrap;
   z-index: 5;
 }
-body.touch #gold-badge {
-  position: absolute;
-  left: max(8px, env(safe-area-inset-left));
-  top: calc(max(4px, env(safe-area-inset-top)) + min(var(--mini-w, 180px), (100vh - 156px - env(safe-area-inset-top) - env(safe-area-inset-bottom))) + 6px);
-  z-index: 5;
-  flex: none;
-  flex-direction: row;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  margin: 0;
-  padding: 1px 8px 2px;
-  border-radius: 999px;
-  background: rgba(12, 8, 6, 0.55);
-  border: 1px solid rgba(199, 179, 119, 0.75);
-  box-shadow: 0 0 8px rgba(199, 179, 119, 0.28);
-  pointer-events: auto;
-}
 body.touch .top-actions { order: 4; }
-body.touch #gold-badge b { font-size: 13px; }
-body.touch #gold-badge small { font-size: 10px; letter-spacing: 0.08em; }
 body.touch .hero-plate { display: flex; align-items: center; gap: 6px; }
 body.touch .portrait {
   width: 32px;
@@ -1028,22 +1108,26 @@ body.touch #orb-mp {
 }
 body.touch .orb em { font-size: 8px; bottom: 18%; }
 
-/* WILD RIFT VIEW: touch placement. Pass 3 order item 1 [JOSEPH] "minimap top-left" [TEMP values]:
-   view.ts MINIMAP touchTop 4, touchLeft 8, default width 180 (min 120 / max 240). max-width keeps the card,
-   the gold counter under it (6px gap + 24px) and a 16px gap clear of the resting stick (top 106px above the
-   bottom): 100vh - 4 - 152. z-index 6 keeps the card above the top bar's gradient. */
+/* WILD RIFT VIEW: touch placement. Pass 3 order item 1 [JOSEPH] "minimap top-left"; Item 7 [TEMP values]:
+   view.ts MINIMAP touchTop 0, touchLeft 0 (flush in the corner), default width 180 (min 120 / max 240).
+   max-width keeps the card, the gold box under it (6px gap + 46px) and a 16px gap clear of the resting stick
+   (top 106px above the bottom): 100vh - 0 - 174. z-index 6 keeps the card above the top bar's gradient. */
+body.touch {
+  --mini-side: min(var(--mini-w, 180px), calc(100vh - 174px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+}
+body.touch:has(#minimap-toggle.off) { --mini-side: 56px; }
+/* Item 7: the folded chip is the same 52 x 28 on touch (it kept the card width before). */
+body.touch #minimap-toggle.off { width: 52px; height: 28px; max-width: none; }
 body.touch #minimap-toggle {
-  top: max(4px, env(safe-area-inset-top));
+  top: max(0px, env(safe-area-inset-top));
   bottom: auto;
-  left: max(8px, env(safe-area-inset-left));
+  left: max(0px, env(safe-area-inset-left));
   right: auto;
   z-index: 6;
   width: var(--mini-w, 180px);
-  max-width: calc(100vh - 156px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  max-width: calc(100vh - 174px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   height: auto;
   background: rgba(12, 8, 6, 0.72);
-  border-color: rgba(199, 179, 119, 0.8);
-  box-shadow: 0 0 8px rgba(199, 179, 119, 0.22);
 }
 /* Pass 3: the card hangs from the top, so its resize grip is the bottom-right corner (drag out to grow). */
 body.touch #minimap-grip {
@@ -1052,7 +1136,7 @@ body.touch #minimap-grip {
   background: linear-gradient(315deg, rgba(230, 211, 161, 0.75) 0 3px, transparent 3px 6px, rgba(230, 211, 161, 0.55) 6px 8px, transparent 8px);
 }
 /* Map folded to the "Map" chip (18px tall on touch): gold follows it up, same 6px gap. */
-body.touch:has(#minimap-toggle.off) #gold-badge { top: calc(max(4px, env(safe-area-inset-top)) + 24px); }
+body:has(#minimap-toggle.off) #gold-badge { top: calc(max(0px, env(safe-area-inset-top)) + 34px); }
 body.touch .top-actions {
   position: static;
   margin-left: auto;

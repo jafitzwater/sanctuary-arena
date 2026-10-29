@@ -120,19 +120,22 @@ export const MINIMAP = {
   maxW: 240,
   /** New key so the old 150 px saved width does not hide the new default. */
   storageKey: 'sa.minimapW2',
-  /** Touch: card top edge below the screen top (pass 3: top-left corner, over the top bar's left end). */
-  touchTop: 4,
-  touchLeft: 8,
-  /** Touch: gap from the card's bottom edge to the gold counter under it. */
+  /**
+   * Card top edge below the screen top. Item 7 (Wild Rift HUD layout) [TEMP]: tucked flush into the top-left
+   * corner (was 4 / 8 in pass 3), thin frame, rounded only at the bottom-right like the reference.
+   */
+  touchTop: 0,
+  touchLeft: 0,
+  /** Gap from the card's bottom edge to the gold box under it. */
   goldGap: 6,
-  /** Touch: gold counter height (style.css body.touch #gold-badge, about 23 px). */
-  goldH: 24,
+  /** Item 7 [TEMP]: gold icon-and-number box height (style.css #gold-badge; was a 24 px pill). */
+  goldH: 46,
   /** The resting stick's top edge above the screen bottom (style.css body.touch #stick: bottom 16px, height 90px). */
   stickTop: 106,
   /** Clear gap kept between the gold counter and the resting stick. */
   stickGap: 16,
-  /** Css px the card keeps free under itself: gold gap + gold + stick gap + stick (6 + 24 + 16 + 106). */
-  belowCard: 152,
+  /** Css px the card keeps free under itself: gold gap + gold + stick gap + stick (6 + 46 + 16 + 106). */
+  belowCard: 174,
 } as const;
 
 /**
@@ -147,6 +150,69 @@ export function minimapTouchBox(viewH: number, wantW: number, mapW: number, mapH
   const h = minimapH(w, mapW, mapH);
   const goldTop = top + h + MINIMAP.goldGap;
   return { left: MINIMAP.touchLeft, top, w, h, bottom: top + h, goldTop, goldBottom: goldTop + MINIMAP.goldH };
+}
+
+/**
+ * Item 7, Wild Rift HUD layout (Joseph t230u/t242u, reference hud-reference.jpg). All sizes [TEMP]; style.css
+ * mirrors them (#gold-badge, #settings-btn, #team-icons; test/wild-rift-hud.ts checks the css matches).
+ * 1. Gold: icon-and-number box on the left side, under the minimap.
+ * 2. Minimap: thin-framed card tucked into the top-left corner (phone and desktop; desktop was top-right).
+ * 3. Settings cog: right of the minimap, midway down its right side.
+ * 4. Allied champion icons with health bars: top row, right of the minimap.
+ */
+export const HUD_CORNER = {
+  /** Gold box: left inset from the screen edge, width (height is MINIMAP.goldH). */
+  goldLeft: 6,
+  goldW: 54,
+  /** Settings cog: round button size and gap from the minimap's right edge. */
+  gearSize: 34,
+  gearGap: 8,
+  /** Ally icons: gap from the minimap's right edge, top inset, portrait size, gap between icons, bar. */
+  teamGap: 10,
+  teamTop: 4,
+  teamIcon: 30,
+  teamSpacing: 6,
+  teamBarGap: 3,
+  teamBarH: 5,
+  /** Desktop: the card's height cap (style.css #minimap-toggle max-width: calc(100vh - 170px)). */
+  desktopBelow: 170,
+  /** Desktop: extra gap between the ally icons and the top bar's hero plate. */
+  barGap: 14,
+} as const;
+
+export type Rect = { x: number; y: number; w: number; h: number };
+
+export function teamIconsWidth(count: number): number {
+  const c = HUD_CORNER;
+  return count <= 0 ? 0 : count * c.teamIcon + (count - 1) * c.teamSpacing;
+}
+
+export function teamIconsHeight(): number {
+  return HUD_CORNER.teamIcon + HUD_CORNER.teamBarGap + HUD_CORNER.teamBarH;
+}
+
+/**
+ * Item 7: top-left corner rects in css px for a viewport, the saved minimap width and the number of allies shown.
+ * touch = phone layout (card capped so the gold box stays above the resting stick); desktop caps the card at
+ * viewH - 170 as before. The cog sits midway along the card's right side but never higher than just under the
+ * ally icons (small cards).
+ */
+export function hudCornerLayout(viewW: number, viewH: number, wantW: number, touch: boolean, allies: number, safe = { top: 0, left: 0, bottom: 0 }) {
+  const c = HUD_CORNER;
+  const top = MINIMAP.touchTop + safe.top;
+  const left = MINIMAP.touchLeft + safe.left;
+  const room = touch ? viewH - top - safe.bottom - MINIMAP.belowCard : viewH - c.desktopBelow;
+  const side = Math.max(0, Math.min(clampMinimapW(wantW), Math.floor(room)));
+  const minimap: Rect = { x: left, y: top, w: side, h: side };
+  const gold: Rect = { x: c.goldLeft + safe.left, y: top + side + MINIMAP.goldGap, w: c.goldW, h: MINIMAP.goldH };
+  const team: Rect = { x: left + side + c.teamGap, y: c.teamTop + safe.top, w: teamIconsWidth(allies), h: teamIconsHeight() };
+  const gearTop = Math.max(top + side / 2 - c.gearSize / 2, team.y + team.h + 6);
+  const settings: Rect = { x: left + side + c.gearGap, y: gearTop, w: c.gearSize, h: c.gearSize };
+  return { minimap, gold, settings, team, viewW, viewH };
+}
+
+export function rectsOverlap(a: Rect, b: Rect): boolean {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
 export function clampMinimapW(w: number): number {
