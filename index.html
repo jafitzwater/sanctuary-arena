@@ -67,8 +67,9 @@
             </div>
             <div class="stat"><b id="level" class="d2-text">1</b><small class="d2-text">lv</small></div>
           </div>
-          <div id="gold-badge" class="stat gold">
-            <b id="gold" class="d2-text">0</b><small class="d2-text">GOLD</small>
+          <div id="gold-badge" class="gold-box" aria-label="Gold">
+            <span class="coins" aria-hidden="true"><i></i><i></i></span>
+            <b id="gold" class="d2-text">0</b>
           </div>
           <div id="telemetry">
             <span id="clock" class="d2-text">00:00</span>
@@ -83,9 +84,6 @@
               <img class="recall-icon" alt="" />
               <span class="recall-label">Recall</span>
             </button>
-            <button id="settings-btn" type="button" aria-label="Settings">
-              <img class="cog" alt="" />
-            </button>
           </div>
         </header>
 
@@ -94,6 +92,10 @@
           <span id="minimap-grip" aria-hidden="true"></span>
           <span class="map-label d2-text">Map</span>
         </button>
+        <button id="settings-btn" type="button" aria-label="Settings">
+          <img class="cog" alt="" />
+        </button>
+        <div id="team-icons" aria-label="Allies"></div>
         <div id="targetbar" hidden>
           <b id="target-name"></b>
           <div class="bar target-hp"><span id="target-fill"></span></div>
