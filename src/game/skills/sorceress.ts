@@ -18,8 +18,8 @@ export const SORC_SKILL_REACH_BONUS = 40;
 export const ICE_BOLT_SLOW = { pct: 0.25, t: 1.5 };
 export const BLIZZARD = { range: 320, radius: 110, pct: 0.35, t: 2 };
 /** [TEMP] Skill rework placeholders: Lightning (instant single hit), Fire Blast (burst around the target). */
-export const LIGHTNING = { mult: 1.3, perRank: 0.12 };
-export const FIRE_BLAST = { radius: 100, mult: 1.4, perRank: 0.15 };
+export const LIGHTNING = { mult: 1.3, perRank: 0.13 }; // [TEMP] skill follow-ups balance band
+export const FIRE_BLAST = { radius: 100, mult: 1.4, perRank: 0.15 }; // [TEMP] skill follow-ups balance band (cd 11)
 /** [TEMP] Teleport range: base plus per rank. */
 export const TELEPORT = { range: 260, perRank: 20 };
 

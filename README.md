@@ -25,7 +25,7 @@ Life at level 1 is 240. Each level adds 4, and each point of vitality adds 4. A 
 | Stun | 4 | 115% damage and 0.6s stun, 10 mana, 7s | +5% damage, +0.25s stun |
 | Leap Attack | 6 | Jump and hit for 135% damage, 14 mana, 9s | +15% damage, +2 mana |
 | Battle Orders | 8 | +6% maximum life for 8s, 18 mana, 16s | +6% life |
-| Whirlwind | 10 | Spin, each hit 32% damage, 22 mana, 11s | +4% damage per hit, +4 mana |
+| Whirlwind | 9 | Spin, each hit 32% damage, 22 mana, 11s | +4% damage per hit, +4 mana |
 
 Akara sells one weapon, one armor, one helm, and one belt. A new piece replaces the old one and refunds half the old price. Club is cheap at level 1. Short Sword (40 strength) at level 3. Falchion (50 strength) at level 5 — a level 5 Barbarian who put every stat point into strength (base 30 + 20) can equip it. Two-Handed Sword (65 strength, 30 dexterity) at level 8. Armor and helms follow the same levels, except studded leather and the helm still ask for 55 strength. You carry 3 health potions and 3 mana potions. A Sash (level 2) raises that to 4. A Belt (level 6, 45 strength) raises it to 5. Strength adds melee damage. Dexterity adds a little armor and attack speed. Vitality adds life and energy adds mana for every class.
 

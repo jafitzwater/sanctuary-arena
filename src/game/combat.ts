@@ -136,7 +136,8 @@ export function syncChampionLevels(sim: Sim): void {
     if (unit.id === sim.playerId) unit.level = sim.level;
     else unit.level = clock;
     // Skill rework order item 6 [JOSEPH]: bot life grows with its level (economy.botMaxHp); keep the HP
-    // fraction. Only on a level change, so other HP edits between levels stand.
+    // fraction. Only on a level change, so other HP edits between levels stand. Skill follow-ups item 3
+    // [JOSEPH]: botMaxHp starts from the class's player level-1 life x 0.85 (sim.spawnHero sets level 1).
     if (unit.bot && unit.level !== was) {
       const max = botMaxHp(unit.look ?? unit.defId, unit.level);
       if (max !== unit.maxHp) {

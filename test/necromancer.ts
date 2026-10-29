@@ -42,7 +42,7 @@ assert.deepEqual(STARTING_STATS.necromancer, { str: 15, dex: 15, vit: 15, energy
 // [DOC] "Necromancer | same as the sorceress" (2 energy, 2 vitality, 1 strength, 0 dexterity).
 assert.deepEqual(STAT_GROWTH.necromancer, { energy: 2, vit: 2, str: 1, dex: 0 });
 // [DOC] "Teeth: teeth, bone spear, bone armor, bone spirit." One path built (Teeth); Minions not built.
-// Skill rework order [JOSEPH]: top skill Blood Splash (L9 [TEMP]); Bone Spear stays L3.
+// Skill rework order [JOSEPH]: top skill Blood Splash (skill follow-ups order: L9 [JOSEPH]); Bone Spear stays L3.
 assert.deepEqual(necromancer.skills.map((s) => s.name), ['Teeth', 'Bone Spear', 'Bone Armor', 'Bone Spirit', 'Blood Splash']);
 assert.equal(necromancer.skills.length, 5);
 assert.ok(necromancer.skills[4].topTier);

@@ -96,7 +96,7 @@ export const fireShot: SkillHandler = (ctx) => {
 };
 
 /** [TEMP] Strafe (skill rework, top tier [JOSEPH]): one arrow at each of up to 5 foes in reach. */
-export const STRAFE = { targets: 5, mult: 0.8, perRank: 0.1 };
+export const STRAFE = { targets: 5, mult: 0.9, perRank: 0.1 }; // [TEMP] skill follow-ups balance band (cd 11)
 
 export const strafe: SkillHandler = (ctx) => {
   const foes = foesInReach(ctx, amazonReach(ctx.hero.attackRange)).slice(0, STRAFE.targets);

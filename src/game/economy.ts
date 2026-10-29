@@ -136,18 +136,28 @@ export function respawnSeconds(deathCount: number, level = 1): number {
  * Skill rework order item 6 [JOSEPH]: "BOT HEALTH scales with level like players of the same class but
  * 15% less: use the champion hpPerLevel/vit growth x 0.85." A player's per-level life growth is
  * hpPerLevel plus the auto-placed vitality (STAT_GROWTH vit x hpPerVit); bots get 0.85 of it per level.
- * [TEMP] The level-1 base stays the existing bot life (240, sim.spawnHero); only the growth is new.
- * Bots keep their existing class mapping (seat classId -> unit.look); unknown ids use the Barbarian.
+ * Skill follow-ups order item 3 [JOSEPH: "like League of Legends mobile", -15%]: bots are the same
+ * champions as players, so a bot's level-1 life is that class's player level-1 life (ClassDef stats.hp,
+ * what heroNumbers gives a fresh level-1 player with no gear) x 0.85, replacing the flat 240. Growth stays
+ * 0.85 x the player's per-level growth. Bots keep their class mapping (seat classId -> unit.look);
+ * unknown ids use the Barbarian.
  */
 export const BOT_HP_GROWTH_MUL = 0.85;
-export const BOT_BASE_HP = 240;
+export const BOT_HP_MUL = 0.85;
+/** Player level-1 life of a class (heroNumbers at level 1, base attributes, no gear). */
+export function playerBaseHp(classId: string): number {
+  return (CLASSES[classId] ?? CLASSES.barbarian).stats.hp;
+}
+export function botBaseHp(classId: string): number {
+  return BOT_HP_MUL * playerBaseHp(classId);
+}
 export function playerHpGrowthPerLevel(classId: string): number {
   const def = CLASSES[classId] ?? CLASSES.barbarian;
   const vit = STAT_GROWTH[def.id]?.vit ?? 0;
   return def.stats.hpPerLevel + vit * def.stats.hpPerVit;
 }
 export function botMaxHp(classId: string, level: number): number {
-  return Math.round(BOT_BASE_HP + BOT_HP_GROWTH_MUL * playerHpGrowthPerLevel(classId) * (Math.max(1, level) - 1));
+  return Math.round(botBaseHp(classId) + BOT_HP_GROWTH_MUL * playerHpGrowthPerLevel(classId) * (Math.max(1, level) - 1));
 }
 
 // ---------- PACE MODEL (items test) ----------

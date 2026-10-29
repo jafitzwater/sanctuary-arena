@@ -51,7 +51,7 @@ function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' |
  * Doc: "Skills unlock at level 1, level 3, level 5, and level 7." -> teeth 1, bone spear 3, bone armor 5,
  * bone spirit 7 [DOC]. The Teeth path has four skills and no fifth, so nothing unlocks after level 7.
  * Skill rework order (2026-10-29) [JOSEPH]: no paths; one flat list. Bone Spear stays L3 [JOSEPH]; the other
- * levels are unchanged. Top skill Blood Splash [JOSEPH]: area blast around the target, unlock L9 [TEMP].
+ * levels are unchanged. Top skill Blood Splash [JOSEPH]: area blast around the target, unlock L9 [JOSEPH] (skill follow-ups order).
  * Skill rework order [JOSEPH]: "ALL SKILLS MAX RANK 3" -> maxRank 3 (was doc "Skills max at level 5" -> 5) [DOC]. Mana cost is the % rule with the 2% step [DOC][P].
  * [TEMP] Cooldowns and effects are unset in the doc ([U]); the handlers in skills/necromancer.ts use
  * existing mechanics (projectile, armor buff) with fixed placeholder numbers.
@@ -111,14 +111,14 @@ const skillList: SkillDef[] = [
     id: 'blood-splash',
     name: 'Blood Splash', // [JOSEPH] top skill
     short: 'Blood',
-    unlockLevel: 9, // [TEMP]
+    unlockLevel: 9, // [JOSEPH] skill follow-ups order
     topTier: true,
-    mana: 20,
-    manaPerRank: 2,
-    cooldown: 12, // [TEMP]
+    mana: 22, // [TEMP] mirror field, as the other top tiers (cost is the % rule)
+    manaPerRank: 4,
+    cooldown: 12, // [TEMP] skill follow-ups balance band
     row: 5,
     d2Id: 0,
-    description: 'Blood bursts on one foe and hits every foe around it. Rank 1 deals 160% of a basic hit, and each rank adds 15%.', // [TEMP]
+    description: 'Blood bursts on one foe and hits every foe around it. Rank 1 deals 170% of a basic hit, and each rank adds 20%.', // [TEMP]
   }),
 ];
 

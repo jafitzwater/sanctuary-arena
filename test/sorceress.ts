@@ -67,8 +67,8 @@ assert.equal(amazon.stats.moveSpeed, 340);
 assert.deepEqual(amazon.skills.map((s) => s.id), ['magic-arrow', 'multi-shot', 'ice-shot', 'fire-shot', 'strafe']);
 assert.equal(paladin.stats.moveSpeed, 335);
 assert.deepEqual(paladin.skills.map((s) => s.id), ['zeal', 'smite', 'charge', 'holy-shield', 'battle-hammers']);
-// Economy order [JOSEPH]: top tier at 5 (was 10).
-assert.deepEqual(paladin.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 5], 'Paladin top tier at 5');
+// Skill follow-ups order [JOSEPH]: top tier at 9 (was 5).
+assert.deepEqual(paladin.skills.map((s) => s.unlockLevel), [1, 3, 5, 7, 9], 'Paladin top tier at 9');
 
 // --- Movement speed: [JOSEPH] Sorceress 325 through the existing single-MS formula.
 assert.equal(BASE_MS.sorceress, 325);

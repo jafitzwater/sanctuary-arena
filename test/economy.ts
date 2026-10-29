@@ -10,7 +10,7 @@ import { canRankUp, grantXp, kill, netGearPrice, syncChampionLevels, tryBuy, try
 import {
   LOW_GOLD_BONUS, MAX_LEVEL, MINION_GOLD, PASSIVE_GOLD, SELL_PCT, START_GOLD, assistGold, championBounty,
   championKillXp, expectedLevel, lowestGoldIds, minionRole, paceModel, passiveGoldRate, respawnSeconds, sellValue, shareGold,
-  totalXpToLevel, BOT_BASE_HP, botMaxHp, playerHpGrowthPerLevel,
+  totalXpToLevel, BOT_HP_MUL, botMaxHp, playerBaseHp, playerHpGrowthPerLevel,
 } from '../src/game/economy';
 import { player } from '../src/game/query';
 import { createMatch, spawnMinion, updateSim } from '../src/game/sim';
@@ -145,9 +145,9 @@ assert.ok(at(5) <= 6 * 60 && at(9) <= 10 * 60 && at(13) <= 16 * 60, 'top-tier ra
 assert.equal(expectedLevel(0), 1);
 assert.equal(expectedLevel(at(9)), 9);
 // Skill rework order [JOSEPH]: no paths; every class has one flat list with one top-tier skill; all
-// skills max rank 3 with no 9/13 rank gates (removed from the economy order). Unlocks: Barbarian/Paladin
-// top tier kept at 5; Sorceress/Amazon/Necromancer top tier at 9.
-const TOP_UNLOCK: Record<string, number> = { barbarian: 5, paladin: 5, sorceress: 9, amazon: 9, necromancer: 9 };
+// skills max rank 3 with no 9/13 rank gates (removed from the economy order). Skill follow-ups order
+// [JOSEPH]: all five top tiers unlock at 9 (Barbarian/Paladin were 5).
+const TOP_UNLOCK: Record<string, number> = { barbarian: 9, paladin: 9, sorceress: 9, amazon: 9, necromancer: 9 };
 for (const def of Object.values(CLASSES)) {
   const top = def.skills.filter((s) => s.topTier);
   assert.equal(top.length, 1, `${def.id} one top tier`);
@@ -172,16 +172,28 @@ for (const def of Object.values(CLASSES)) {
   assert.ok(!sim.belt.includes(ult.id), 'top tier is not auto-slotted over the other four skills');
 }
 
-// ---- BOT HP (skill rework item 6 [JOSEPH]) ----
+// ---- BOT HP (skill rework item 6, skill follow-ups item 3 [JOSEPH]) ----
 {
-  for (const id of Object.keys(CLASSES)) {
+  assert.equal(BOT_HP_MUL, 0.85);
+  for (const def of Object.values(CLASSES)) {
+    const id = def.id;
+    // The player's own numbers: a fresh level-1 player and that player at level 10 (auto vit included).
+    const fresh = createMatch(sanctuary, def, 1);
+    const p1 = player(fresh).maxHp;
+    assert.equal(playerBaseHp(id), p1, `${id} player L1 life`);
+    assert.equal(botMaxHp(id, 1), Math.round(0.85 * p1), `${id} bot L1 life = player L1 x 0.85`);
+    while (fresh.level < 10) grantXp(fresh, xpToNext(fresh.level));
+    const p10 = player(fresh).maxHp;
     const g = playerHpGrowthPerLevel(id);
-    assert.equal(botMaxHp(id, 1), BOT_BASE_HP);
-    assert.equal(botMaxHp(id, 10), Math.round(BOT_BASE_HP + 0.85 * g * 9), `${id} bot growth is 0.85x the player's`);
+    assert.equal(p10, p1 + 9 * g, `${id} player growth per level incl. vitality`);
+    assert.equal(botMaxHp(id, 10), Math.round(0.85 * p10), `${id} bot L10 = player L10 x 0.85`);
   }
   const sim = createMatch(sanctuary, barbarian, 1);
+  for (const unit of sim.units.filter((u) => u.bot && u.kind === 'champion')) {
+    assert.equal(unit.maxHp, botMaxHp(unit.look ?? 'barbarian', 1), `${unit.name} spawns with its class's bot life`);
+    assert.equal(unit.hp, unit.maxHp);
+  }
   const bot = sim.units.find((u) => u.bot && u.kind === 'champion')!;
-  assert.equal(bot.maxHp, 240);
   sim.time = 14 * 60;
   syncChampionLevels(sim);
   assert.ok(bot.level > 1);

@@ -5,7 +5,7 @@ import { CAVE_RESET } from './data/caves';
 import { grassPatches, hiddenUnits } from './data/grass';
 import { TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
-import { MINION_GOLD, MINION_XP, PASSIVE_GOLD, START_GOLD, lowestGoldIds, minionRole, passiveGoldRate } from './economy';
+import { MINION_GOLD, MINION_XP, PASSIVE_GOLD, START_GOLD, botMaxHp, lowestGoldIds, minionRole, passiveGoldRate } from './economy';
 import { dealTeams } from './teams';
 import { barbarian, STICK_IDLE_TILT } from './data/classes/barbarian';
 import {
@@ -1302,7 +1302,10 @@ function updateDens(sim: Sim, dt: number): void {
   }
 }
 
-export function spawnHero(sim: Sim, team: Team, x: number, y: number, name: string): Unit {
+export function spawnHero(sim: Sim, team: Team, x: number, y: number, name: string, classId = 'barbarian'): Unit {
+  // Skill follow-ups order item 3 [JOSEPH]: bot level-1 life = the class's player level-1 life x 0.85
+  // (economy.botMaxHp; was a flat 240).
+  const hp = botMaxHp(classId, 1);
   return blankUnit(sim, {
     defId: 'barbarian',
     kind: 'champion',
@@ -1311,8 +1314,8 @@ export function spawnHero(sim: Sim, team: Team, x: number, y: number, name: stri
     x,
     y,
     radius: 18,
-    hp: 240,
-    maxHp: 240,
+    hp,
+    maxHp: hp,
     mana: 80,
     maxMana: 80,
     ad: 15,
@@ -1332,7 +1335,7 @@ function spawnRoster(sim: Sim, seed: number): void {
   const allyHome = sim.map.playerBase;
   const enemyHome = sim.map.enemyBase;
   dealt.allies.forEach((seat, index) => {
-    const unit = spawnHero(sim, 'ally', allyHome.x + mapLen(200 + index * 36), allyHome.y + mapLen(-90 + seat.lane * 48), seat.name);
+    const unit = spawnHero(sim, 'ally', allyHome.x + mapLen(200 + index * 36), allyHome.y + mapLen(-90 + seat.lane * 48), seat.name, seat.classId);
     unit.path = seat.lane;
     unit.waypoint = 1;
     unit.color = seat.tint;
@@ -1342,7 +1345,7 @@ function spawnRoster(sim: Sim, seed: number): void {
     unit.moveSpeed = totalMS(unit.msBase);
   });
   dealt.enemies.forEach((seat, index) => {
-    const unit = spawnHero(sim, 'enemy', enemyHome.x - mapLen(200 + index * 36), enemyHome.y + mapLen(70 - seat.lane * 40), seat.name);
+    const unit = spawnHero(sim, 'enemy', enemyHome.x - mapLen(200 + index * 36), enemyHome.y + mapLen(70 - seat.lane * 40), seat.name, seat.classId);
     unit.path = seat.lane;
     unit.waypoint = Math.max(0, laneAt(sim, seat.lane).length - 2);
     unit.color = seat.tint;

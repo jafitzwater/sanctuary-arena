@@ -39,7 +39,8 @@ function skill(partial: Pick<SkillDef, 'id' | 'name' | 'short' | 'unlockLevel' |
  * points after level 7." -> zeal 1, smite 3, charge 5, holy shield 7 [DOC].
  * [TEMP] NEEDS JOSEPH Battle hammers: the doc only says "after level 7"; the Barbarian's top-tier
  * Whirlwind uses level 10, so Battle Hammers uses 10 too (NEEDS JOSEPH).
- * Superseded: economy order moved it to 5; skill rework order keeps 5, renames it Blessed Hammer, no rank gates.
+ * Superseded: economy order moved it to 5; skill rework order renamed it Blessed Hammer (no rank gates);
+ * skill follow-ups order [JOSEPH]: unlock 9, as every top tier.
  * Skill rework order [JOSEPH]: "ALL SKILLS MAX RANK 3" -> maxRank 3 (was doc "Skills max at level 5" -> 5) [DOC]. Mana cost is the shared % rule (combat.manaCost) [DOC].
  * [TEMP] Cooldowns and effects are unset in the doc ([U]); the handlers in skills/paladin.ts use existing
  * mechanics (melee hit, stun, leap, armor buff, area damage) with fixed placeholder numbers.
@@ -101,9 +102,9 @@ const skillList: SkillDef[] = [
     // Skill rework order [JOSEPH]: "keep Blessed Hammer" -> display name; id unchanged.
     name: 'Blessed Hammer',
     short: 'Hammer',
-    // Skill rework order [JOSEPH]: top tier, unlock level kept at 5 (economy order); max rank 3 with no
-    // rank gates (the 9/13 rank levels are removed).
-    unlockLevel: 5,
+    // Skill follow-ups order [JOSEPH]: top tier unlocks at 9 (was 5) so all five top tiers match; max rank 3
+    // with no rank gates; rank 1 auto-learns at unlock.
+    unlockLevel: 9,
     topTier: true,
     mana: 22,
     manaPerRank: 4,
@@ -125,7 +126,7 @@ export const paladin: ClassDef = {
   // [TEMP] Zeal/Smite/Charge are melee skills -> melee basic attacks.
   role: 'melee',
   blurb:
-    'Zeal, Smite, Charge, Holy Shield, and Blessed Hammer. Skills learn themselves at levels 1, 3, 5 and 7, and Blessed Hammer at 5. Press T to spend extra points.',
+    'Zeal, Smite, Charge, Holy Shield, and Blessed Hammer. Skills learn themselves at levels 1, 3, 5, 7 and 9. Press T to spend extra points.',
   token: row.token || 'PA',
   startingBelt: ['zeal', '', '', ''],
   stats: {
