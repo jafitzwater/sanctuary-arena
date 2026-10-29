@@ -15,6 +15,16 @@ const SYNTHETIC_CLICK_MS = 700;
 const STICK_BLOCK =
   'button, a, input, textarea, select, #topbar, #minimap, #minimap-toggle, #gold-badge, #belt, #potions, #shop, #tree, #help, #title, #end, #quick-buy';
 
+/**
+ * Batch 2 A [t216u]: while the player hero is dead, drop the ground destination and the
+ * enemy lock so the revived hero stands still at the fountain until the player gives a new order.
+ */
+export function clearCommandsWhileDead(state: { dest: Vec | null; targetId: number | null }, alive: boolean): void {
+  if (alive) return;
+  state.dest = null;
+  state.targetId = null;
+}
+
 interface InputHooks {
   getSim: () => Sim | null;
   getWorld: (sx: number, sy: number) => Vec;
@@ -275,6 +285,8 @@ export class InputController {
       if (this.attack && !this.castFocus) {
         this.targetId = auto ? auto.id : null;
       }
+      // Batch 2 A [t216u]: a ground click or enemy lock must not survive death, or the hero runs off on revive.
+      clearCommandsWhileDead(this, hero.alive);
       if (!this.pointerSeen && !this.pinnedAim) {
         this.aimX = hero.x + Math.cos(hero.facing) * 200;
         this.aimY = hero.y + Math.sin(hero.facing) * 200;

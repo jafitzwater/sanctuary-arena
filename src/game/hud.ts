@@ -6,6 +6,7 @@ import { itemIcon, plateIcons, skillIcon } from './art/icons';
 import { isBetterGear, isShopItem, itemById, itemGate, ITEMS, potionCap, type ItemDef } from './data/items';
 import { canRankUp, inShopRange, netGearPrice, manaCost, MAX_LEVEL, xpToNext } from './combat';
 import { player } from './query';
+import { combatStatsText, shopTextFor } from './itemText';
 import type { Sim } from './types';
 
 type MenuTab = 'skills' | 'stats';
@@ -329,7 +330,7 @@ export class Hud {
     this.sawShop = this.shopOpen;
     this.sawTree = this.treeOpen;
     const note = this.q('#shop-note');
-    const stats = `Str ${sim.attributes.str} · Dex ${sim.attributes.dex} · potions ${potionCap(sim.loadout.belt)}`;
+    const stats = `Str ${sim.attributes.str} · Dex ${sim.attributes.dex} · potions ${potionCap(sim.loadout.belt)} · ${combatStatsText(hero)}`;
     this.writeText(
       note,
       near
@@ -627,7 +628,8 @@ export class Hud {
       if (pick) icon.src = itemIcon(pick.id);
     }
     this.text('#shop-detail-name', pick?.name ?? 'Akara');
-    this.text('#shop-detail-desc', pick?.description ?? 'Stand in the Encampment and pick a category.');
+    const viewer = player(sim);
+    this.text('#shop-detail-desc', pick ? shopTextFor(sim, pick, { bo: viewer.boT > 0, berserk: viewer.berserkT > 0 }) : 'Stand in the Encampment and pick a category.');
     const quote = pick ? this.quote(sim, pick) : null;
     const bits = pick && quote
       ? [
