@@ -1,5 +1,6 @@
 import { amazon } from './amazon';
 import { barbarian } from './barbarian';
+import { paladin } from './paladin';
 import type { ClassDef } from './types';
 
 /**
@@ -13,6 +14,7 @@ import type { ClassDef } from './types';
 export const CLASSES: Record<string, ClassDef> = {
   barbarian,
   amazon,
+  paladin,
 };
 
 export function getClass(id: string): ClassDef {

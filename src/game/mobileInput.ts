@@ -37,11 +37,15 @@ export type SkillAim = 'single' | 'ground' | 'self';
 /** Amazon order: the four Magic Arrow path skills aim at a unit (handlers in skills/amazon.ts). */
 const AMAZON_SINGLE = ['magic-arrow', 'multi-shot', 'ice-shot', 'fire-shot'];
 
-/** Barbarian and Amazon skills. Leap is the ground cast; bash and the Amazon arrows lock a unit. */
+/** Paladin order: Zeal and Smite lock a unit in melee reach, Charge locks a unit to rush (skills/paladin.ts). */
+const PALADIN_MELEE = ['zeal', 'smite'];
+
+/** Barbarian, Amazon and Paladin skills. Leap is the ground cast; bash and the Amazon arrows lock a unit. */
 export function skillAimKind(id: string): SkillAim {
   if (id === 'leap-attack') return 'ground';
   if (id === 'bash') return 'single';
   if (AMAZON_SINGLE.includes(id)) return 'single';
+  if (PALADIN_MELEE.includes(id) || id === 'charge') return 'single';
   return 'self';
 }
 
@@ -49,6 +53,8 @@ export function skillAimKind(id: string): SkillAim {
 export function skillReach(id: string, attackRange: number): number {
   if (id === 'bash') return attackRange + 18;
   if (AMAZON_SINGLE.includes(id)) return attackRange + 40; // skills/amazon.ts AMAZON_SKILL_REACH_BONUS [TEMP]
+  if (PALADIN_MELEE.includes(id)) return attackRange + 18; // skills/paladin.ts PALADIN_MELEE_REACH_BONUS [TEMP]
+  if (id === 'charge') return 260; // skills/paladin.ts CHARGE_REACH [TEMP]
   return attackRange;
 }
 
