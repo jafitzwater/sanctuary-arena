@@ -7,6 +7,7 @@ import { player } from './query';
 import { Hud } from './hud';
 import { InputController } from './input';
 import { Renderer } from './render';
+import { postMatchAction, startPostMatch, tickPostMatch, type PostAction, type PostMatch } from './postMatch';
 import { createMatch, updateSim } from './sim';
 import type { Sim } from './types';
 
@@ -21,6 +22,8 @@ export class Game {
   private sim: Sim;
   private classId = 'barbarian';
   private mode: Mode = 'title';
+  /** Post-match flow step (Joseph t309u); null outside the 'end' mode. */
+  private post: PostMatch | null = null;
   private last = 0;
   private time = 0;
   private renderer: Renderer;
@@ -67,7 +70,9 @@ export class Game {
       if (this.mode === 'title') this.sim = createMatch(sanctuary, getClass(id));
     };
     this.hud.onPlay = () => this.begin();
-    this.hud.onAgain = () => this.begin();
+    this.hud.onAgain = () => this.postAction('again');
+    this.hud.onMenu = () => this.postAction('menu');
+    this.hud.onContinue = () => this.postAction('continue');
     this.hud.onCast = (id) => {
       this.audio.unlock();
       this.input.cast = id;
@@ -135,10 +140,32 @@ export class Game {
     requestAnimationFrame(this.frame);
   }
 
+  /** Post-match buttons: Continue steps the flow; Play another match / Back to main screen leave it. */
+  private postAction(action: PostAction): void {
+    if (this.mode !== 'end' || !this.post) return;
+    const next = postMatchAction(this.post, action);
+    this.post = next.post;
+    if (next.mode === 'play') this.begin();
+    else if (next.mode === 'title') {
+      // Back to main screen: a fresh title sim for the class picker, no match state left over.
+      this.audio.unlock();
+      this.sim = createMatch(sanctuary, getClass(this.classId));
+      this.mode = 'title';
+      this.post = null;
+      this.hud.shopOpen = false;
+      this.hud.helpOpen = false;
+      this.hud.treeOpen = false;
+      this.input.targetId = null;
+      this.input.dest = null;
+      this.input.endFrame();
+    }
+  }
+
   private begin(): void {
     this.audio.unlock();
     this.sim = createMatch(sanctuary, getClass(this.classId));
     this.mode = 'play';
+    this.post = null;
     this.hud.shopOpen = false;
     this.hud.helpOpen = false;
     this.hud.treeOpen = false;
@@ -164,11 +191,13 @@ export class Game {
       updateSim(this.sim, input, dt);
       if (this.sim.phase !== 'playing') {
         this.mode = 'end';
+        this.post = startPostMatch(this.sim.phase);
         this.hud.shopOpen = false;
         this.hud.helpOpen = false;
         this.hud.treeOpen = false;
       }
     }
+    if (this.mode === 'end' && this.post) this.post = tickPostMatch(this.post, dt);
     this.input.endFrame();
     this.audio.consume(this.sim);
     this.renderer.updateCamera(this.sim, this.mode === 'end' ? 'play' : this.mode, dt, this.time);
@@ -179,7 +208,7 @@ export class Game {
       attack: this.input.attack,
       time: this.time,
     });
-    this.hud.sync(this.sim, this.mode, playing ? this.input.targetId : null);
+    this.hud.sync(this.sim, this.mode, playing ? this.input.targetId : null, this.post);
     requestAnimationFrame(this.frame);
   };
 

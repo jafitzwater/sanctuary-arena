@@ -8,6 +8,7 @@ import { isBetterGear, isShopItem, itemById, itemGate, ITEMS, potionCap, type It
 import { canRankUp, inShopRange, netGearPrice, manaCost, MAX_LEVEL, xpToNext } from './combat';
 import { player } from './query';
 import { combatStatsText, shopTextFor } from './itemText';
+import { summarizeMatch, type PostMatch, type ScoreRow } from './postMatch';
 import type { Sim } from './types';
 
 type MenuTab = 'skills' | 'stats';
@@ -38,6 +39,8 @@ export class Hud {
   onPlay: (() => void) | null = null;
   onPickClass: ((id: string) => void) | null = null;
   onAgain: (() => void) | null = null;
+  onMenu: (() => void) | null = null;
+  onContinue: (() => void) | null = null;
 
   shopOpen = false;
   helpOpen = false;
@@ -144,6 +147,12 @@ export class Hud {
     this.arm('#play-btn', () => this.onPlay?.());
     this.buildClasses();
     this.arm('#again-btn', () => this.onAgain?.());
+    this.arm('#menu-btn', () => this.onMenu?.());
+    this.arm('#end-next', () => this.onContinue?.());
+    // Post-match banner: a tap anywhere skips to the game breakdown.
+    this.arm('#end', () => {
+      if (this.q('#end').dataset.step === 'banner') this.onContinue?.();
+    });
     this.arm('#shop-btn', () => this.onToggleShop?.());
     this.arm('#recall-btn', () => this.onRecall?.());
     this.arm('#settings-btn', () => this.onToggleHelp?.());
@@ -264,7 +273,7 @@ export class Hud {
     button.textContent = muted ? (touch ? 'Muted' : 'Sound off') : touch ? 'Sound' : 'Sound on';
   }
 
-  sync(sim: Sim, mode: Mode, focusId: number | null = null): void {
+  sync(sim: Sim, mode: Mode, focusId: number | null = null, post: PostMatch | null = null): void {
     if (!this.built) {
       this.buildSkills(sim);
       this.buildShop();
@@ -284,7 +293,7 @@ export class Hud {
     this.reveal(title, mode === 'title');
     this.reveal(hud, mode === 'play');
     this.reveal(end, mode === 'end');
-    if (mode === 'end') this.fillEnd(sim);
+    if (mode === 'end') this.fillEnd(sim, post);
     if (mode !== 'play') return;
 
     const hero = player(sim);
@@ -425,8 +434,39 @@ export class Hud {
     );
   }
 
-  private fillEnd(sim: Sim): void {
+  /**
+   * Post-match flow (Joseph t309u): banner, game breakdown, character breakdown. The breakdowns are
+   * built once per finished match (the sim is frozen once the phase leaves 'playing'); portraits
+   * repaint until their class sheet has loaded.
+   */
+  private endKey = '';
+  private readonly endFaces: { canvas: HTMLCanvasElement; classId: string; r: number }[] = [];
+  private fillEnd(sim: Sim, post: PostMatch | null): void {
+    const end = this.q('#end');
+    const step = post?.step ?? 'banner';
     const won = sim.phase === 'victory';
+    if (end.dataset.step !== step) end.dataset.step = step;
+    this.setClass(end, 'victory', won);
+    this.setClass(end, 'defeat', !won);
+    this.reveal(this.q('#end-banner'), step === 'banner');
+    this.reveal(this.q('#end-game'), step === 'game');
+    this.reveal(this.q('#end-char'), step === 'character');
+    const key = `${sim.seed}:${sim.time}:${sim.phase}`;
+    if (key !== this.endKey) {
+      this.endKey = key;
+      this.buildEnd(sim);
+    }
+    for (let i = this.endFaces.length - 1; i >= 0; i--) {
+      const face = this.endFaces[i];
+      const ctx = face.canvas.getContext('2d');
+      if (ctx && drawClassPortrait(ctx, face.classId, face.r, face.r, face.r)) this.endFaces.splice(i, 1);
+    }
+  }
+
+  private buildEnd(sim: Sim): void {
+    const won = sim.phase === 'victory';
+    const sum = summarizeMatch(sim);
+    this.endFaces.length = 0;
     this.text('#end-title', won ? 'Victory' : 'Defeat');
     this.text(
       '#end-copy',
@@ -434,10 +474,110 @@ export class Hud {
         ? (sim.map.victory ?? "Andariel's altar is silent. The road back to the Rogue Encampment is clear.")
         : (sim.map.defeat ?? 'The Rogue Encampment has fallen. The Blood Moor belongs to the Fallen.'),
     );
-    this.text(
-      '#end-stats',
-      `Level ${sim.level}  ·  ${sim.kills} / ${sim.deaths} / ${sim.assists}  ·  ${sim.cs} last hits  ·  ${formatTime(sim.time)}`,
-    );
+    this.text('#end-result', won ? 'Victory' : 'Defeat');
+    this.text('#end-ally-k', String(sum.teams[0].kills));
+    this.text('#end-enemy-k', String(sum.teams[1].kills));
+    this.text('#end-meta', `${sum.mapName}  ·  ${formatTime(sum.time)}  ·  structures destroyed ${sum.teams[0].structures} – ${sum.teams[1].structures}`);
+    for (const team of sum.teams) {
+      const host = this.root.querySelector<HTMLElement>(`#end-team-${team.team}`);
+      if (!host) continue;
+      host.replaceChildren();
+      const head = document.createElement('div');
+      head.className = 'end-team-head';
+      for (const label of [team.team === 'ally' ? 'Your team' : 'Enemy team', 'K / D / A', 'Gold', 'Items']) {
+        const cell = document.createElement('span');
+        cell.textContent = label;
+        head.appendChild(cell);
+      }
+      host.appendChild(head);
+      for (const row of team.rows) host.appendChild(this.endRow(row));
+    }
+    const you = sum.you;
+    this.text('#end-hero-name', you.name);
+    this.text('#end-hero-class', `${you.className}  ·  Level ${you.level}`);
+    this.text('#end-kda', `${you.kills ?? 0} / ${you.deaths} / ${you.assists ?? 0}`);
+    const face = this.root.querySelector<HTMLCanvasElement>('#end-face');
+    if (face) {
+      face.getContext('2d')?.clearRect(0, 0, face.width, face.height);
+      this.endFaces.push({ canvas: face, classId: you.classId, r: face.width / 2 });
+    }
+    const bars = this.root.querySelector<HTMLElement>('#end-bars');
+    if (bars) {
+      bars.replaceChildren();
+      for (const bar of sum.bars) {
+        const el = document.createElement('div');
+        el.className = 'end-bar';
+        const label = document.createElement('b');
+        label.textContent = bar.label;
+        const track = document.createElement('div');
+        track.className = 'end-track';
+        const fill = document.createElement('i');
+        fill.style.width = `${(bar.fill * 100).toFixed(1)}%`;
+        track.appendChild(fill);
+        const value = document.createElement('em');
+        value.textContent = bar.value;
+        const note = document.createElement('small');
+        note.textContent = bar.note;
+        el.append(label, track, value, note);
+        bars.appendChild(el);
+      }
+    }
+    const gear = this.root.querySelector<HTMLElement>('#end-gear');
+    if (gear) {
+      gear.replaceChildren();
+      const label = document.createElement('p');
+      label.className = 'fine';
+      label.textContent = 'Gear';
+      gear.appendChild(label);
+      for (const id of you.items) gear.appendChild(this.endItem(id));
+    }
+  }
+
+  private endRow(row: ScoreRow): HTMLElement {
+    const el = document.createElement('div');
+    el.className = `end-row${row.you ? ' you' : ''}`;
+    el.dataset.id = String(row.id);
+    const face = document.createElement('canvas');
+    face.width = 48;
+    face.height = 48;
+    this.endFaces.push({ canvas: face, classId: row.classId, r: 24 });
+    const who = document.createElement('div');
+    who.className = 'end-who';
+    const name = document.createElement('span');
+    name.className = 'end-name';
+    name.textContent = row.you ? `${row.name} (you)` : row.name;
+    const sub = document.createElement('span');
+    sub.className = 'end-sub';
+    sub.textContent = `${row.className} · Lv ${row.level}`;
+    for (const label of row.highlights) {
+      const hl = document.createElement('span');
+      hl.className = 'hl';
+      hl.textContent = ` · ${label}`;
+      sub.appendChild(hl);
+    }
+    who.append(name, sub);
+    const kda = document.createElement('span');
+    kda.className = 'end-num';
+    kda.textContent = `${row.kills ?? '–'} / ${row.deaths} / ${row.assists ?? '–'}`;
+    const gold = document.createElement('span');
+    gold.className = 'end-num gold';
+    gold.textContent = String(row.netWorth);
+    const items = document.createElement('div');
+    items.className = 'end-items';
+    for (const id of row.items) items.appendChild(this.endItem(id));
+    el.append(face, who, kda, gold, items);
+    return el;
+  }
+
+  private endItem(id: string | null): HTMLElement {
+    const slot = document.createElement('span');
+    if (!id) return slot;
+    slot.title = labelOf(id);
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = itemIcon(id);
+    slot.appendChild(img);
+    return slot;
   }
 
   private buildSkills(sim: Sim): void {
