@@ -8,6 +8,7 @@ import { inJungleInterior } from '../../src/game/landscape';
 import { distToPolyline } from '../../src/game/math';
 import { createMatch, spawnMinion, updateSim } from '../../src/game/sim';
 import { walkable } from '../../src/game/terrain';
+import { inBaseWall } from '../../src/game/baseLayout';
 import { emptyInput } from '../../src/game/types';
 
 const TOWER_MARGIN = 60;
@@ -43,6 +44,8 @@ let samples = 0;
 for (let x = 0; x <= sanctuary.width; x += 30) {
   for (let y = 0; y <= sanctuary.height; y += 30) {
     if (!inJungleInterior(sanctuary, x, y)) continue;
+    // Base layout [JOSEPH t309u]: the base walls between the lanes are the one deliberate block in the jungle.
+    if (inBaseWall(sanctuary, x, y)) continue;
     samples += 1;
     assert.ok(walkable(sanctuary, x, y), `jungle interior blocks at ${x},${y}`);
   }

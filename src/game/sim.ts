@@ -26,6 +26,8 @@ import { baseMSFor, totalMS } from './data/moveSpeed';
 import { mapLen } from './data/mapScale';
 import { clampToPlayable } from './lane';
 import { FOOTPRINT } from './terrain';
+import { baseLayoutOn, barrierUp, holdInBarrier, SPAWN_BARRIER_RADIUS, spawnSeat } from './baseLayout';
+import { bodyDetour, wallDetour } from './basePath';
 import {
   banner,
   damageUnit,
@@ -323,13 +325,15 @@ function spawnPlayer(sim: Sim): Unit {
   const stats = sim.classDef.stats;
   const built = heroNumbers(sim, { bo: false, berserk: false });
   const base = sim.map.playerBase;
+  // Base layout [JOSEPH t309u]: the player takes seat 0 behind the Worldstone, inside the spawn barrier.
+  const seat = baseLayoutOn(sim.map) ? spawnSeat(sim.map, 'ally', 0) : { x: base.x + mapLen(150), y: base.y };
   return blankUnit(sim, {
     defId: sim.classDef.id,
     kind: 'champion',
     team: 'ally',
     name: sim.classDef.name,
-    x: base.x + mapLen(150),
-    y: base.y,
+    x: seat.x,
+    y: seat.y,
     radius: stats.radius,
     hp: built.hp,
     maxHp: built.hp,
@@ -640,14 +644,28 @@ function moveToward(unit: Unit, x: number, y: number, dt: number, scale = 1): vo
     interruptChampion(activeSim, unit, true);
   }
   if (unit.kind === 'champion') championsMoved.add(unit.id);
-  const dx = x - unit.x;
-  const dy = y - unit.y;
+  // Base layout [JOSEPH t309u]: walk through the lane gaps and round the Worldstone instead of into them.
+  const aim = activeSim ? steerAround(activeSim, unit, x, y) : { x, y };
+  const dx = aim.x - unit.x;
+  const dy = aim.y - unit.y;
   const d = Math.hypot(dx, dy);
   if (d < 1) return;
   const step = Math.min(d, moveSpeed(unit) * scale * dt);
   unit.x += (dx / d) * step;
   unit.y += (dy / d) * step;
   unit.facing = Math.atan2(dy, dx);
+}
+
+/** Next aim point toward (x, y) past the base walls and the Worldstone bodies (the goal when the way is clear). */
+function steerAround(sim: Sim, unit: Unit, x: number, y: number): { x: number; y: number } {
+  if (!baseLayoutOn(sim.map)) return { x, y };
+  const aim = wallDetour(sim.map, unit, { x, y });
+  for (const body of sim.units) {
+    if (body.kind !== 'base' || !body.alive) continue;
+    const side = bodyDetour(unit, aim, body, footRadius(body) + footRadius(unit) + mapLen(6));
+    if (side) return side;
+  }
+  return aim;
 }
 
 function updatePlayer(sim: Sim, hero: Unit, input: FrameInput, dt: number): void {
@@ -724,6 +742,16 @@ export function inOpeningWait(sim: Sim): boolean {
 /** Keep every hero inside its own base (the shop radius, so potions stay buyable) during the opening wait. */
 function holdInBase(sim: Sim): void {
   if (!inOpeningWait(sim)) return;
+  if (barrierUp(sim.map, sim.time)) {
+    // Base layout [JOSEPH t309u]: the glowing spawn barrier behind the Worldstone holds every hero and bot.
+    for (const unit of sim.units) {
+      if (!unit.alive || unit.kind !== 'champion' || (unit.team !== 'ally' && unit.team !== 'enemy')) continue;
+      const spot = holdInBarrier(sim.map, unit.team, unit.x, unit.y, SPAWN_BARRIER_RADIUS - footRadius(unit));
+      unit.x = spot.x;
+      unit.y = spot.y;
+    }
+    return;
+  }
   const room = sim.map.shopRadius;
   for (const unit of sim.units) {
     if (!unit.alive || unit.kind !== 'champion') continue;
@@ -1352,7 +1380,11 @@ function spawnRoster(sim: Sim, seed: number): void {
   const allyHome = sim.map.playerBase;
   const enemyHome = sim.map.enemyBase;
   dealt.allies.forEach((seat, index) => {
-    const unit = spawnHero(sim, 'ally', allyHome.x + mapLen(200 + index * 36), allyHome.y + mapLen(-90 + seat.lane * 48), seat.name, seat.classId);
+    // Base layout [JOSEPH t309u]: bots spawn on the seats around the player, inside the spawn barrier.
+    const spot = baseLayoutOn(sim.map)
+      ? spawnSeat(sim.map, 'ally', index + 1)
+      : { x: allyHome.x + mapLen(200 + index * 36), y: allyHome.y + mapLen(-90 + seat.lane * 48) };
+    const unit = spawnHero(sim, 'ally', spot.x, spot.y, seat.name, seat.classId);
     unit.path = seat.lane;
     unit.waypoint = 1;
     unit.color = seat.tint;
@@ -1362,7 +1394,10 @@ function spawnRoster(sim: Sim, seed: number): void {
     unit.moveSpeed = totalMS(unit.msBase);
   });
   dealt.enemies.forEach((seat, index) => {
-    const unit = spawnHero(sim, 'enemy', enemyHome.x - mapLen(200 + index * 36), enemyHome.y + mapLen(70 - seat.lane * 40), seat.name, seat.classId);
+    const spot = baseLayoutOn(sim.map)
+      ? spawnSeat(sim.map, 'enemy', index)
+      : { x: enemyHome.x - mapLen(200 + index * 36), y: enemyHome.y + mapLen(70 - seat.lane * 40) };
+    const unit = spawnHero(sim, 'enemy', spot.x, spot.y, seat.name, seat.classId);
     unit.path = seat.lane;
     unit.waypoint = Math.max(0, laneAt(sim, seat.lane).length - 2);
     unit.color = seat.tint;

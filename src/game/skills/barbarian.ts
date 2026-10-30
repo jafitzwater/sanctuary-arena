@@ -1,5 +1,6 @@
 import { banner, damageUnit, noteDebuff, recomputeHero, ring, sfx } from '../combat';
 import { clampToPlayable } from '../lane';
+import { stopAtBaseWall } from '../basePath';
 import { clamp } from '../math';
 import type { Unit } from '../types';
 import type { CastContext, SkillHandler } from './types';
@@ -82,7 +83,9 @@ export const leapAttack: SkillHandler = (ctx) => {
     d = maxR;
   }
   const scale = d > maxR ? maxR / d : 1;
-  const landed = clampToPlayable(sim.map, hero.x + dx * scale, hero.y + dy * scale);
+  // Base layout [JOSEPH t309u]: the leap lands in front of a base wall, never over it.
+  const reach = stopAtBaseWall(sim.map, hero, { x: hero.x + dx * scale, y: hero.y + dy * scale });
+  const landed = clampToPlayable(sim.map, reach.x, reach.y);
   const x1 = clamp(landed.x, 36, sim.map.width - 36);
   const y1 = clamp(landed.y, 36, sim.map.height - 36);
   hero.facing = Math.atan2(y1 - hero.y, x1 - hero.x);
