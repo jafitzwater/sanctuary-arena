@@ -217,7 +217,8 @@ assert.ok(Math.abs(totalMS(325) - 325) < 0.01, `325 -> ${totalMS(325)} px/s`);
   assert.ok((CLASS_SHEET_IDS as readonly string[]).includes('sorceress'));
   assert.ok(hasClassSheet('sorceress'));
   const png = readPng('public/sprites/classes/sorceress-full-sheet-64.png');
-  assert.deepEqual([png.w, png.h], [CLASS_SHEET.cols * CLASS_SHEET.cell, CLASS_SHEET.rows * CLASS_SHEET.cell]);
+  // 3D v1 (t302u): 62-col sheet like the Barbarian v3; cols 0-17 keep the 18-col layout the game reads.
+  assert.deepEqual([png.w, png.h], [62 * CLASS_SHEET.cell, CLASS_SHEET.rows * CLASS_SHEET.cell]);
   const rows = new Set<number>();
   for (let c = 0; c < 8; c++) {
     const row = classSheetRow(c);

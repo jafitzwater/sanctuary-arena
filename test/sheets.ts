@@ -38,9 +38,11 @@ const frameProbe = [-3, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 15];
 for (const id of CLASS_SHEET_IDS) {
   const [w, h] = pngSize(`public/sprites/classes/${id}-full-sheet-64.png`);
   // Barbarian sheet: run 18-25, walk12 26-37, run12 38-49, attack12 50-61 (wired for the barbarian only): 62 cols = 3968 wide. Others stay 18 cols = 1152.
-  const expectedW = id === 'barbarian' ? 3968 : CLASS_SHEET.cols * CLASS_SHEET.cell;
+  // Sorceress 3D v1 (t302u): same 62-col layout as the Barbarian v3 sheet; the game still reads only cols 0-17 for her.
+  const wide = id === 'barbarian' || id === 'sorceress';
+  const expectedW = wide ? 3968 : CLASS_SHEET.cols * CLASS_SHEET.cell;
   assert.deepEqual([w, h], [expectedW, CLASS_SHEET.rows * CLASS_SHEET.cell]);
-  assert.deepEqual([w, h], [id === 'barbarian' ? 3968 : 1152, 512]);
+  assert.deepEqual([w, h], [wide ? 3968 : 1152, 512]);
   if (id === 'barbarian') assert.equal(w / CLASS_SHEET.cell, BARBARIAN_MOTION_COLS);
   for (let c = 0; c < 8; c++) for (const a of anims) for (const f of frameProbe) {
     const row = classSheetRow(c);
