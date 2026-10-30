@@ -27,19 +27,19 @@ const path = (id: string) => {
   return p!.lane;
 };
 
-// t315u [JOSEPH]: the 12,000 x 12,000 design map is played at 9,000 x 9,000 (MAP_SCALE 0.75).
+// t326u [JOSEPH]: the 12,000 x 12,000 design map is played at 6,800 x 6,800 (MAP_SCALE 6800/12000; was 9,000 at 0.75, t315u).
 /** A design-map (12,000) coordinate on the played map. */
 const S = (v: number) => v * MAP_SCALE;
 
-test('map is 9,000 x 9,000 (12,000 design x 0.75) [JOSEPH t315u]', () => {
+test('map is 6,800 x 6,800 (12,000 design x 6800/12000) [JOSEPH t326u]', () => {
   assert.equal(MAP_W, 12000);
   assert.equal(MAP_H, 12000);
-  assert.equal(MAP_SCALE, 0.75);
-  assert.equal(W, 9000);
-  assert.equal(H, 9000);
+  assert.equal(MAP_SCALE, 6800 / 12000);
+  assert.equal(W, 6800);
+  assert.equal(H, 6800);
 });
 
-test('Nexus to Nexus along the diagonal (mid) lane is 0.75 x 15k-16k', () => {
+test('Nexus to Nexus along the diagonal (mid) lane is MAP_SCALE x 15k-16k', () => {
   // Worldstone -> lane mouth -> mid lane -> lane mouth -> Worldstone.
   const l = len([map.playerBase, ...path('center'), map.enemyBase]);
   assert.ok(l >= S(15000) && l <= S(16000), `mid lane ${l.toFixed(0)}`);

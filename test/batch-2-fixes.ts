@@ -10,6 +10,7 @@ import { player } from '../src/game/query';
 import { BOT_CAUGHT_SLACK, BOT_CAUGHT_SPEED, BOT_COMMIT_RADIUS, BOT_FLEE_HP, botShouldCommit, createMatch, updateSim } from '../src/game/sim';
 import { emptyInput, type FrameInput, type Sim, type Unit } from '../src/game/types';
 import type { Vec } from '../src/game/math';
+import { mapLen } from '../src/game/data/mapScale';
 
 const DT = 1 / 60;
 
@@ -57,15 +58,18 @@ const DT = 1 / 60;
   assert.equal(BOT_FLEE_HP, 0.32);
   assert.deepEqual([BOT_COMMIT_RADIUS, BOT_CAUGHT_SLACK, BOT_CAUGHT_SPEED], [700, 30, 0.97]);
 
+  const SPOT = mapLen(3500 / 0.75); // 3500 on the 9,000 map
+  const FAR = { x: mapLen(11000 / 0.75), y: mapLen(1000 / 0.75) };
   const arena = (): { sim: Sim; hero: Unit; bot: Unit } => {
     const sim = createMatch(sanctuary, getClass('barbarian'), 3);
     sim.time = 20;
     const hero = player(sim);
     const bot = sim.units.find((u) => u.kind === 'champion' && u.team === 'enemy' && u.bot)!;
-    for (const u of sim.units) if (u.kind === 'champion' && u !== hero && u !== bot) { u.x = 11000; u.y = 1000; }
-    sim.units = sim.units.filter((u) => u.kind !== 'minion' || Math.hypot(u.x - 3500, u.y - 3500) > 1500);
-    hero.x = 3500; hero.y = 3500;
-    bot.x = 3560; bot.y = 3500;
+    // t326u: the arena spot follows MAP_SCALE (it was 3500,3500 on the 9,000 map; at 6,800 that is under the mid towers).
+    for (const u of sim.units) if (u.kind === 'champion' && u !== hero && u !== bot) { u.x = FAR.x; u.y = FAR.y; }
+    sim.units = sim.units.filter((u) => u.kind !== 'minion' || Math.hypot(u.x - SPOT, u.y - SPOT) > 1500);
+    hero.x = SPOT; hero.y = SPOT;
+    bot.x = SPOT + 60; bot.y = SPOT;
     bot.hp = bot.maxHp * 0.25;
     hero.hp = hero.maxHp;
     hero.moveSpeed = bot.moveSpeed; // an equally fast chaser
@@ -92,7 +96,7 @@ const DT = 1 / 60;
   {
     const { sim, hero, bot } = arena();
     const other = sim.units.find((u) => u.kind === 'champion' && u.team === 'ally' && u !== hero)!;
-    other.x = 3700; other.y = 3500;
+    other.x = SPOT + 200; other.y = SPOT;
     assert.equal(botShouldCommit(sim, bot), null);
     for (let i = 0; i < 10; i++) updateSim(sim, emptyInput(), DT);
     assert.equal(bot.targetId, null, 'the outnumbered low bot drops its target and retreats');

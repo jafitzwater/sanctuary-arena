@@ -15,10 +15,10 @@
 import type { ActDef, BaseSpawn } from './acts/types';
 
 /**
- * [JOSEPH t315u] One global map factor: the 12,000 x 12,000 design map is played at 9,000 x 9,000.
- * 1 = the design map.
+ * [JOSEPH t326u] One global map factor: the 12,000 x 12,000 design map is played at 6,800 x 6,800
+ * (was 9,000 x 9,000 at 0.75, t315u). 1 = the design map.
  */
-export const MAP_SCALE = 0.75;
+export const MAP_SCALE = 6800 / 12000;
 
 /** A fixed map-layout length (world units, designed at scale 1) at the current MAP_SCALE. */
 export function mapLen(designUnits: number, scale = MAP_SCALE): number {
@@ -26,9 +26,14 @@ export function mapLen(designUnits: number, scale = MAP_SCALE): number {
 }
 
 type Pt = { x: number; y: number };
-/** Not rounded: x * 0.75 can land on .5, and rounding would break the 180-degree mirror (W - x). */
+/**
+ * Snapped to a 1/64 grid, not to whole units: x * MAP_SCALE is fractional (0.75 gives .5, which whole-unit rounding
+ * turns into a broken 180-degree mirror), and at 6800/12000 the raw float products miss the exact mirror W - x by
+ * ~1e-12 (t326u). The map width is a whole number, so on this grid W - snap(x) === snap(W - x).
+ */
+const snap = (v: number) => Math.round(v * 64) / 64;
 function sp<T extends Pt>(p: T, s: number): T {
-  return { ...p, x: p.x * s, y: p.y * s };
+  return { ...p, x: snap(p.x * s), y: snap(p.y * s) };
 }
 function sl(lane: Pt[], s: number): Pt[] {
   return lane.map((p) => sp(p, s));

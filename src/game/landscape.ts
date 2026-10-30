@@ -108,9 +108,14 @@ export function inJungleInterior(map: ActDef, x: number, y: number): boolean {
   const north = map.paths?.find((path) => path.id === 'north')?.lane;
   const south = map.paths?.find((path) => path.id === 'south')?.lane;
   if (!north || !south) return false;
-  const keep = map.plaza + BASE_KEEP;
-  if (Math.hypot(x - map.playerBase.x, y - map.playerBase.y) <= keep) return false;
-  if (Math.hypot(x - map.enemyBase.x, y - map.enemyBase.y) <= keep) return false;
+  // t326u: with the PR #96 base walls on, the walls frame the base and this keep ring is skipped. The ring
+  // (unscaled plaza 340 + scaled BASE_KEEP) left small blocked slivers between the lane corridors just outside the
+  // plaza; on the 6,800 map a retreating bot wedged on one for the rest of the match.
+  if (!baseLayoutOn(map)) {
+    const keep = map.plaza + BASE_KEEP;
+    if (Math.hypot(x - map.playerBase.x, y - map.playerBase.y) <= keep) return false;
+    if (Math.hypot(x - map.enemyBase.x, y - map.enemyBase.y) <= keep) return false;
+  }
   const ring = [...north, ...[...south].reverse()];
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {

@@ -39,7 +39,7 @@ export const ZONE_IDS: ZoneId[] = [
   'jungle-lava',
 ];
 
-/** [TEMP] Theme radii, world units (paint only). Map layout, so they follow MAP_SCALE (t315u, 9,000 map). */
+/** [TEMP] Theme radii, world units (paint only). Map layout, so they follow MAP_SCALE (t315u, t326u). */
 export const ZONE_SIZES = {
   /** Base theme around each Worldstone. */
   base: mapLen(1400),
