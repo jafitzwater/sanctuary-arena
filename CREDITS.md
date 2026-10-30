@@ -47,6 +47,17 @@ Flare's run cycle is also the walk cycle. Playback still uses this game's clocks
 
 These units stay procedural (`src/game/art/figures.ts`, `src/game/art/d2look.ts`): Blood Raven, rogue, rogue archer, willowisp, mummy, demon, towers, bases, and seals.
 
+## Barbarian class sheet (3D v3, order t297u)
+
+`public/sprites/classes/barbarian-full-sheet-64.png` is rendered from 3D models and animations. All third-party sources are [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/); attribution is not required but given here.
+
+| Source | Used for |
+| --- | --- |
+| [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html) [Standard] by Quaternius ([download](https://quaternius.itch.io/universal-base-characters)), CC0 1.0 | `Superhero_Male_FullBody` body mesh and rig |
+| [Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html) [Standard] by Quaternius ([download](https://quaternius.itch.io/universal-animation-library)), CC0 1.0 | `UAL1_Standard.glb`: `Idle_Loop`, `Walk_Loop`, `Jog_Fwd_Loop` (blended into the run), `Death01` |
+
+Original work for this project: topknot and ponytail, face stripe and arm band, leather pauldrons, chest strap, boots, kilt, the axe, materials and palette, and the overhead axe chop (self-keyframed). Rendered headless in Blender 4.5 LTS (orthographic, 8 directions rendered separately, no mirroring), then mapped to the barbarian's 48-colour palette. No Mixamo, CC-BY or ripped art. The Diablo II Barbarian was a look-only reference; none of its pixels are in the sheet.
+
 ## Base floor (batch 3 item 7)
 
 `public/env/stone_path_128x64.png` is the stone path sheet from [Isometric ground tiles](https://opengameart.org/content/isometric-ground-tiles) by rubberduck, [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Attribution is not required. Both mirrored base yards use the first 16 full-diamond variants, darkened. See `public/env/LICENSE-stone_path.txt`.
