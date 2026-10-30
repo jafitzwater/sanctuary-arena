@@ -112,8 +112,20 @@ export function laneFraction(p: Pt, lane: Pt[]): { d: number; t: number } {
 
 /** Which theme zone a world point belongs to. Precedence: lava river, bases, lanes, jungle quadrant. */
 export function zoneAt(map: ActDef, x: number, y: number): ZoneId {
+  return zoneOf(map, x, y, true);
+}
+
+/**
+ * t330u 3D floors: the zone whose ground lies under (x, y) with the River of Lava ignored, so the lava
+ * ribbon paints over the ground of the zone it crosses. Paint only; zoneAt is unchanged.
+ */
+export function groundZoneAt(map: ActDef, x: number, y: number): ZoneId {
+  return zoneOf(map, x, y, false);
+}
+
+function zoneOf(map: ActDef, x: number, y: number, river: boolean): ZoneId {
   const p = { x, y };
-  if (map.river && map.river.length > 1 && laneFraction(p, map.river).d <= ZONE_SIZES.river) return 'lava-river';
+  if (river && map.river && map.river.length > 1 && laneFraction(p, map.river).d <= ZONE_SIZES.river) return 'lava-river';
   if (Math.hypot(x - map.playerBase.x, y - map.playerBase.y) <= ZONE_SIZES.base) return 'rogue-encampment';
   if (Math.hypot(x - map.enemyBase.x, y - map.enemyBase.y) <= ZONE_SIZES.base) return 'pandemonium-fortress';
   let lane: { id: string; d: number; t: number } | null = null;

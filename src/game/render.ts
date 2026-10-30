@@ -80,11 +80,15 @@ import {
   shadeHex,
   structureVisualScale,
   tileTone,
+  TREE_GROUND_DARKEN,
   treeEdgeSize,
   treeSeed,
 } from './readability';
 import { ChunkedBake } from './bakeChunks';
-import { ZONE_MINI, ZONE_SIZES, zoneAt, zoneGrid, zoneGroundPaint, type ZoneId } from './data/mapZones';
+import { ZONE_MINI, ZONE_SIZES, groundZoneAt, zoneAt, zoneGrid, zoneGroundPaint, type ZoneId } from './data/mapZones';
+import { FLOOR_TILE_H, FLOOR_TILE_W, floorTile, floorTileStats, floorTilesReady, onFloorTiles, zoneFloor } from './art/floorTiles';
+import { composeFloor, type FloorField } from './floorBake';
+import { distToPolyline } from './math';
 import { paintBorderFeature, paintBridge, paintLavaRibbon, paintZoneDecal, themeFamily } from './art/zoneTheme';
 import { heroGaitStep, heroHoldCompass, readStickMotion } from './gait';
 import type { ActDef } from './data/acts/types';
@@ -274,6 +278,12 @@ export class Renderer {
   /** Blood pools stay on the ground when a chunk is evicted and rebaked. */
   private readonly bloodLog: { x: number; y: number; r: number; ichor: boolean; seed: number }[] = [];
   private mapKey = '';
+  private floorHooked = false;
+  private yardScratch: HTMLCanvasElement | null = null;
+  private cobblePattern: CanvasPattern | null = null;
+  /** t330u: bake time of 3D-floor chunks (ms total / count), for the perf report. */
+  floorBakeMs = 0;
+  floorBakeChunks = 0;
   /** Visual readability item 9: tree outline width in bake px for the current bake. */
   private treeOutline = 0;
   /** Item 7: the CC0 stone floor is loaded and paints both base yards. */
@@ -612,6 +622,12 @@ export class Renderer {
     const key = `${map.id}${floor ? ':floor' : ''}:t${turns}:o${treeOutline}`;
     if (this.bake && this.mapKey === key) return;
     if (mirrored && !floor) onBaseFloor(() => { this.mapKey = ''; });
+    // t330u 3D floors: tiles load in the background; until they settle chunks bake the code-drawn ground,
+    // then every chunk repaints progressively (a couple per frame), so match start never waits on them.
+    if (!floorTilesReady() && !this.floorHooked) {
+      this.floorHooked = true;
+      onFloorTiles(() => this.bake?.invalidate());
+    }
     this.floorArt = floor;
     this.treeOutline = treeOutline;
     const hw = BAKE_HW;
@@ -627,7 +643,7 @@ export class Renderer {
     this.lavaLayers = this.buildLava(map, hw, ox, oy);
     this.bridges = this.buildBridges(map, hw, ox, oy);
     // Map 12k order: lazily painted 512 px chunks instead of one (W + H) * 0.85 px wide canvas.
-    this.bake = new ChunkedBake(width, height, (ctx, x0, y0, w, h) => this.paintChunk(ctx, x0, y0, w, h));
+    this.bake = new ChunkedBake(width, height, (ctx, x0, y0, w, h, full) => this.paintChunk(ctx, x0, y0, w, h, full));
     this.fires = mirrored
       ? [
           // Item 7: the same brazier on each side, mirrored, burning in the side's color.
@@ -642,19 +658,33 @@ export class Renderer {
     this.mapKey = key;
   }
 
-  /** One bake chunk: ground tiles, lava river, team glows, border features, props, then saved blood pools. */
-  private paintChunk(ctx: CanvasRenderingContext2D, x0: number, y0: number, w: number, h: number): void {
+  /**
+   * One bake chunk: ground tiles, lava river, team glows, border features, props, then saved blood pools.
+   * Returns false for a provisional paint (code-drawn ground because this frame's bake budget is spent);
+   * the chunk then upgrades to the tile floor on a later frame.
+   */
+  private paintChunk(ctx: CanvasRenderingContext2D, x0: number, y0: number, w: number, h: number, full = true): boolean {
     const map = this.bakeMap;
-    if (!map) return;
+    if (!map) return true;
     const hw = BAKE_HW;
     const ox = this.bakeOx;
     const oy = this.bakeOy;
     crisp(ctx);
-    ctx.fillStyle = tilePaint(GROUND_BASE).fill;
-    ctx.fillRect(x0, y0, w, h);
-    const features = this.stampGround(ctx, map, ox, oy, hw, x0, y0, w, h);
-    if (this.lavaLayers) paintLavaRibbon(ctx, this.lavaLayers);
-    for (const deck of this.bridges) paintBridge(ctx, deck);
+    const ready = floorTilesReady();
+    const tiles = ready && full;
+    let features: { x: number; y: number; zone: ZoneId; n: number; size: number }[];
+    if (tiles) {
+      // t330u: 3D-rendered tiles composited per pixel (borders, lava bank, cobble lane); trees still from the lattice.
+      features = this.stampGround(ctx, map, ox, oy, hw, x0, y0, w, h, 'features');
+      this.paintFloorTiles(ctx, map, x0, y0, w, h);
+      for (const deck of this.bridges) this.paintTileBridge(ctx, deck);
+    } else {
+      ctx.fillStyle = tilePaint(GROUND_BASE).fill;
+      ctx.fillRect(x0, y0, w, h);
+      features = this.stampGround(ctx, map, ox, oy, hw, x0, y0, w, h);
+      if (this.lavaLayers) paintLavaRibbon(ctx, this.lavaLayers);
+      for (const deck of this.bridges) paintBridge(ctx, deck);
+    }
     if (mirroredBases(map)) {
       // Item 7: red and blue primary glow over each yard (doc: "Red is one side's primary glow. Blue is the other.").
       const r = map.fountainRadius * hw * Math.SQRT2 * 1.15;
@@ -671,6 +701,114 @@ export class Renderer {
       if (pool.x + 40 < x0 || pool.x - 40 > x0 + w || pool.y + 40 < y0 || pool.y - 40 > y0 + h) continue;
       seededStamp(ctx, pool);
     }
+    return tiles || !ready;
+  }
+
+  /** t330u: ground of one chunk from the 3D tiles (floorBake.composeFloor), written with putImageData. */
+  private paintFloorTiles(ctx: CanvasRenderingContext2D, map: ActDef, x0: number, y0: number, w: number, h: number): void {
+    const t0 = performance.now();
+    const hw = BAKE_HW;
+    const ox = this.bakeOx;
+    const oy = this.bakeOy;
+    const yardR = map.paths ? map.fountainRadius : map.plaza;
+    const bases = [map.playerBase, map.enemyBase];
+    const roads = map.paths?.length ? map.paths.map((path) => path.lane) : [map.lane];
+    const river = map.river && map.river.length > 1 ? map.river : null;
+    const field: FloorField = {
+      ground: (wx, wy) => zoneFloor(groundZoneAt(map, wx, wy)),
+      road: (wx, wy) => {
+        let best = Infinity;
+        for (const lane of roads) best = Math.min(best, distToPolyline({ x: wx, y: wy }, lane));
+        return best;
+      },
+      river: (wx, wy) => (river ? distToPolyline({ x: wx, y: wy }, river) : Infinity),
+      yard: (wx, wy) => Math.max(...bases.map((b) => yardR - Math.hypot(wx - b.x, wy - b.y))),
+      blocked: (wx, wy) => !walkable(map, wx, wy) && !inBaseWall(map, wx, wy),
+    };
+    // Yard stone: the existing town diamonds painted into a scratch chunk, then blended on a noisy edge.
+    let yard: Uint8ClampedArray | null = null;
+    const reach = (yardR + 160) * hw * Math.SQRT2;
+    const nearYard = bases.some((b) => {
+      const c = projectIso(b.x, b.y, hw, ox, oy);
+      return c.x + reach > x0 && c.x - reach < x0 + w && c.y + reach * 0.5 > y0 && c.y - reach * 0.5 < y0 + h;
+    });
+    if (nearYard) {
+      const scratch = this.yardScratch ?? document.createElement('canvas');
+      this.yardScratch = scratch;
+      scratch.width = w;
+      scratch.height = h;
+      const sctx = scratch.getContext('2d', { willReadFrequently: true });
+      if (sctx) {
+        crisp(sctx);
+        sctx.clearRect(0, 0, w, h);
+        sctx.save();
+        sctx.translate(-x0, -y0);
+        this.stampGround(sctx, map, ox, oy, hw, x0, y0, w, h, 'yard');
+        sctx.restore();
+        yard = sctx.getImageData(0, 0, w, h).data;
+      }
+    }
+    const img = ctx.createImageData(w, h);
+    composeFloor(img.data, field, {
+      x0, y0, size: w, hw,
+      unproject: (sx, sy) => unprojectIso(sx, sy, hw, ox, oy),
+      tile: floorTile,
+      roadHalf: map.laneWidth / 2 + 10,
+      lavaHalf: ZONE_SIZES.river * 0.66,
+      bankHalf: ZONE_SIZES.river * 1.4,
+      yard,
+      treeDarken: TREE_GROUND_DARKEN,
+    });
+    // putImageData ignores the chunk's translate: (0, 0) is the chunk's top-left (x0, y0).
+    ctx.putImageData(img, 0, 0);
+    this.floorBakeMs += performance.now() - t0;
+    this.floorBakeChunks += 1;
+  }
+
+  /** t330u: lane bridge over the lava in the cobble tile (mock-up: darker deck, dark rim, drop shadow). */
+  private paintTileBridge(ctx: CanvasRenderingContext2D, deck: Vec[]): void {
+    if (deck.length !== 4) return;
+    if (!this.cobblePattern) {
+      const tile = floorTile('cobble_0');
+      const c = document.createElement('canvas');
+      c.width = FLOOR_TILE_W;
+      c.height = FLOOR_TILE_H;
+      const cctx = c.getContext('2d');
+      if (!cctx) {
+        paintBridge(ctx, deck);
+        return;
+      }
+      cctx.putImageData(new ImageData(new Uint8ClampedArray(tile.data), FLOOR_TILE_W, FLOOR_TILE_H), 0, 0);
+      this.cobblePattern = ctx.createPattern(c, 'repeat');
+      if (!this.cobblePattern) {
+        paintBridge(ctx, deck);
+        return;
+      }
+    }
+    const path = (dx: number, dy: number) => {
+      ctx.beginPath();
+      ctx.moveTo(deck[0].x + dx, deck[0].y + dy);
+      for (let k = 1; k < 4; k++) ctx.lineTo(deck[k].x + dx, deck[k].y + dy);
+      ctx.closePath();
+    };
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 10;
+    ctx.shadowOffsetY = 4;
+    path(0, 0);
+    ctx.fillStyle = '#16110e';
+    ctx.fill();
+    ctx.restore();
+    path(0, 0);
+    ctx.fillStyle = this.cobblePattern;
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(30, 24, 20, 0.9)';
+    ctx.lineWidth = 4;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
   }
 
   /** Map 12k item 3: the river polyline as one continuous lava ribbon (paint only; the river never blocked). */
@@ -762,6 +900,7 @@ export class Renderer {
   private stampGround(
     ctx: CanvasRenderingContext2D, map: ActDef, ox: number, oy: number, hw: number,
     x0: number, y0: number, w: number, h: number,
+    mode: 'all' | 'features' | 'yard' = 'all',
   ): { x: number; y: number; zone: ZoneId; n: number; size: number }[] {
     const step = 80 / hw;
     // Visual readability item 7: projected direction of the 4 lattice neighbors (for lane edge sides).
@@ -801,17 +940,22 @@ export class Renderer {
         const wild = kind === 'grass' || kind === 'edge' || kind === 'bank' || kind === 'dark' || kind === 'river';
         // Base layout [t309u]: no trees on the wall band, the ruin blocks stand there instead.
         const decor = wild && !walkable(map, wx, wy) && !inBaseWall(map, wx, wy);
-        const mud = kind === 'grass' && this.nearPath(map, wx, wy, step);
+        const mud = mode === 'all' && kind === 'grass' && this.nearPath(map, wx, wy, step);
         // Visual readability items 7 + 9 (paint only): value per visible tile, darker tree-cluster ground,
         // and a dark band on lane sides that touch a non-lane tile.
         const family = themeFamily(zone);
         const woods = decor && (family === 'forest' || family === 'jungle');
         const tone = tileTone({ kind, treeGround: woods, i, j });
-        const edges = kind === 'path'
+        if (mode === 'yard') {
+          // t330u: only the yard stone, for the 3D floor's yard layer.
+          if (kind === 'town') this.paintTile(ctx, 'town', i, j, sx, sy, false, false, zone, tone);
+          continue;
+        }
+        const edges = mode === 'all' && kind === 'path'
           ? nbr.filter((d) => groundAt(map, wx + d.ddx, wy + d.ddy) !== 'path').map((d) => [d.sx, d.sy] as [number, number])
           : null;
-        this.paintTile(ctx, GROUND_BASE, i, j, sx, sy, !overlay && decor, !overlay && mud, zone, overlay ? 1 : tone);
-        if (overlay) this.paintTile(ctx, kind, i, j, sx, sy, false, false, zone, tone, edges);
+        if (mode === 'all') this.paintTile(ctx, GROUND_BASE, i, j, sx, sy, !overlay && decor, !overlay && mud, zone, overlay ? 1 : tone);
+        if (mode === 'all' && overlay) this.paintTile(ctx, kind, i, j, sx, sy, false, false, zone, tone, edges);
         const n = hash(i * 13 + 5, j * 17 + 11);
         // Item 9: denser jungle edges = woods tiles next to a walkable tile take a lower threshold and varied size.
         const edge = woods && nbr.some((d) => walkable(map, wx + d.ddx, wy + d.ddy));
@@ -1589,9 +1733,17 @@ export class Renderer {
   }
 
   /** Map 12k: ground bake chunk stats (debug hook). */
-  bakeStats(): { live: number; baked: number; width: number; height: number; chunk: number; draws: number; view: number[] } | null {
+  bakeStats(): {
+    live: number; baked: number; width: number; height: number; chunk: number; draws: number; view: number[];
+    stale: number; refreshed: number; provisional: number; floor: ReturnType<typeof floorTileStats> & { bakeMs: number; chunks: number };
+  } | null {
     if (!this.bake) return null;
-    return { live: this.bake.count, baked: this.bake.baked, width: this.bake.width, height: this.bake.height, chunk: this.bake.size, draws: this.bake.draws, view: this.bake.lastView };
+    return {
+      live: this.bake.count, baked: this.bake.baked, width: this.bake.width, height: this.bake.height, chunk: this.bake.size, draws: this.bake.draws, view: this.bake.lastView,
+      // t330u: 3D floor tiles (load time, fallbacks, decoded bytes) and their chunk bake time.
+      stale: this.bake.stale, refreshed: this.bake.refreshed, provisional: this.bake.provisional,
+      floor: { ...floorTileStats(), bakeMs: Math.round(this.floorBakeMs), chunks: this.floorBakeChunks },
+    };
   }
 
   sampleMap(worldX: number, worldY: number): [number, number, number, number] | null {
