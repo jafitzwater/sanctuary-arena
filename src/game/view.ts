@@ -61,6 +61,31 @@ export function facingToView(angle: number, turns: ViewTurns): number {
   return angle - (turns * Math.PI) / 2;
 }
 
+/**
+ * Sprite facing fix [JOSEPH t298u]: the sheet rows are SCREEN directions (manifest: "e = screen-right,
+ * s = toward camera"), so the row must come from the facing as drawn, after the 2:1 iso projection. The
+ * compass used to be taken in view space before the projection, which drew every row one 45 degree step
+ * counter-clockwise of the real on-screen direction (moving right showed the NE row).
+ * World facing -> on-screen angle (radians, x right, y down; 0 = screen east, clockwise).
+ */
+export function facingToScreen(angle: number, turns: ViewTurns): number {
+  const v = facingToView(angle, turns);
+  const c = Math.cos(v);
+  const s = Math.sin(v);
+  // Same 2:1 projection as iso.ts projectIso: screen = (x - y, (x + y) / 2).
+  return Math.atan2((c + s) / 2, c - s);
+}
+
+/** Inverse of facingToScreen: an on-screen angle back to the world facing that draws along it. */
+export function screenToFacing(screenAngle: number, turns: ViewTurns): number {
+  const sx = Math.cos(screenAngle);
+  const sy = Math.sin(screenAngle);
+  // iso.ts screenVectorToWorld (inverse 2:1 projection), then undo the view turn.
+  const vx = (sx + sy * 2) / 2;
+  const vy = (sy * 2 - sx) / 2;
+  return Math.atan2(vy, vx) + (turns * Math.PI) / 2;
+}
+
 /** View-space direction back to a world direction (stick input). */
 export function directionFromView(x: number, y: number, turns: ViewTurns): { x: number; y: number } {
   const a = (turns * Math.PI) / 2;
