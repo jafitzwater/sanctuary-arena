@@ -209,11 +209,46 @@
         </section>
       </div>
 
-      <section id="end" hidden>
-        <h2 id="end-title">Victory</h2>
-        <p id="end-copy"></p>
-        <p id="end-stats"></p>
-        <button id="again-btn" type="button">Fight again</button>
+      <section id="end" hidden data-step="banner">
+        <div id="end-banner" class="end-banner">
+          <h2 id="end-title">Victory</h2>
+          <p id="end-copy"></p>
+          <p class="fine end-tap">Tap to continue</p>
+        </div>
+        <div id="end-game" class="end-sheet sheet" hidden>
+          <header class="end-head">
+            <span class="end-k ally" id="end-ally-k">0</span>
+            <h3 id="end-result">Victory</h3>
+            <span class="end-k enemy" id="end-enemy-k">0</span>
+          </header>
+          <p class="fine end-meta" id="end-meta"></p>
+          <div class="end-cols">
+            <div class="end-team ally" id="end-team-ally"></div>
+            <div class="end-team enemy" id="end-team-enemy"></div>
+          </div>
+          <div class="end-actions">
+            <button id="end-next" type="button">Continue</button>
+          </div>
+        </div>
+        <div id="end-char" class="end-sheet sheet" hidden>
+          <div class="end-char-body">
+            <div class="end-hero">
+              <canvas id="end-face" width="160" height="160"></canvas>
+              <p class="end-hero-name" id="end-hero-name"></p>
+              <p class="fine" id="end-hero-class"></p>
+              <p class="end-kda" id="end-kda"></p>
+            </div>
+            <div class="end-perf">
+              <p class="fine">Performance</p>
+              <div id="end-bars"></div>
+              <div class="end-gear" id="end-gear"></div>
+            </div>
+          </div>
+          <div class="end-actions">
+            <button id="menu-btn" type="button">Back to main screen</button>
+            <button id="again-btn" type="button">Play another match</button>
+          </div>
+        </div>
       </section>
     </div>
     <script type="module" src="/src/main.ts"></script>
