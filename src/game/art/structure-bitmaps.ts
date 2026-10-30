@@ -3,7 +3,7 @@
  * and the two Worldstone bases are drawn from the Sprite Director bitmaps in public/sprites/structures/ (PR #88)
  * instead of the code-drawn paintSpire / paintStronghold.
  * Manifest: sanctuary-canon/tower-art-manifest.md. Anchor = bottom-centre pixel at the unit foot.
- * Scale (t275u): tower s = 368·u / 120, base s = 644·u / 216 (was 128·u/120, 220·1.1·u/216). The SAME s is used for
+ * Scale (t287u): tower s = 257.6·u / 120, base s = 386.4·u / 216 (t275u/t280u: 368·u/120, 644·u/216; originally 128·u/120, 220·1.1·u/216). The SAME s is used for
  * the destroyed sprite, so the ruin covers the alive footprint.
  * Rendering only: no collision, stats, ranges, minimap or HP bar change.
  * While an image is loading or if it fails, callers fall back to the existing code-drawn art.
@@ -24,13 +24,13 @@ export type StructureKind = 'tower' | 'base';
  * Reference champion height in the order: 128·u·CHAMPION_SPRITE_SCALE.
  */
 export const CHAMPION_REF_H = 128;
-/** [TEMP] Guard tower drawn height vs a champion (order: at least 2.5x). Was 128 / (128·1.15) ≈ 0.87x. */
-export const TOWER_CHAMPION_RATIO = 2.5;
-/** [TEMP] Worldstone base drawn height vs the NEW tower height (order CHANGE t280u: 1.75x, was 3x). */
-export const BASE_TOWER_RATIO = 1.75;
-/** Alive tower drawn height, ×u (was 128): 2.5 · 128 · 1.15 = 368. */
+/** [TEMP] Guard tower drawn height vs a champion (order t287u: 1.75x; t275u was 2.5x; originally ≈ 0.87x). */
+export const TOWER_CHAMPION_RATIO = 1.75;
+/** [TEMP] Worldstone base drawn height vs the NEW tower height (order t287u: 1.5x; t280u was 1.75x, t275u 3x). */
+export const BASE_TOWER_RATIO = 1.5;
+/** Alive tower drawn height, ×u: 1.75 · 128 · 1.15 = 257.6 (was 368; originally 128). */
 export const TOWER_DRAW_H = TOWER_CHAMPION_RATIO * CHAMPION_REF_H * CHAMPION_SPRITE_SCALE;
-/** Alive base drawn height, ×u, final (includes #87's x1.1; was 220·1.1 = 242): 1.75 · 368 = 644. */
+/** Alive base drawn height, ×u, final (includes #87's x1.1; ): 1.5 · 257.6 = 386.4 (was 644; originally 220·1.1 = 242). */
 export const BASE_DRAW_H = BASE_TOWER_RATIO * TOWER_DRAW_H;
 /** Destroyed heights for the code-drawn fallback, same ruin/alive ratio as before (tower 70/128, base 120/220). */
 export const TOWER_RUIN_H = (TOWER_DRAW_H * 70) / 128;
