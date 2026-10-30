@@ -12,7 +12,7 @@ import { inBaseWall } from '../../src/game/baseLayout';
 import { emptyInput } from '../../src/game/types';
 
 const TOWER_MARGIN = 60;
-const LANE_MIN = mapLen(260); // 195 px at MAP_SCALE 0.75
+const LANE_MIN = mapLen(260); // scales with MAP_SCALE (147 px at 6,800)
 const lanes = (sanctuary.paths ?? []).map((path) => path.lane);
 const dens = sanctuary.dens ?? [];
 assert.equal(dens.length, 4);
