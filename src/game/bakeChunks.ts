@@ -14,9 +14,15 @@ export interface BakeChunk {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   used: number;
+  /** Paint generation the chunk was baked with (see ChunkedBake.invalidate). */
+  gen: number;
 }
 
-export type ChunkPainter = (ctx: CanvasRenderingContext2D, x0: number, y0: number, w: number, h: number) => void;
+/**
+ * Paints one chunk. `full` is false once this draw() has spent its bake budget: the painter may then paint a
+ * cheap provisional version and return false, and the chunk is upgraded on a later draw (no single-frame stall).
+ */
+export type ChunkPainter = (ctx: CanvasRenderingContext2D, x0: number, y0: number, w: number, h: number, full: boolean) => boolean | void;
 
 /** Chunk cells overlapped by a bake-space rect. */
 export function chunkRange(x: number, y: number, w: number, h: number, total: { w: number; h: number }, size = BAKE_CHUNK) {
@@ -36,6 +42,16 @@ export class ChunkedBake {
   baked = 0;
   draws = 0;
   lastView: number[] = [];
+  /** t330u: bumped when new floor art arrives; stale chunks keep drawing and repaint a few per draw. */
+  private gen = 0;
+  private refreshLeft = 0;
+  /** [TEMP] Stale chunks repainted per draw() call, so a re-bake never stalls one frame. */
+  refreshPerDraw = 1;
+  /** [TEMP] Bake time per draw() (ms) after which new chunks get the painter's cheap provisional paint. */
+  budgetMs = 8;
+  refreshed = 0;
+  provisional = 0;
+  private drawStart = -Infinity;
 
   constructor(
     readonly width: number,
@@ -57,6 +73,19 @@ export class ChunkedBake {
   get(cx: number, cy: number): BakeChunk | null {
     const key = `${cx},${cy}`;
     let chunk = this.chunks.get(key);
+    if (chunk && chunk.gen !== this.gen && this.refreshLeft > 0 && this.underBudget()) {
+      // Progressive re-bake: repaint this stale chunk in place (the old paint stays until then).
+      this.refreshLeft -= 1;
+      const x0 = cx * this.size;
+      const y0 = cy * this.size;
+      chunk.ctx.clearRect(0, 0, this.size, this.size);
+      chunk.ctx.save();
+      chunk.ctx.translate(-x0, -y0);
+      const done = this.paint(chunk.ctx, x0, y0, this.size, this.size, true);
+      chunk.ctx.restore();
+      chunk.gen = done === false ? -1 : this.gen;
+      this.refreshed += 1;
+    }
     if (!chunk) {
       const canvas = document.createElement('canvas');
       canvas.width = this.size;
@@ -68,15 +97,38 @@ export class ChunkedBake {
       const y0 = cy * this.size;
       ctx.save();
       ctx.translate(-x0, -y0);
-      this.paint(ctx, x0, y0, this.size, this.size);
+      const done = this.paint(ctx, x0, y0, this.size, this.size, this.underBudget());
       ctx.restore();
-      chunk = { cx, cy, canvas, ctx, used: ++this.tick };
+      if (done === false) this.provisional += 1;
+      chunk = { cx, cy, canvas, ctx, used: ++this.tick, gen: done === false ? -1 : this.gen };
       this.chunks.set(key, chunk);
       this.baked += 1;
       this.evict();
     }
     chunk.used = ++this.tick;
     return chunk;
+  }
+
+  private underBudget(): boolean {
+    return performance.now() - this.drawStart < this.budgetMs;
+  }
+
+  /** Marks every chunk stale: each keeps drawing its old paint until draw() repaints it (refreshPerDraw per call). */
+  invalidate(): void {
+    this.gen += 1;
+  }
+
+  /** Chunks in the last drawn view still showing an older or provisional paint (off-view ones upgrade when seen). */
+  get stale(): number {
+    const [x, y, w, h] = this.lastView;
+    if (w === undefined) return 0;
+    const r = chunkRange(x, y, w, h, { w: this.width, h: this.height }, this.size);
+    let n = 0;
+    for (const chunk of this.chunks.values()) {
+      if (chunk.gen === this.gen) continue;
+      if (chunk.cx >= r.c0 && chunk.cx <= r.c1 && chunk.cy >= r.r0 && chunk.cy <= r.r1) n += 1;
+    }
+    return n;
   }
 
   has(cx: number, cy: number): boolean {
@@ -104,6 +156,8 @@ export class ChunkedBake {
   draw(target: CanvasRenderingContext2D, srcX: number, srcY: number, srcW: number, srcH: number, dstW: number, dstH: number, prebake = 1): void {
     this.lastView = [srcX, srcY, srcW, srcH];
     this.draws += 1;
+    this.refreshLeft = this.refreshPerDraw;
+    this.drawStart = performance.now();
     const k = dstW / srcW;
     const ky = dstH / srcH;
     const r = chunkRange(srcX, srcY, srcW, srcH, { w: this.width, h: this.height }, this.size);
@@ -121,11 +175,12 @@ export class ChunkedBake {
       }
     }
     let left = prebake;
-    if (left <= 0) return;
+    if (left <= 0 || !this.underBudget()) return;
     const ring = chunkRange(srcX - this.size, srcY - this.size, srcW + this.size * 2, srcH + this.size * 2, { w: this.width, h: this.height }, this.size);
     for (let cy = ring.r0; cy <= ring.r1 && left > 0; cy++) {
       for (let cx = ring.c0; cx <= ring.c1 && left > 0; cx++) {
         if (this.has(cx, cy)) continue;
+        if (!this.underBudget()) return;
         this.get(cx, cy);
         left -= 1;
       }

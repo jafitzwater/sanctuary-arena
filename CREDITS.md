@@ -76,3 +76,25 @@ Original work for this project: the outfit (teal-green bodice with gold hem, dar
 ## Map 12k theme (order "Map size and Diablo 2 theme from reference")
 
 All new terrain art is procedural Canvas 2D code (`src/game/art/zoneTheme.ts`, `src/game/data/mapZones.ts`): zone palettes, lava river, bridge, decals, trees, sandstone and obsidian features. No new image assets. The Diablo 2 acts and the reference image are a style reference only; nothing from Lords of Pain, The Spriters Resource or the reference image is in the repo.
+
+## 3D floor tiles (order t330u)
+
+`public/tiles/*.webp` (512x256 seamless tiles: `plains_0/1`, `sand_0/1`, `jungle_0/1`, `fire_0/1`, `lava_0`, `cobble_0` and its height map `cobble_0_h`) were rendered for this project in Blender 4.5 Cycles (orthographic, the game's 2:1 camera) from the PBR texture sets below, then converted to WebP. All sources are [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/); attribution is not required but given here.
+
+| Source | Used for |
+| --- | --- |
+| Poly Haven [`leafy_grass`](https://polyhaven.com/a/leafy_grass), CC0 1.0 | plains base, jungle moss |
+| Poly Haven [`forrest_ground_01`](https://polyhaven.com/a/forrest_ground_01), CC0 1.0 | plains patches |
+| Poly Haven [`brown_mud_leaves_01`](https://polyhaven.com/a/brown_mud_leaves_01), CC0 1.0 | plains dirt |
+| Poly Haven [`dry_ground_rocks`](https://polyhaven.com/a/dry_ground_rocks), CC0 1.0 | sand base |
+| Poly Haven [`gravelly_sand`](https://polyhaven.com/a/gravelly_sand), CC0 1.0 | sand patches |
+| Poly Haven [`rock_ground_02`](https://polyhaven.com/a/rock_ground_02), CC0 1.0 | sand stony patches |
+| Poly Haven [`forest_leaves_02`](https://polyhaven.com/a/forest_leaves_02), CC0 1.0 | jungle base |
+| Poly Haven [`mud_forest`](https://polyhaven.com/a/mud_forest), CC0 1.0 | jungle mud |
+| Poly Haven [`burned_ground_01`](https://polyhaven.com/a/burned_ground_01), CC0 1.0 | river-of-flame base |
+| Poly Haven [`mud_cracked_dry_03`](https://polyhaven.com/a/mud_cracked_dry_03), CC0 1.0 | river-of-flame crack mask (displacement only) |
+| Poly Haven [`rock_ground`](https://polyhaven.com/a/rock_ground), CC0 1.0 | river-of-flame rock, lava crust |
+| Poly Haven [`cobblestone_05`](https://polyhaven.com/a/cobblestone_05), CC0 1.0 | lane and bridge cobble (`cobble_0`, `cobble_0_h`) |
+| ambientCG [`Lava004`](https://ambientcg.com/view?id=Lava004), CC0 1.0 | lava river (`lava_0`) |
+
+The blends between grounds, the lava bank, glow and lip, and the lane edges are composited in code (`src/game/floorBake.ts`). If a tile fails to load, a code-drawn tile (`src/game/art/floorTiles.ts`) takes its place. The Diablo II tiles were a mood and tile-size reference only; none of their pixels are used.
