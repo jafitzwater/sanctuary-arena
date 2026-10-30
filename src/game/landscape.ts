@@ -1,6 +1,7 @@
 import { mapLen } from './data/mapScale';
 import type { ActDef } from './data/acts/types';
 import { distToPolyline, type Vec } from './math';
+import { barrierCenter, baseLayoutOn, SPAWN_BARRIER_RADIUS } from './baseLayout';
 
 export interface Prop {
   kind: 'tree' | 'rock' | 'fence' | 'tent' | 'npc' | 'stump' | 'wagon';
@@ -288,6 +289,9 @@ function placePalisade(props: Prop[], map: ActDef, gate: Gate): void {
   }
 }
 
+/** [TEMP] Gap between the spawn barrier ring and the camp tents / wagon moved out of it. */
+const PEN_CLEAR = mapLen(16);
+
 function campFurnish(props: Prop[], map: ActDef, base: Vec, gate: Gate, npc: boolean): void {
   const seats: { kind: Prop['kind']; variant: number; dist: number; side: number; block: number; flip: boolean }[] = [
     { kind: 'tent', variant: 0, dist: 200, side: 80, block: 42, flip: false },
@@ -295,13 +299,27 @@ function campFurnish(props: Prop[], map: ActDef, base: Vec, gate: Gate, npc: boo
     { kind: 'wagon', variant: 0, dist: 230, side: 10, block: 36, flip: false },
   ];
   if (npc) seats.push({ kind: 'npc', variant: 0, dist: 70, side: 120, block: 20, flip: false });
+  const pen = baseLayoutOn(map)
+    ? barrierCenter(map, base.x === map.playerBase.x && base.y === map.playerBase.y ? 'ally' : 'enemy')
+    : null;
   for (const seat of seats) {
     let placed = false;
     for (const dist of [seat.dist, seat.dist + 40, seat.dist - 30]) {
       if (placed) break;
       for (const side of [seat.side, seat.side + 50, seat.side - 50]) {
-        const x = base.x - gate.axisX * dist + gate.perpX * side;
-        const y = base.y - gate.axisY * dist + gate.perpY * side;
+        let x = base.x - gate.axisX * dist + gate.perpX * side;
+        let y = base.y - gate.axisY * dist + gate.perpY * side;
+        if (pen) {
+          // Base layout [JOSEPH t309u]: camp clutter stands just outside the spawn barrier ring, not inside it.
+          const dx = x - pen.x;
+          const dy = y - pen.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const room = SPAWN_BARRIER_RADIUS + PEN_CLEAR + seat.block * 0.5;
+          if (d < room) {
+            x = pen.x + (dx / d) * room;
+            y = pen.y + (dy / d) * room;
+          }
+        }
         if (x < 64 || y < 64 || x > map.width - 64 || y > map.height - 64) continue;
         if (inGateSlot(map, x, y)) continue;
         if (nearLane(map, x, y, LANE_CLEAR_HALF + 8)) continue;

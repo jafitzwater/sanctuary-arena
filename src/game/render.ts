@@ -108,6 +108,9 @@ import {
   worldToMinimap,
   type ViewTurns,
 } from './view';
+import { BARRIER_FADE, BARRIER_HEIGHT, WALL_HEIGHT, paintBarrier, paintBarrierCountdown, paintWallBlock } from './art/baseWalls';
+import { BASE_WALL_HALF, SPAWN_BARRIER_RADIUS, barrierCenter, barrierSeconds, baseLayoutOn, inBaseWall } from './baseLayout';
+import { wallBlocks } from './basePath';
 import { TEAM_GLOW, baseFloorReady, onBaseFloor, paintBaseFloor, paintTeamGlow } from './art/base-ground';
 import { drawItemBeam, drawItemNameplate, ITEM_LABEL_CLASS, type GroundDrop } from './itemBeam';
 import { FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, mirroredBases, propForm, sceneryFor, type Prop } from './landscape';
@@ -289,6 +292,8 @@ export class Renderer {
   private readonly poses = new Map<number, Pose>();
   /** Campfires and braziers. Visual only; they are not collision props. */
   private fires: { x: number; y: number; hell: boolean; blue?: boolean }[] = [];
+  /** Base layout [t309u]: seconds until the spawn barrier drops (0 once down). */
+  private barrierLeft = 0;
   private readonly recallTrack = new Map<number, { max: number; x: number; y: number }>();
   private portals: { x: number; y: number; t: number }[] = [];
   private readonly slashT = new Map<number, number>();
@@ -442,6 +447,7 @@ export class Renderer {
         },
       });
     }
+    this.pushBaseLayout(sim, layers, opts.time, cssW, cssH);
     layers.sort((a, b) => a.depth - b.depth);
     for (const layer of layers) layer.paint();
 
@@ -496,6 +502,8 @@ export class Renderer {
     this.lighting.draw(ctx, cssW, cssH, this.lights, opts.time);
     crisp(ctx);
     for (const paint of this.hudPaint) paint();
+    // Base layout [t309u]: the opening countdown sits above nameplates.
+    if (this.barrierLeft > 0) paintBarrierCountdown(ctx, cssW, cssH, this.barrierLeft);
     for (const fx of sim.fx) {
       if (fx.kind === 'text') this.drawFx(ctx, fx, sim);
     }
@@ -507,6 +515,59 @@ export class Renderer {
     this.publishLook();
     this.publishAtmos();
     this.drawMinimap(sim, opts.targetId);
+  }
+
+  /**
+   * Base layout [JOSEPH t309u]: stone ruin wall blocks and the glowing spawn barrier as depth-sorted layers,
+   * plus the opening countdown (HUD pass). Draw only; collision lives in baseLayout / basePath.
+   */
+  private pushBaseLayout(
+    sim: Sim, layers: { depth: number; paint: () => void }[], time: number, cssW: number, cssH: number,
+  ): void {
+    const map = sim.map;
+    this.barrierLeft = 0;
+    if (!baseLayoutOn(map)) return;
+    const ctx = this.ctx;
+    const margin = 80;
+    const wallH = WALL_HEIGHT * this.scale;
+    for (const block of wallBlocks(map)) {
+      const c = this.project(block.x, block.y);
+      if (c.x < -margin || c.y < -margin || c.x > cssW + margin || c.y > cssH + margin + wallH) continue;
+      const hl = block.len * 0.47;
+      const nx = block.ty;
+      const ny = -block.tx;
+      const foot = [
+        this.project(block.x - block.tx * hl - nx * BASE_WALL_HALF, block.y - block.ty * hl - ny * BASE_WALL_HALF),
+        this.project(block.x + block.tx * hl - nx * BASE_WALL_HALF, block.y + block.ty * hl - ny * BASE_WALL_HALF),
+        this.project(block.x + block.tx * hl + nx * BASE_WALL_HALF, block.y + block.ty * hl + ny * BASE_WALL_HALF),
+        this.project(block.x - block.tx * hl + nx * BASE_WALL_HALF, block.y - block.ty * hl + ny * BASE_WALL_HALF),
+      ];
+      const hell = !mirroredBases(map)
+        && Math.hypot(block.x - map.enemyBase.x, block.y - map.enemyBase.y) < Math.hypot(block.x - map.playerBase.x, block.y - map.playerBase.y);
+      layers.push({ depth: c.y, paint: () => paintWallBlock(ctx, foot, wallH, block.seed, hell) });
+    }
+    const left = barrierSeconds(map) - sim.time;
+    if (left <= -BARRIER_FADE) return;
+    const alpha = left > 0 ? Math.min(1, 0.35 + sim.time * 2) : 1 + left / BARRIER_FADE;
+    const curtain = BARRIER_HEIGHT * this.scale;
+    for (const side of ['ally', 'enemy'] as const) {
+      const center = barrierCenter(map, side);
+      const cp = this.project(center.x, center.y);
+      if (cp.x < -400 || cp.y < -400 || cp.x > cssW + 400 || cp.y > cssH + 400) continue;
+      const ring: Vec[] = [];
+      const n = 48;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        ring.push(this.project(center.x + Math.cos(a) * SPAWN_BARRIER_RADIUS, center.y + Math.sin(a) * SPAWN_BARRIER_RADIUS));
+      }
+      const top = Math.min(...ring.map((p) => p.y));
+      const bottom = Math.max(...ring.map((p) => p.y));
+      const color = TEAM_GLOW[side];
+      layers.push({ depth: top - 1, paint: () => paintBarrier(ctx, ring, cp.y, curtain, color, alpha, time, true) });
+      layers.push({ depth: bottom + 1, paint: () => paintBarrier(ctx, ring, cp.y, curtain, color, alpha, time, false) });
+      this.lights.push({ screenX: cp.x, screenY: cp.y - curtain * 0.4, radius: (bottom - top) * 1.6 + 40, intensity: 0.75 * alpha, color });
+    }
+    this.barrierLeft = left;
   }
 
   /** WILD RIFT VIEW: character scale vs the view (view.ts CHARACTER, hero = 11% of screen height [TEMP]). */
@@ -738,7 +799,8 @@ export class Renderer {
         const zone = zoneAt(map, wx + (hash(i, j) - 0.5) * 3 * step, wy + (hash(j + 7, i - 3) - 0.5) * 3 * step);
         const overlay = kind !== GROUND_BASE;
         const wild = kind === 'grass' || kind === 'edge' || kind === 'bank' || kind === 'dark' || kind === 'river';
-        const decor = wild && !walkable(map, wx, wy);
+        // Base layout [t309u]: no trees on the wall band, the ruin blocks stand there instead.
+        const decor = wild && !walkable(map, wx, wy) && !inBaseWall(map, wx, wy);
         const mud = kind === 'grass' && this.nearPath(map, wx, wy, step);
         // Visual readability items 7 + 9 (paint only): value per visible tile, darker tree-cluster ground,
         // and a dark band on lane sides that touch a non-lane tile.
@@ -2086,6 +2148,23 @@ export class Renderer {
       ctx.moveTo(pa.x, pa.y);
       ctx.lineTo(pb.x, pb.y);
       ctx.stroke();
+    }
+    // Base layout [t309u]: the stone ring walls, as thin lines between the lane gaps.
+    {
+      const blocks = wallBlocks(map);
+      ctx.strokeStyle = 'rgba(200, 190, 168, 0.75)';
+      ctx.lineWidth = ICONS.wallLine * dpr;
+      for (let i = 1; i < blocks.length; i++) {
+        const a = blocks[i - 1];
+        const b = blocks[i];
+        if (Math.hypot(a.x - b.x, a.y - b.y) > a.len * 1.5) continue;
+        const pa = at(a.x, a.y);
+        const pb = at(b.x, b.y);
+        ctx.beginPath();
+        ctx.moveTo(pa.x, pa.y);
+        ctx.lineTo(pb.x, pb.y);
+        ctx.stroke();
+      }
     }
     // Cave bosses (major objectives) and jungle camps.
     for (const den of map.dens ?? []) {

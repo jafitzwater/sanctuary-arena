@@ -2,6 +2,7 @@ import { mapLen } from './data/mapScale';
 import type { ActDef } from './data/acts/types';
 import { FLOOR_STEP, inGateSlot, inJungleInterior, LANE_CLEAR_HALF, sceneryFor } from './landscape';
 import { clamp, distToPolyline, nearestOnPolyline, type Vec } from './math';
+import { inBaseWall } from './baseLayout';
 
 /** Outer cliff. Inside this margin the ground is open only on roads and clearings. */
 const EDGE = 48;
@@ -110,9 +111,20 @@ function hitProp(map: ActDef, x: number, y: number): boolean {
 
 /** Sanctuary collision. Act I ignores this and keeps the lane clamp. */
 export function walkable(map: ActDef, x: number, y: number): boolean {
+  return walkableGround(map, x, y, true);
+}
+
+/** Open ground without the base walls (paint and layout checks only; movement uses `walkable`). */
+export function walkableNoWalls(map: ActDef, x: number, y: number): boolean {
+  return walkableGround(map, x, y, false);
+}
+
+function walkableGround(map: ActDef, x: number, y: number, walls: boolean): boolean {
   if (!map.paths) return true;
   if (x < EDGE || y < EDGE || x > map.width - EDGE || y > map.height - EDGE) return false;
   if (inCorridor(map, x, y) || inGateSlot(map, x, y)) return true;
+  // Base layout [JOSEPH t309u]: the base walls block everything off the lanes (lane corridors are the only gaps).
+  if (walls && inBaseWall(map, x, y)) return false;
   if (hitProp(map, x, y)) return false;
   if (inOpening(map, x, y)) return true;
   // Pass 3 order item 2: the interior jungle between the roads is fully walkable.

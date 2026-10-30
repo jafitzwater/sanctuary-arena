@@ -7,6 +7,7 @@
  */
 import { banner, damageUnit, noteDebuff, ring, sfx } from '../combat';
 import { clampToPlayable } from '../lane';
+import { stopAtBaseWall } from '../basePath';
 import { clamp } from '../math';
 import type { Unit } from '../types';
 import type { CastContext, SkillHandler } from './types';
@@ -93,7 +94,9 @@ export const charge: SkillHandler = (ctx) => {
   }
   const ang = Math.atan2(foe.y - hero.y, foe.x - hero.x);
   const stop = Math.max(0, Math.hypot(foe.x - hero.x, foe.y - hero.y) - foe.radius - hero.radius);
-  const landed = clampToPlayable(sim.map, hero.x + Math.cos(ang) * stop, hero.y + Math.sin(ang) * stop);
+  // Base layout [JOSEPH t309u]: the charge stops at a base wall, never crosses it.
+  const reach = stopAtBaseWall(sim.map, hero, { x: hero.x + Math.cos(ang) * stop, y: hero.y + Math.sin(ang) * stop });
+  const landed = clampToPlayable(sim.map, reach.x, reach.y);
   const x1 = clamp(landed.x, 36, sim.map.width - 36);
   const y1 = clamp(landed.y, 36, sim.map.height - 36);
   hero.facing = ang;

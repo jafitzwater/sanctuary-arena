@@ -8,6 +8,7 @@
  */
 import { banner, damageUnit, ring, sfx } from '../combat';
 import { clampToPlayable } from '../lane';
+import { stopAtBaseWall } from '../basePath';
 import { clamp } from '../math';
 import type { Sim, Unit } from '../types';
 import type { CastContext, SkillHandler } from './types';
@@ -150,7 +151,9 @@ export const teleport: SkillHandler = (ctx) => {
     d = maxR;
   }
   const s = d > maxR ? maxR / d : 1;
-  const landed = clampToPlayable(sim.map, hero.x + dx * s, hero.y + dy * s);
+  // Base layout [JOSEPH t309u]: teleport stops in front of a base wall, never through it.
+  const reach = stopAtBaseWall(sim.map, hero, { x: hero.x + dx * s, y: hero.y + dy * s });
+  const landed = clampToPlayable(sim.map, reach.x, reach.y);
   ring(sim, hero.x, hero.y, 34, '#c8a8ff');
   hero.facing = Math.atan2(dy, dx);
   hero.x = clamp(landed.x, 36, sim.map.width - 36);
