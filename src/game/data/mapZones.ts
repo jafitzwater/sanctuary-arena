@@ -10,6 +10,7 @@
  * every other system ignore them.
  */
 import type { ActDef } from './acts/types';
+import { mapLen } from './mapScale';
 
 export type ZoneId =
   | 'rogue-encampment'
@@ -38,14 +39,14 @@ export const ZONE_IDS: ZoneId[] = [
   'jungle-lava',
 ];
 
-/** [TEMP] Theme radii, world units (paint only). */
+/** [TEMP] Theme radii, world units (paint only). Map layout, so they follow MAP_SCALE (t315u, 9,000 map). */
 export const ZONE_SIZES = {
   /** Base theme around each Worldstone. */
-  base: 1400,
+  base: mapLen(1400),
   /** Lane theme band each side of a lane center line. */
-  lane: 1000,
+  lane: mapLen(1000),
   /** Lava river theme each side of the river line (the old river + bank width, 46 + 46). */
-  river: 92,
+  river: mapLen(92),
   /** [TEMP] Blood Moor covers the first third of each lane from the Blue side (order: "first third"). */
   bloodMoorShare: 1 / 3,
 } as const;

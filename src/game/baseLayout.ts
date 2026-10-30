@@ -19,12 +19,14 @@ import type { Vec } from './math';
 export const BASE_WALL_RADIUS = mapLen(2600);
 /** [TEMP] Half thickness of the base wall (the wall is 2x this wide). */
 export const BASE_WALL_HALF = mapLen(40);
+// t315u (9,000 map): the spawn pen is a size, not map layout. It holds 5 unscaled heroes and must clear the
+// unscaled Worldstone (radius 74) and stay inside the unscaled shop radius, so it does not follow MAP_SCALE.
 /** [TEMP] Spawn barrier centre: this far behind the Worldstone, away from the lanes. */
-export const SPAWN_BARRIER_BEHIND = mapLen(200);
+export const SPAWN_BARRIER_BEHIND = 200;
 /** [TEMP] Spawn barrier ring radius (whole side fits; the far edge stays inside the shop radius for potions). */
-export const SPAWN_BARRIER_RADIUS = mapLen(110);
+export const SPAWN_BARRIER_RADIUS = 110;
 /** [TEMP] Spawn seats: seat 0 at the barrier centre, the rest on a ring this far out. */
-export const SPAWN_SEAT_RING = mapLen(56);
+export const SPAWN_SEAT_RING = 56;
 /** Fallback barrier time when an act has no `openingWait` (doc: "There is a 15 second wait to start"). */
 export const SPAWN_BARRIER_SECONDS = 15;
 

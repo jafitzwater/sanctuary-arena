@@ -188,15 +188,22 @@ function beside(lane: { x: number; y: number }[], t: number, side: number): { x:
   return { x: at.x + (-dy / mag) * side, y: at.y + (dx / mag) * side };
 }
 
+/**
+ * t315u (9,000 map): a seal stands this far (world units, as played) beside its lane centre. The seal's footprint
+ * does not scale with the map, so the offset is held at 120 played units instead of shrinking to 90 (which would
+ * put the seal 13 units onto the narrower road).
+ */
+const SEAL_SIDE = 120 / MAP_SCALE;
+
 const seals = [north, center, south].flatMap((path) =>
   (['ally', 'enemy'] as const).map((team) => {
-    const at = beside(path.lane, team === 'ally' ? 0.1 : 0.9, team === 'ally' ? 120 : -120);
+    const at = beside(path.lane, team === 'ally' ? 0.1 : 0.9, team === 'ally' ? SEAL_SIDE : -SEAL_SIDE);
     const side = team === 'ally' ? 'Blue Encampment' : 'Red Encampment';
     return {
       team,
       path: path.id,
-      x: Math.round(at.x),
-      y: Math.round(at.y),
+      x: at.x,
+      y: at.y,
       name: `${side} ${path.name} Seal`,
     };
   }),

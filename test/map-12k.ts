@@ -4,6 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { sanctuary, MAP_W, MAP_H } from '../src/game/data/acts/sanctuary';
+import { MAP_SCALE } from '../src/game/data/mapScale';
 import { TOWER_TIERS } from '../src/game/data/acts/types';
 import { walkable } from '../src/game/terrain';
 import { ZONE_IDS, zoneAt, zoneBounds, zoneGrid } from '../src/game/data/mapZones';
@@ -26,17 +27,22 @@ const path = (id: string) => {
   return p!.lane;
 };
 
-test('map is 12,000 x 12,000 [JOSEPH]', () => {
+// t315u [JOSEPH]: the 12,000 x 12,000 design map is played at 9,000 x 9,000 (MAP_SCALE 0.75).
+/** A design-map (12,000) coordinate on the played map. */
+const S = (v: number) => v * MAP_SCALE;
+
+test('map is 9,000 x 9,000 (12,000 design x 0.75) [JOSEPH t315u]', () => {
   assert.equal(MAP_W, 12000);
   assert.equal(MAP_H, 12000);
-  assert.equal(W, 12000);
-  assert.equal(H, 12000);
+  assert.equal(MAP_SCALE, 0.75);
+  assert.equal(W, 9000);
+  assert.equal(H, 9000);
 });
 
-test('Nexus to Nexus along the diagonal (mid) lane is 15k-16k', () => {
+test('Nexus to Nexus along the diagonal (mid) lane is 0.75 x 15k-16k', () => {
   // Worldstone -> lane mouth -> mid lane -> lane mouth -> Worldstone.
   const l = len([map.playerBase, ...path('center'), map.enemyBase]);
-  assert.ok(l >= 15000 && l <= 16000, `mid lane ${l.toFixed(0)}`);
+  assert.ok(l >= S(15000) && l <= S(16000), `mid lane ${l.toFixed(0)}`);
 });
 
 test('Blue base bottom-left, Red base top-right, mirrored', () => {
@@ -105,16 +111,16 @@ test('zones cover the whole map and every zone exists', () => {
 test('theme zone assignments follow the order', () => {
   assert.equal(zoneAt(map, map.playerBase.x, map.playerBase.y), 'rogue-encampment');
   assert.equal(zoneAt(map, map.enemyBase.x, map.enemyBase.y), 'pandemonium-fortress');
-  assert.equal(zoneAt(map, 900, 7000), 'blood-moor', 'first third of top lane');
-  assert.equal(zoneAt(map, 6000, 880), 'dry-hills', 'top lane past the first third');
-  assert.equal(zoneAt(map, 3500, 8500), 'blood-moor', 'first third of mid');
-  assert.equal(zoneAt(map, 7600, 4400), 'spider-forest', 'mid past the first third');
-  assert.equal(zoneAt(map, 9000, 11100), 'river-of-flame', 'bottom lane past the first third');
-  assert.equal(zoneAt(map, 6000, 6000), 'lava-river');
-  assert.equal(zoneAt(map, 4800, 2600), 'jungle-dense', 'top jungle');
-  assert.equal(zoneAt(map, 2600, 6000), 'jungle-plains', 'left-middle jungle');
-  assert.equal(zoneAt(map, 9400, 6000), 'jungle-desert', 'right jungle near Red');
-  assert.equal(zoneAt(map, 6000, 9300), 'jungle-lava', 'bottom-center jungle');
+  assert.equal(zoneAt(map, S(900), S(7000)), 'blood-moor', 'first third of top lane');
+  assert.equal(zoneAt(map, S(6000), S(880)), 'dry-hills', 'top lane past the first third');
+  assert.equal(zoneAt(map, S(3500), S(8500)), 'blood-moor', 'first third of mid');
+  assert.equal(zoneAt(map, S(7600), S(4400)), 'spider-forest', 'mid past the first third');
+  assert.equal(zoneAt(map, S(9000), S(11100)), 'river-of-flame', 'bottom lane past the first third');
+  assert.equal(zoneAt(map, S(6000), S(6000)), 'lava-river');
+  assert.equal(zoneAt(map, S(4800), S(2600)), 'jungle-dense', 'top jungle');
+  assert.equal(zoneAt(map, S(2600), S(6000)), 'jungle-plains', 'left-middle jungle');
+  assert.equal(zoneAt(map, S(9400), S(6000)), 'jungle-desert', 'right jungle near Red');
+  assert.equal(zoneAt(map, S(6000), S(9300)), 'jungle-lava', 'bottom-center jungle');
 });
 
 test('minimap zone grid is derived from the same map data', () => {

@@ -244,8 +244,8 @@ export function groundAt(map: ActDef, x: number, y: number): GroundKind {
   if (road <= cobble) return 'path';
   if (map.river && map.river.length > 1) {
     const water = distToPolyline({ x, y }, map.river);
-    if (water < 46) return 'river';
-    if (water < 92) return 'bank';
+    if (water < mapLen(46)) return 'river'; // t315u: river width is map layout and follows MAP_SCALE
+    if (water < mapLen(92)) return 'bank';
   }
   const yard = map.paths ? map.fountainRadius : map.plaza;
   if (camp <= yard) return 'town';

@@ -275,7 +275,7 @@ function boulderSite(map: ActDef, props: Prop[], x: number, y: number): boolean 
 function placePalisade(props: Prop[], map: ActDef, gate: Gate): void {
   const foot = 26 * 0.3;
   const inner = GATE_HALF + foot;
-  const spacing = mapLen(46); // pass 2 item 1: base wall post spacing follows MAP_SCALE
+  const spacing = 46; // t315u: post spacing is a prop arrangement in the unscaled base yard (posts keep their size)
   for (const sign of [-1, 1]) {
     for (let i = 0; i < 4; i++) {
       const off = inner + i * spacing;
@@ -290,7 +290,7 @@ function placePalisade(props: Prop[], map: ActDef, gate: Gate): void {
 }
 
 /** [TEMP] Gap between the spawn barrier ring and the camp tents / wagon moved out of it. */
-const PEN_CLEAR = mapLen(16);
+const PEN_CLEAR = 16; // t315u: the spawn pen keeps its size, so its clearance does too
 
 function campFurnish(props: Prop[], map: ActDef, base: Vec, gate: Gate, npc: boolean): void {
   const seats: { kind: Prop['kind']; variant: number; dist: number; side: number; block: number; flip: boolean }[] = [
