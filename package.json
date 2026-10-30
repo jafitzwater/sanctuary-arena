@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
-    "test": "tsx test/match.ts && tsx test/attack-cycle.ts && tsx test/combat-tags.ts && tsx test/sprites.ts && tsx test/items.ts && tsx test/sheets.ts && tsx test/move-speed.ts && tsx test/wild-rift-view.ts && tsx test/wild-rift-pass2.ts && tsx test/amazon.ts && tsx test/paladin.ts && tsx test/sorceress.ts && tsx test/necromancer.ts && tsx test/map-12k.ts && tsx test/economy.ts && tsx test/skill-balance.ts && tsx test/unit-frame.ts && tsx test/remember-batch-1.ts && tsx test/batch-2-fixes.ts && tsx test/necro-sorc-damage.ts && tsx test/wild-rift-hud.ts && tsx test/four-ui-sizes.ts && tsx test/visual-readability.ts && tsx test/tower-bitmaps.ts && tsx test/thin-outlines.ts && tsx test/structure-scale.ts"
+    "test": "tsx test/match.ts && tsx test/attack-cycle.ts && tsx test/combat-tags.ts && tsx test/sprites.ts && tsx test/items.ts && tsx test/sheets.ts && tsx test/move-speed.ts && tsx test/wild-rift-view.ts && tsx test/wild-rift-pass2.ts && tsx test/amazon.ts && tsx test/paladin.ts && tsx test/sorceress.ts && tsx test/necromancer.ts && tsx test/map-12k.ts && tsx test/economy.ts && tsx test/skill-balance.ts && tsx test/unit-frame.ts && tsx test/remember-batch-1.ts && tsx test/batch-2-fixes.ts && tsx test/necro-sorc-damage.ts && tsx test/wild-rift-hud.ts && tsx test/four-ui-sizes.ts && tsx test/visual-readability.ts && tsx test/tower-bitmaps.ts && tsx test/thin-outlines.ts && tsx test/structure-scale.ts && tsx test/sprite-facing.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

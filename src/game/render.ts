@@ -95,7 +95,8 @@ import {
   cameraZoom,
   characterScale,
   championSpriteScale,
-  facingToView,
+  facingToScreen,
+  screenToFacing,
   fromView,
   ICONS,
   MINIMAP_ICON_SHADE,
@@ -1580,8 +1581,9 @@ export class Renderer {
     }
     const phase = advanceHeroPhase(prev?.phase ?? 0, state, this.frameDt);
     // WILD RIFT VIEW: the sheet row follows the on-screen facing; `shown` stays a world angle.
-    const compass = heroHoldCompass(prev?.compass ?? null, facingToView(unit.facing, activeView.turns));
-    const target = compass * (Math.PI / 4) - facingToView(0, activeView.turns);
+    // Sprite facing fix [JOSEPH t298u]: compass from the projected (on-screen) angle, so right = E row, up = N row.
+    const compass = heroHoldCompass(prev?.compass ?? null, facingToScreen(unit.facing, activeView.turns));
+    const target = screenToFacing(compass * (Math.PI / 4), activeView.turns);
     const shown = prev ? smoothFacing(prev.shown, target, this.frameDt) : target;
     const stepped = state !== 'idle' && step < MAX_STRIDE_STEP ? step : 0;
     const travel = (prev?.travel ?? 0) + stepped;
