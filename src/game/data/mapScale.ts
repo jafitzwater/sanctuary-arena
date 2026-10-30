@@ -6,7 +6,7 @@
  *
  * Implements: the single MAP_SCALE constant and a pure `scaleAct` that multiplies every physical map coordinate and
  * map dimension of an ActDef by it (map size, lane/path polylines, river, towers, bases, seals, pits, shrines, cave
- * camps, road width, jungle shoulder, base plaza, shop and fountain yards). Fixed map-layout offsets elsewhere
+ * camps, road width, jungle shoulder). The base yard (plaza, shop and fountain radii) keeps its size (t315u). Fixed map-layout offsets elsewhere
  * (spawn seats, clearings, side offsets of grass/orbs/pools) use `mapLen`.
  * Tech design: the match stays in cartesian world coordinates; only the coordinates shrink. Phaser-free (tests).
  * Excluded (unchanged on purpose): hp, damage, armor, attack ranges, attack intervals, unit radii, gold, xp,
@@ -14,8 +14,11 @@
  */
 import type { ActDef, BaseSpawn } from './acts/types';
 
-/** [TEMP] [JOSEPH] One global map factor. 1 = the pre-pass-2 map. */
-export const MAP_SCALE = 1.0;
+/**
+ * [JOSEPH t315u] One global map factor: the 12,000 x 12,000 design map is played at 9,000 x 9,000.
+ * 1 = the design map.
+ */
+export const MAP_SCALE = 0.75;
 
 /** A fixed map-layout length (world units, designed at scale 1) at the current MAP_SCALE. */
 export function mapLen(designUnits: number, scale = MAP_SCALE): number {
@@ -23,8 +26,9 @@ export function mapLen(designUnits: number, scale = MAP_SCALE): number {
 }
 
 type Pt = { x: number; y: number };
+/** Not rounded: x * 0.75 can land on .5, and rounding would break the 180-degree mirror (W - x). */
 function sp<T extends Pt>(p: T, s: number): T {
-  return { ...p, x: Math.round(p.x * s), y: Math.round(p.y * s) };
+  return { ...p, x: p.x * s, y: p.y * s };
 }
 function sl(lane: Pt[], s: number): Pt[] {
   return lane.map((p) => sp(p, s));
@@ -53,8 +57,10 @@ export function scaleAct(act: ActDef, s: number = MAP_SCALE): ActDef {
     enemyBase: sb(act.enemyBase, s),
     laneWidth: r(act.laneWidth),
     jungle: r(act.jungle),
-    plaza: r(act.plaza),
-    shopRadius: r(act.shopRadius),
-    fountainRadius: r(act.fountainRadius),
+    // t315u: the base yard (open plaza, shop and fountain ranges) is sized around the unscaled Worldstone, the
+    // unscaled spawn pen and the heroes, so it keeps its size; only its position moves with the base.
+    plaza: act.plaza,
+    shopRadius: act.shopRadius,
+    fountainRadius: act.fountainRadius,
   };
 }

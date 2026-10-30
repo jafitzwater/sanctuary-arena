@@ -686,7 +686,8 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
     for (let turn = 0; turn < 16; turn++) {
       const ang = (turn / 16) * Math.PI * 2 + 0.2;
       const from = { x: fence.x - Math.cos(ang) * (foot + 10), y: fence.y - Math.sin(ang) * (foot + 10) };
-      const to = { x: fence.x + Math.cos(ang) * 8, y: fence.y + Math.sin(ang) * 8 };
+      // t315u: aim inside the post footprint (26 * 0.3 = 7.8); on the 9,000 map the posts stand in open yard ground.
+      const to = { x: fence.x + Math.cos(ang) * 4, y: fence.y + Math.sin(ang) * 4 };
       if (!walkable(sanctuary, from.x, from.y) || walkable(sanctuary, to.x, to.y)) continue;
       const landed = slide(sanctuary, from, to);
       const dx = Math.abs(landed.x - from.x);
