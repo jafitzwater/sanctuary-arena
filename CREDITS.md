@@ -98,3 +98,19 @@ All new terrain art is procedural Canvas 2D code (`src/game/art/zoneTheme.ts`, `
 | ambientCG [`Lava004`](https://ambientcg.com/view?id=Lava004), CC0 1.0 | lava river (`lava_0`) |
 
 The blends between grounds, the lava bank, glow and lip, and the lane edges are composited in code (`src/game/floorBake.ts`). If a tile fails to load, a code-drawn tile (`src/game/art/floorTiles.ts`) takes its place. The Diablo II tiles were a mood and tile-size reference only; none of their pixels are used.
+
+## 3D camps (order t337u)
+
+`public/camps/camp-3d-{jungle,plains,desert,forge}.webp` (the jungle cave, Cairn Stones, desert ruin gate and Hell Forge camps at the four monster dens) were rendered for this project in Blender 4.5 Cycles with the floor-tile rig (orthographic, the game's 2:1 camera, 1 image px = 1 bake px), by the Sprite Director's camp-3d-v1 samples, then converted to WebP with alpha (`scripts/import-camps.sh`). The `-foot.png` y-sort maps are generated from the same scenes (`scripts/camp-footmap.py`, Cycles position pass). All sources are [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/); attribution is not required but given here.
+
+| Source | Used for |
+| --- | --- |
+| Poly Haven models [`rock_face_01`](https://polyhaven.com/a/rock_face_01), [`rock_moss_set_01`](https://polyhaven.com/a/rock_moss_set_01), [`rock_moss_set_02`](https://polyhaven.com/a/rock_moss_set_02), CC0 1.0 | jungle cave wall |
+| Poly Haven models [`boulder_01`](https://polyhaven.com/a/boulder_01), [`namaqualand_boulder_02`](https://polyhaven.com/a/namaqualand_boulder_02), [`sand_rocks_small_01`](https://polyhaven.com/a/sand_rocks_small_01), CC0 1.0 | boulders and rocks (jungle, plains, desert) |
+| Poly Haven models [`fir_tree_01`](https://polyhaven.com/a/fir_tree_01), [`shrub_02`](https://polyhaven.com/a/shrub_02), [`fern_02`](https://polyhaven.com/a/fern_02), [`grass_medium_01`](https://polyhaven.com/a/grass_medium_01), CC0 1.0 | jungle trees and undergrowth, plains grass |
+| Poly Haven models [`ceramic_vase_01`](https://polyhaven.com/a/ceramic_vase_01), [`antique_ceramic_vase_01`](https://polyhaven.com/a/antique_ceramic_vase_01), CC0 1.0 | desert pots |
+| Poly Haven textures [`rock_boulder_cracked`](https://polyhaven.com/a/rock_boulder_cracked), [`sandstone_blocks_08`](https://polyhaven.com/a/sandstone_blocks_08), [`stone_tiles_02`](https://polyhaven.com/a/stone_tiles_02), [`rock_wall_08`](https://polyhaven.com/a/rock_wall_08), [`rusty_metal_02`](https://polyhaven.com/a/rusty_metal_02), CC0 1.0 | cairn stones, ruin gate and flagstones, forge platform, brick and iron |
+| Poly Haven textures `mud_forest`, `brown_mud_leaves_01`, `forest_leaves_02`, `forrest_ground_01`, `leafy_grass`, `gravelly_sand`, `dry_ground_rocks`, `mud_cracked_dry_03`, `burned_ground_01`, `rock_ground` (see 3D floor tiles above), CC0 1.0 | camp clearings, blended into the zone floors |
+| ambientCG [`Lava004`](https://ambientcg.com/view?id=Lava004), CC0 1.0 | Hell Forge lava moat |
+
+The standing stones, carved runes, ruin pillars and lintel, forge, anvil, torches, braziers, demon statues and rock spikes are self-made geometry and textures (this project). If a camp image fails to load, its den keeps the code-drawn clearing.

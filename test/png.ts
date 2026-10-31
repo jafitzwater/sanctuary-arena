@@ -1,4 +1,4 @@
-// Test helper: minimal 8-bit RGBA/RGB PNG decoder (no dependencies). Tests only.
+// Test helper: minimal 8-bit RGBA/RGB/grey PNG decoder (no dependencies). Tests only.
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 
@@ -14,8 +14,8 @@ export function readPng(path: string): Png {
     else if (type === 'IDAT') idat.push(d);
     o += 12 + len;
   }
-  if (bd !== 8 || (ct !== 6 && ct !== 2)) throw new Error(`${path}: need 8-bit RGBA or RGB PNG (bd ${bd}, ct ${ct})`);
-  const bpp = ct === 6 ? 4 : 3, stride = w * bpp;
+  if (bd !== 8 || (ct !== 6 && ct !== 2 && ct !== 0)) throw new Error(`${path}: need 8-bit RGBA, RGB or grey PNG (bd ${bd}, ct ${ct})`);
+  const bpp = ct === 6 ? 4 : ct === 2 ? 3 : 1, stride = w * bpp;
   const raw = inflateSync(Buffer.concat(idat));
   const px = new Uint8Array(w * h * bpp);
   for (let y = 0; y < h; y++) {
@@ -30,6 +30,7 @@ export function readPng(path: string): Png {
   }
   if (bpp === 4) return { w, h, rgba: px };
   const rgba = new Uint8Array(w * h * 4);
+  if (bpp === 1) { for (let i = 0; i < w * h; i++) { rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = px[i]; rgba[i * 4 + 3] = 255; } return { w, h, rgba }; }
   for (let i = 0; i < w * h; i++) { rgba[i * 4] = px[i * 3]; rgba[i * 4 + 1] = px[i * 3 + 1]; rgba[i * 4 + 2] = px[i * 3 + 2]; rgba[i * 4 + 3] = 255; }
   return { w, h, rgba };
 }
