@@ -250,10 +250,14 @@ export const SANCTUARY_DESIGN: ActDef = {
   // tower's range (+60) and the roads, as two mirrored pairs (W - x, H - y).
   // Map 12k item 2: same two mirrored pairs in the same quarters as before (Countess + Radament in the left
   // jungle, Council + Izual in the right jungle), deep in the jungle, far outside every tower's range.
+  // t337u 3D camps: one themed camp per zone (camp-3d art, src/game/art/campArt.ts). Countess stays in the plains
+  // (Cairn Stones) and Izual in the desert (ruin gate); Radament moved (2200, 7600) -> (4400, 9800) into the
+  // lava field (Hell Forge) and Council (9800, 4400) -> (7600, 2200) into the dense jungle (jungle cave), so
+  // each zone has one camp and the pairs stay exact mirrors (W - x, H - y).
   dens: [
     { id: 1, x: 3200, y: 5600, unit: 'countess', count: 1, respawn: CAVE_RESPAWN, cave: true },
-    { id: 2, x: 2200, y: 7600, unit: 'radament', count: 1, respawn: CAVE_RESPAWN, cave: true },
-    { id: 3, x: 9800, y: 4400, unit: 'council-member', count: 3, respawn: CAVE_RESPAWN, cave: true },
+    { id: 2, x: 4400, y: 9800, unit: 'radament', count: 1, respawn: CAVE_RESPAWN, cave: true },
+    { id: 3, x: 7600, y: 2200, unit: 'council-member', count: 3, respawn: CAVE_RESPAWN, cave: true },
     { id: 4, x: 8800, y: 6400, unit: 'izual', count: 1, respawn: CAVE_RESPAWN, cave: true },
   ],
   // Mirrored with the roadways (paint only, item 23). Map 12k item 3: drawn as one continuous lava river,

@@ -118,6 +118,14 @@ export class ChunkedBake {
     this.gen += 1;
   }
 
+  /** t337u: marks only the chunks under a bake rect stale (a camp image arrived); they repaint progressively. */
+  invalidateRect(x: number, y: number, w: number, h: number): void {
+    const r = chunkRange(x, y, w, h, { w: this.width, h: this.height }, this.size);
+    for (const chunk of this.chunks.values()) {
+      if (chunk.cx >= r.c0 && chunk.cx <= r.c1 && chunk.cy >= r.r0 && chunk.cy <= r.r1) chunk.gen = -1;
+    }
+  }
+
   /** Chunks in the last drawn view still showing an older or provisional paint (off-view ones upgrade when seen). */
   get stale(): number {
     const [x, y, w, h] = this.lastView;

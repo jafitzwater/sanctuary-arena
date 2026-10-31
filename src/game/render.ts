@@ -120,6 +120,8 @@ import { drawItemBeam, drawItemNameplate, ITEM_LABEL_CLASS, type GroundDrop } fr
 import { FLOOR_STEP, GATE_HALF, LANE_CLEAR_HALF, mirroredBases, propForm, sceneryFor, type Prop } from './landscape';
 import { AMBIENT_ALPHA, DarkGothicLighting, LIGHTING, type LightSource } from './lighting';
 import type { Vec } from './math';
+import { CAMP_ART, campArt, campFrontMask, campThemeForDen, type CampTheme } from './art/campArt';
+import type { DenSpawn } from './data/acts/types';
 import { player } from './query';
 import { GROUND_BASE, groundAt, tilePaint, walkable, type GroundKind } from './terrain';
 import type { Camera, Sim, Unit } from './types';
@@ -279,6 +281,13 @@ export class Renderer {
   private readonly bloodLog: { x: number; y: number; r: number; ichor: boolean; seed: number }[] = [];
   private mapKey = '';
   private floorHooked = false;
+  /** t337u 3D camps: one per den, bake-space centre (den position); art from campArt, baked + y-sort overdraw. */
+  private camps: { den: DenSpawn; theme: CampTheme; bx: number; by: number }[] = [];
+  private campHooked = false;
+  /** Bake -> screen mapping of the last bake blit (rounded source, as ChunkedBake.draw uses). */
+  private bakeView = { srcX: 0, srcY: 0, kx: 1, ky: 1 };
+  private campScratch: HTMLCanvasElement | null = null;
+  private campMask: ImageData | null = null;
   private yardScratch: HTMLCanvasElement | null = null;
   private cobblePattern: CanvasPattern | null = null;
   /** t330u: bake time of 3D-floor chunks (ms total / count), for the perf report. */
@@ -425,6 +434,7 @@ export class Renderer {
       const srcW = Math.max(1, Math.round(cssW / this.scale));
       const srcH = Math.max(1, Math.round(cssH / this.scale));
       this.bake.draw(ctx, srcX, srcY, srcW, srcH, cssW, cssH, 1);
+      this.bakeView = { srcX, srcY, kx: cssW / srcW, ky: cssH / srcH };
     }
     this.drawMist(sim, cssW, cssH);
     this.drawOrbs(sim);
@@ -454,6 +464,7 @@ export class Renderer {
           if (unit.hidden) ctx.globalAlpha = 0.6;
           this.drawUnit(ctx, unit, opts, u, this.armorTier(sim), sim.playerId);
           ctx.globalAlpha = 1;
+          this.campOverdraw(ctx, unit, u);
         },
       });
     }
@@ -640,6 +651,23 @@ export class Renderer {
     this.bakeMap = map;
     this.scenery = sceneryFor(map);
     this.sceneryAt = this.scenery.map((prop) => ({ prop, ...projectIso(prop.x, prop.y, hw, ox, oy) }));
+    this.camps = [];
+    for (const den of map.dens ?? []) {
+      const theme = campThemeForDen(map, den);
+      if (!theme) continue;
+      const c = projectIso(den.x, den.y, hw, ox, oy);
+      this.camps.push({ den, theme, bx: c.x, by: c.y });
+    }
+    if (!this.campHooked) {
+      this.campHooked = true;
+      // A camp image arrived: repaint only the chunks under it (progressively, like the floor tiles).
+      campArt.onChange(() => {
+        for (const camp of this.camps) {
+          const art = CAMP_ART[camp.theme];
+          this.bake?.invalidateRect(camp.bx - art.ax, camp.by - art.ay, art.w, art.h);
+        }
+      });
+    }
     this.lavaLayers = this.buildLava(map, hw, ox, oy);
     this.bridges = this.buildBridges(map, hw, ox, oy);
     // Map 12k order: lazily painted 512 px chunks instead of one (W + H) * 0.85 px wide canvas.
@@ -696,12 +724,74 @@ export class Renderer {
     }
     features.sort((a, b) => a.y - b.y);
     for (const f of features) paintBorderFeature(ctx, f.zone, f.x, f.y, f.n, f.size, this.treeOutline);
+    this.bakeCamps(ctx, x0, y0, w, h);
     this.bakeProps(ctx, map, x0, y0, w, h);
     for (const pool of this.bloodLog) {
       if (pool.x + 40 < x0 || pool.x - 40 > x0 + w || pool.y + 40 < y0 || pool.y - 40 > y0 + h) continue;
       seededStamp(ctx, pool);
     }
     return tiles || !ready;
+  }
+
+  /**
+   * t337u 3D camps: each loaded camp image is painted 1:1 into the floor chunks at its den (its soft alpha edge
+   * blends into the zone floor). Until it loads, or if it fails, the den keeps the code-drawn clearing.
+   */
+  private bakeCamps(ctx: CanvasRenderingContext2D, x0: number, y0: number, w: number, h: number): void {
+    for (const camp of this.camps) {
+      const art = CAMP_ART[camp.theme];
+      const left = Math.round(camp.bx - art.ax);
+      const top = Math.round(camp.by - art.ay);
+      if (left > x0 + w || top > y0 + h || left + art.w < x0 || top + art.h < y0) continue;
+      const sprite = campArt.sprite(camp.theme);
+      if (sprite) ctx.drawImage(sprite.img, left, top);
+    }
+  }
+
+  /**
+   * t337u y-sort: after a unit is drawn, the camp object pixels (stones, trees, pillars, statues) whose foot lies
+   * in front of the unit's feet are drawn over it again, clipped to the unit's box, so it reads as standing
+   * behind them. Everything else of the camp stays in the floor bake under the unit.
+   */
+  private campOverdraw(ctx: CanvasRenderingContext2D, unit: Unit, u: number): void {
+    if (!this.camps.length) return;
+    const p = this.project(unit.x, unit.y);
+    const tall = Math.max(this.unitHeight(unit), 110) * u;
+    const ux0 = p.x - tall * 0.75;
+    const ux1 = p.x + tall * 0.75;
+    const uy0 = p.y - tall * 1.4;
+    const uy1 = p.y + tall * 0.15;
+    if (ux1 < 0 || uy1 < 0 || ux0 > this.camera.cssW || uy0 > this.camera.cssH) return;
+    const { srcX, srcY, kx, ky } = this.bakeView;
+    for (const camp of this.camps) {
+      const art = CAMP_ART[camp.theme];
+      const sx0 = (Math.round(camp.bx - art.ax) - srcX) * kx;
+      const sy0 = (Math.round(camp.by - art.ay) - srcY) * ky;
+      if (ux1 < sx0 || uy1 < sy0 || ux0 > sx0 + art.w * kx || uy0 > sy0 + art.h * ky) continue;
+      const sprite = campArt.sprite(camp.theme);
+      if (!sprite?.foot) continue;
+      const ix0 = Math.max(0, Math.floor((ux0 - sx0) / kx));
+      const iy0 = Math.max(0, Math.floor((uy0 - sy0) / ky));
+      const ix1 = Math.min(art.w, Math.ceil((ux1 - sx0) / kx));
+      const iy1 = Math.min(art.h, Math.ceil((uy1 - sy0) / ky));
+      const rw = ix1 - ix0;
+      const rh = iy1 - iy0;
+      if (rw <= 0 || rh <= 0) continue;
+      if (!this.campMask || this.campMask.width !== rw || this.campMask.height !== rh) this.campMask = new ImageData(rw, rh);
+      const footImg = (p.y - sy0) / ky;
+      if (!campFrontMask(sprite.foot, art.w, art.h, ix0, iy0, ix1, iy1, footImg, this.campMask.data)) continue;
+      const scratch = this.campScratch ?? (this.campScratch = document.createElement('canvas'));
+      if (scratch.width < rw) scratch.width = rw;
+      if (scratch.height < rh) scratch.height = rh;
+      const sctx = scratch.getContext('2d');
+      if (!sctx) return;
+      sctx.clearRect(0, 0, rw, rh);
+      sctx.putImageData(this.campMask, 0, 0);
+      sctx.globalCompositeOperation = 'source-in';
+      sctx.drawImage(sprite.img, ix0, iy0, rw, rh, 0, 0, rw, rh);
+      sctx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(scratch, 0, 0, rw, rh, sx0 + ix0 * kx, sy0 + iy0 * ky, rw * kx, rh * ky);
+    }
   }
 
   /** t330u: ground of one chunk from the 3D tiles (floorBake.composeFloor), written with putImageData. */
