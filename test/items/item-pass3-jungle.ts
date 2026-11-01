@@ -15,7 +15,7 @@ const TOWER_MARGIN = 60;
 const LANE_MIN = mapLen(260); // scales with MAP_SCALE (147 px at 6,800)
 const lanes = (sanctuary.paths ?? []).map((path) => path.lane);
 const dens = sanctuary.dens ?? [];
-assert.equal(dens.length, 4);
+assert.equal(dens.length, 6); // t345u: + the Countess's mirrored pair
 
 for (const den of dens) {
   for (const tower of sanctuary.towers) {

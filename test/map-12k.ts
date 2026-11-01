@@ -78,7 +78,7 @@ test('tower, seal, base and camp counts unchanged', () => {
   assert.equal(map.towers.filter((t) => t.team === 'ally').length, 6);
   assert.equal((map.seals ?? []).filter((s) => s.team === 'ally').length, 3);
   assert.equal((map.seals ?? []).filter((s) => s.team === 'enemy').length, 3);
-  assert.equal((map.dens ?? []).length, 4);
+  assert.equal((map.dens ?? []).length, 6); // t345u: + the Countess's mirrored pair
   assert.equal((map.shrines ?? []).length, 4);
   assert.equal((map.pits ?? []).length, 2);
   assert.equal((map.paths ?? []).length, 3);

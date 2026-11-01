@@ -114,3 +114,14 @@ The blends between grounds, the lava bank, glow and lip, and the lane edges are 
 | ambientCG [`Lava004`](https://ambientcg.com/view?id=Lava004), CC0 1.0 | Hell Forge lava moat |
 
 The standing stones, carved runes, ruin pillars and lintel, forge, anvil, torches, braziers, demon statues and rock spikes are self-made geometry and textures (this project). If a camp image fails to load, its den keeps the code-drawn clearing.
+
+## Rakanishu boss sheet (3D v1, order t345u)
+
+`public/sprites/bosses/rakanishu-atlas.webp` (the frames the game draws, cropped 1:1 from the Sprite Director's 8-direction sheet by `scripts/rakanishu-atlas.py`) is rendered from 3D models and animations. All third-party sources are [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/); attribution is not required but given here.
+
+| Source | Used for |
+| --- | --- |
+| [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html) [Standard] by Quaternius ([download](https://quaternius.itch.io/universal-base-characters)), CC0 1.0 | `Superhero_Male_FullBody` body mesh and rig |
+| [Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html) [Standard] by Quaternius ([download](https://quaternius.itch.io/universal-animation-library)), CC0 1.0 | `UAL1_Standard.glb`: `Sword_Idle`, `Walk_Loop`, `Sword_Attack`, `Hit_Chest`, `Death01` |
+
+Original work for this project: the horns, hair tuft, eye glints, spiky shoulder pad, ragged kilt, belt, armour vertex colours, the scimitar, and `public/sprites/bosses/rakanishu-spark.png` (procedural lightning spark sheet). Rendered headless in Blender 4.5 LTS (orthographic, 8 directions rendered separately, no mirroring). No Mixamo, CC-BY or ripped art. The Diablo II Rakanishu was a look-only reference; none of its pixels are in the sheet.
