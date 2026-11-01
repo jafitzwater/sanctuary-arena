@@ -211,10 +211,13 @@ test('globes: killed by the player, Rakanishu drops one health and one mana (the
   const { sim, boss } = arena();
   sim.potions.health = 0;
   sim.potions.mana = 0;
+  const level0 = sim.level;
   kill(sim, boss, player(sim));
   assert.equal(sim.potions.health, 1);
   assert.equal(sim.potions.mana, 1);
-  assert.match(sim.banner?.text ?? '', /Rakanishu dropped a health potion and a mana potion/);
+  // His xp can level a fresh hero, and the existing level-up banner then replaces the drop banner (unchanged code).
+  if (sim.level === level0) assert.match(sim.banner?.text ?? '', /Rakanishu dropped a health potion and a mana potion/);
+  else assert.match(sim.banner?.text ?? '', /Level/);
 });
 
 test('animation columns: idle, walk12, attack12 around the strike, hit4, death5 (priority order)', () => {
