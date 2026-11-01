@@ -1518,7 +1518,11 @@ button.d2-text,
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.hero-spot:hover { background: radial-gradient(ellipse at 50% 45%, rgba(255, 232, 190, 0.1), rgba(255, 232, 190, 0) 70%); }
+/* t378u: hover hint only for real hover pointers (touch keeps :hover on the last tapped hero) and never on
+   the selected one; the canvas draws the selected look. */
+@media (hover: hover) and (pointer: fine) {
+  .hero-spot:not(.on):hover { background: radial-gradient(ellipse at 50% 45%, rgba(255, 232, 190, 0.08), rgba(255, 232, 190, 0) 70%); }
+}
 .hero-spot:active { transform: none; }
 .hero-spot:focus-visible { outline: 1px solid rgba(230, 211, 161, 0.7); outline-offset: 2px; }
 .hs-logo {
