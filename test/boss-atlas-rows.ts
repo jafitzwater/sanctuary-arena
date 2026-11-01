@@ -1,7 +1,8 @@
 /**
- * t364u (Joseph's sprite-sheet rule from PR #60, as for Rakanishu in test/rakanishu-atlas-rows.ts): every approved
- * boss atlas must fail a test when its direction rows are bad. Decodes each shipped WebP (test-only VP8L decoder)
- * and checks, for every column (idle 0-7, attack 8-19): all 8 direction rows are non-empty, no two rows are
+ * t364u + t370u (Joseph's sprite-sheet rule from PR #60, as for Rakanishu in test/rakanishu-atlas-rows.ts): every
+ * approved boss atlas must fail a test when its direction rows are bad. Decodes each shipped per-animation WebP
+ * (test-only VP8L decoder; 6 bosses x idle8, walk8, attack12, hit4, death10) and checks, for every column of every
+ * animation: all 8 direction rows are non-empty, no two rows are
  * pixel-identical and no two rows are horizontal mirror images (none of these sheets has a manifest mirror).
  * Comparisons are on each frame's opaque crop, so a shifted copy or flip of a row still counts.
  */
@@ -10,9 +11,10 @@ import atlases from '../src/game/art/boss-atlases.json';
 import { readWebpLossless } from './webp-lossless';
 
 const ROWS = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
-const COLS = Array.from({ length: 20 }, (_, i) => i);
+const ANIMS = { idle: 8, walk: 8, attack: 12, hit: 4, death: 10 } as const;
 const MIN_OPAQUE = 100; // px; every real boss frame is far larger (log below)
 type Meta = { w: number; h: number; frames: number[][] };
+type BossMeta = { anims: Record<keyof typeof ANIMS, Meta> };
 type Frame = { row: number; col: number; w: number; h: number; px: Uint8Array; opaque: number };
 let passed = 0;
 function test(name: string, fn: () => void): void {
@@ -53,8 +55,18 @@ function diffShare(a: Frame, b: Frame): number {
 }
 
 let firstCols: Map<number, Frame[]> | null = null;
-for (const [id, meta] of Object.entries(atlases as unknown as Record<string, Meta>)) {
-  const img = readWebpLossless(`public/sprites/bosses/${id}-atlas.webp`);
+const checked: string[] = [];
+const BOSSES = atlases as unknown as Record<string, BossMeta>;
+test('frame tables: 6 bosses x 5 animations (idle, walk, attack, hit, death), each with its own atlas', () => {
+  assert.deepEqual(Object.keys(BOSSES).sort(), ['council-a', 'council-b', 'council-c', 'countess', 'izual', 'radament']);
+  for (const b of Object.values(BOSSES)) assert.deepEqual(Object.keys(b.anims).sort(), Object.keys(ANIMS).sort());
+});
+for (const [boss, bm] of Object.entries(BOSSES)) for (const [anim, n] of Object.entries(ANIMS) as [keyof typeof ANIMS, number][]) {
+  const meta = bm.anims[anim];
+  const id = `${boss} ${anim}`;
+  const COLS = Array.from({ length: n }, (_, i) => i);
+  checked.push(id);
+  const img = readWebpLossless(`public/sprites/bosses/${boss}-${anim}.webp`);
   const crop = (x: number, y: number, w: number, h: number): Uint8Array => {
     const out = new Uint8Array(w * h * 4);
     for (let j = 0; j < h; j++) out.set(img.rgba.subarray(((y + j) * img.w + x) * 4, ((y + j) * img.w + x + w) * 4), j * w * 4);
@@ -93,8 +105,8 @@ for (const [id, meta] of Object.entries(atlases as unknown as Record<string, Met
   });
 
   let minOpaque = Infinity;
-  test(`${id}: all 20 columns (idle8 + attack12) have all 8 direction rows, each non-empty (>= ${MIN_OPAQUE} opaque px)`, () => {
-    assert.equal(meta.frames.length, 160);
+  test(`${id}: all ${n} columns have all 8 direction rows, each non-empty (>= ${MIN_OPAQUE} opaque px)`, () => {
+    assert.equal(meta.frames.length, 8 * n);
     assert.deepEqual([...byCol.keys()].sort((p, q) => p - q), COLS);
     for (const col of COLS) {
       const rows = byCol.get(col)!;
@@ -143,5 +155,7 @@ test('the checks catch bad rows: a copied row and a flipped row are flagged', ()
   assert.ok(mirrored(rows[2], flip));
   assert.ok(!same(rows[2], rows[6]) && !mirrored(rows[2], rows[6]), 'e and w are distinct renders');
 });
+
+test('every shipped boss atlas was checked (30)', () => assert.equal(checked.length, 30));
 
 console.log(`boss-atlas-rows: ${passed} passed`);

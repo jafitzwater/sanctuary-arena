@@ -129,8 +129,8 @@ import type { Camera, Sim, Spark, Unit } from './types';
 import { RAKANISHU_ID, SPARK_DELAY } from './data/rakanishu';
 import { drawRakanishu, drawSparkFrame, rakanishuHeight, SPARK_FRAMES } from './art/rakanishu-art';
 import { rakanishuCol } from './art/rakanishu-frames';
-import { bossArtTick, bossHeight, bossRingPx, drawBossFrame, requestBossArt } from './art/boss-atlas';
-import { bossArtFor, bossCol, type BossArtId } from './art/boss-frames';
+import { bossArtTick, bossHeight, bossRingPx, drawBossFrame, prefetchBossAnim } from './art/boss-atlas';
+import { BOSS_FRAMES, BOSS_HIT_S, BOSS_IDLE_MS, bossArtFor, bossFrame as pickBossFrame, type BossArtId } from './art/boss-frames';
 import { BADGE_RIM, FRAME, FRAME_COLORS, nameplateBarTop, unitFrameData, xpRingRadius, type UnitFrameData } from './unitFrame';
 
 /** Unit-frame restyle: bar left / bar top inside the cached chrome canvas (badge to the left, name above). */
@@ -327,6 +327,10 @@ export class Renderer {
   private readonly sparkArmed = new Set<number>();
   /** t345u: sim time each Rakanishu last started a hit reaction. */
   private readonly rakHitAt = new Map<number, number>();
+  /** t370u: sim time a hit last landed on each approved boss (starts its 4-frame hit reaction). */
+  private readonly bossHitAt = new Map<number, number>();
+  /** t370u: when each dead approved boss's death animation first showed (per death). */
+  private readonly bossDeathAt = new Map<number, { diedAt: number; start: number }>();
   private look: LookLive = { recall: false, recallSec: 0, recallFill: 0, slash: false, spark: false, flinch: false };
   private seen = { slash: 0, spark: 0, flinch: 0, portal: 0, heroSlash: 0 };
   private shadeCanvas: HTMLCanvasElement | null = null;
@@ -1352,9 +1356,12 @@ export class Renderer {
   }
 
   /**
-   * t364u: the Countess, Radament, Izual and Council A/B/C from Joseph's approved atlases (boss-atlas.ts). Row from
-   * the shared on-screen compass (classSheetRow, as the heroes and Rakanishu); column from boss-frames.ts (idle8 /
-   * attack12 only). False while the atlas is loading, so the procedural token stands in. Visual only.
+   * t364u + t370u: the Countess, Radament, Izual and Council A/B/C from Joseph's approved per-animation atlases
+   * (boss-atlas.ts). Row from the shared on-screen compass (classSheetRow, as the heroes and Rakanishu); animation
+   * and column from boss-frames.ts: walk by distance travelled (pose.travel, no foot sliding), the v2 wind-up /
+   * strike around the sim's own strike moment, a 4-frame hit reaction when a hit lands (never over a wind-up or
+   * strike), death once then held under the corpse fade. Renderer-side bookkeeping only; nothing in the sim changes.
+   * While an animation loads its idle frame stands in; false (procedural token) while idle is not loaded either.
    */
   private paintBossArt(
     ctx: CanvasRenderingContext2D,
@@ -1366,13 +1373,32 @@ export class Renderer {
     height: number,
     opts: DrawOpts,
   ): boolean {
-    const col = bossCol({
+    if (unit.alive && unit.hitFlash > 0.1) {
+      const last = this.bossHitAt.get(unit.id);
+      if (last == null || this.simTime - last > BOSS_HIT_S) this.bossHitAt.set(unit.id, this.simTime);
+    }
+    const hitAt = this.bossHitAt.get(unit.id);
+    // Death plays from its first frame once its atlas is on screen (a late load does not skip frames).
+    let dead = this.bossDeathAt.get(unit.id);
+    if (unit.alive) {
+      if (dead) this.bossDeathAt.delete(unit.id);
+      dead = undefined;
+    } else if (dead && dead.diedAt !== unit.diedAt) {
+      dead = undefined;
+    }
+    const clock = this.simTime + (unit.id % 8) * 0.37;
+    const frame = pickBossFrame(art, {
       alive: unit.alive,
+      deadFor: dead?.start != null ? Math.max(0, this.simTime - dead.start) : 0,
       swing: unit.swing,
       attackCd: unit.attackCd,
       engaged: unit.targetId != null,
-      clock: this.simTime + (unit.id % 8) * 0.37,
+      moving: pose.state !== 'idle',
+      travel: pose.travel,
+      hitAge: hitAt == null ? Infinity : this.simTime - hitAt,
+      clock,
     });
+    const idleCol = unit.alive ? Math.floor((Math.max(0, clock) * 1000) / BOSS_IDLE_MS) % BOSS_FRAMES.idle : 0;
     ctx.save();
     if (!unit.alive) ctx.globalAlpha = unit.corpse > 0 ? Math.max(0.05, (unit.corpse / 4.5) * 0.55) : 0.55;
     else if (unit.invuln > 0 && Math.sin(opts.time * 28) > 0) ctx.globalAlpha = 0.45;
@@ -1380,14 +1406,17 @@ export class Renderer {
     const base = Math.min(height, heroDrawHeight('idle') * CHAMPION_SPRITE_SCALE * this.spriteScale() * 2) * 0.72;
     groundShadow(ctx, dx, dy, base);
     groundRing(ctx, dx, dy, base, unit.team === 'ally');
-    const drew = drawBossFrame(ctx, art, classSheetRow(pose.compass), col, dx, dy, height);
+    const drew = drawBossFrame(ctx, art, frame.anim, classSheetRow(pose.compass), frame.col, dx, dy, height, idleCol);
     ctx.restore();
-    return drew;
+    if (!unit.alive && drew === 'anim' && !dead) this.bossDeathAt.set(unit.id, { diedAt: unit.diedAt, start: this.simTime });
+    return drew !== false;
   }
 
   /**
-   * t364u: lazy load. An approved boss atlas starts loading only when its boss is within about one screen of the
-   * view (or drawn), so it is usually ready before it appears; atlases unused for a while are released.
+   * t364u + t370u: lazy load per animation. idle + walk start loading when a boss is within about one screen of
+   * the view; attack and hit once it fights; death once it is low (under 35% hp) or dead. All soft requests: they
+   * only load if the art fits the 28 MiB budget without dropping art on screen (drawing an animation is the hard
+   * request). Atlases unwanted for a while are released.
    */
   private prefetchBossArt(sim: Sim, u: number): void {
     const ring = bossRingPx((heroDrawHeight('idle') * CHAMPION_SPRITE_SCALE * u) / 56);
@@ -1398,7 +1427,16 @@ export class Renderer {
       if (!art) continue;
       const p = this.project(unit.x, unit.y);
       if (p.x < -cssW || p.x > cssW * 2 || p.y < -cssH || p.y > cssH * 2) continue;
-      requestBossArt(art, ring);
+      if (!unit.alive) {
+        prefetchBossAnim(art, 'death', ring);
+        continue;
+      }
+      prefetchBossAnim(art, 'idle', ring);
+      prefetchBossAnim(art, 'walk', ring);
+      if (unit.targetId == null) continue;
+      prefetchBossAnim(art, 'attack', ring);
+      prefetchBossAnim(art, 'hit', ring);
+      if (unit.hp < unit.maxHp * 0.35) prefetchBossAnim(art, 'death', ring);
     }
     bossArtTick();
   }
