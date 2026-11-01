@@ -22,6 +22,8 @@ import {
   xpToNext,
 } from './economy';
 import { player } from './query';
+import { RAKANISHU_ID } from './data/rakanishu';
+import { triggerSparks } from './sparks';
 import type { Fx, Sim, Unit } from './types';
 
 /**
@@ -265,6 +267,8 @@ export function damageUnit(
   }
   else if (attacker?.id === sim.playerId && attacker.whirlT <= 0) sfx(sim, 'swing');
   if (target.hp <= 0) kill(sim, target, attacker);
+  // t345u: any hit on Rakanishu (sword, spell, arrow, tower) sparks a lightning burst, once per SPARK_COOLDOWN.
+  else if (target.defId === RAKANISHU_ID) triggerSparks(sim, target);
 }
 
 export function kill(sim: Sim, unit: Unit, killer: Unit | null): void {

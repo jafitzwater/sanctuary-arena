@@ -80,6 +80,8 @@ export interface Unit {
   facing: number;
   swing: number;
   hitFlash: number;
+  /** t345u: seconds until Rakanishu's next lightning burst may start (0 for everyone else). */
+  sparkCd: number;
   stun: number;
   slow: number;
   slowPct: number;
@@ -161,6 +163,24 @@ export interface Loadout {
   belt: string | null;
 }
 
+/** t345u: one lightning burst at Rakanishu ('burst') or one bolt at a unit ('bolt'). */
+export interface Spark {
+  kind: 'burst' | 'bolt';
+  id: number;
+  fromId: number;
+  /** Rakanishu's position at the burst. */
+  x0: number;
+  y0: number;
+  /** Where the bolt was aimed (the target's position at the burst). */
+  tx: number;
+  ty: number;
+  targetId: number;
+  t: number;
+  life: number;
+  landed: boolean;
+  hit: boolean;
+}
+
 export interface Sim {
   map: ActDef;
   classDef: ClassDef;
@@ -169,6 +189,8 @@ export interface Sim {
   units: Unit[];
   projectiles: Projectile[];
   fx: Fx[];
+  /** t345u: Rakanishu's lightning bursts and bolts in flight (src/game/sparks.ts). */
+  sparks: Spark[];
   nextId: number;
   playerId: number;
   enemyChampionId: number;

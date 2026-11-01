@@ -34,4 +34,6 @@ export const CAVE_BOSSES: CaveBoss[] = [
   { unit: 'council-member', name: 'Council Member', count: 3 },
   // Doc spells it "Izule"; Joseph's answer spells it "Izual" (the D2 name), used here.
   { unit: 'izual', name: 'Izual', count: 1 },
+  // t345u: Rakanishu takes the plains Cairn Stones camp; the Countess moves to her own mirrored pair of dens.
+  { unit: 'rakanishu', name: 'Rakanishu', count: 1 },
 ];

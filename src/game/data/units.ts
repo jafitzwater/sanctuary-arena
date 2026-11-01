@@ -134,6 +134,11 @@ export const UNIT_DEFS: Record<string, UnitDef> = {
   radament: caveBoss('radament', 'Radament', 1200),
   'council-member': caveBoss('council-member', 'Council Member', 1000),
   izual: caveBoss('izual', 'Izual', 2000),
+  // t345u: the plains mob boss in the Cairn Stones camp. Weaker than the Countess (800) and far below the jungle
+  // bosses (Council 3x1000, Radament 1200, Izual 2000), but 3x a mummy (200) and 5x a goatman (120): 600 hp.
+  // Damage 24 sits between a demon (12) and the Countess (33) because his lightning adds damage on top.
+  // Gold/xp 150/140 are above the Countess's 136/126 (the order). Armor, speed, range, interval: caveBoss defaults.
+  rakanishu: { ...caveBoss('rakanishu', 'Rakanishu', 600), ad: 24, gold: 150, xp: 140, color: '#2c4a78', accent: '#9fd0ff' },
   fallen: { ...fromMon('fallen'), hp: 76, ad: 6, moveSpeed: 66 },
   zombie: { ...fromMon('zombie'), hp: 174, ad: 7, moveSpeed: 34 },
   quillrat: { ...fromMon('quillrat'), hp: 94, ad: 6, moveSpeed: 50 },

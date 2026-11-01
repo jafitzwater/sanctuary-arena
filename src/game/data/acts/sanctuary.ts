@@ -255,10 +255,17 @@ export const SANCTUARY_DESIGN: ActDef = {
   // lava field (Hell Forge) and Council (9800, 4400) -> (7600, 2200) into the dense jungle (jungle cave), so
   // each zone has one camp and the pairs stay exact mirrors (W - x, H - y).
   dens: [
-    { id: 1, x: 3200, y: 5600, unit: 'countess', count: 1, respawn: CAVE_RESPAWN, cave: true },
+    // t345u: Rakanishu is the plains mob boss in the Cairn Stones camp (camp art unchanged).
+    { id: 1, x: 3200, y: 5600, unit: 'rakanishu', count: 1, respawn: CAVE_RESPAWN, cave: true },
     { id: 2, x: 4400, y: 9800, unit: 'radament', count: 1, respawn: CAVE_RESPAWN, cave: true },
     { id: 3, x: 7600, y: 2200, unit: 'council-member', count: 3, respawn: CAVE_RESPAWN, cave: true },
     { id: 4, x: 8800, y: 6400, unit: 'izual', count: 1, respawn: CAVE_RESPAWN, cave: true },
+    // t345u: the Countess moved out of the plains camp to open ground between the top and mid lanes, mirrored
+    // exactly for red (W-x, H-y). Played coords about (1360, 2153) / (5440, 4647): road 856, river 858, tower 998,
+    // nearest den/shrine/pit 1116 played px away; walkable in a 250 px ring. No camp art (camp: false), so she
+    // does not duplicate the Cairn Stones / desert camps; she gets the drawn clearing. Stats unchanged.
+    { id: 5, x: 2400, y: 3800, unit: 'countess', count: 1, respawn: CAVE_RESPAWN, cave: true, camp: false },
+    { id: 6, x: 9600, y: 8200, unit: 'countess', count: 1, respawn: CAVE_RESPAWN, cave: true, camp: false },
   ],
   // Mirrored with the roadways (paint only, item 23). Map 12k item 3: drawn as one continuous lava river,
   // top-left corner to bottom-right corner across the mid lane, as in the reference.
