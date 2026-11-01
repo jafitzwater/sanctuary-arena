@@ -23,8 +23,8 @@ assert.equal(UNIT_DEFS.radament.hp, 1200);
 assert.equal(UNIT_DEFS['council-member'].hp, 1000);
 assert.equal(UNIT_DEFS.izual.hp, 2000);
 const dens = sanctuary.dens!;
-// t345u: Rakanishu took den 1 (the plains camp); the Countess moved to her own mirrored pair (dens 5 and 6).
-assert.deepEqual(dens.map((d) => [d.unit, d.count]), [['rakanishu', 1], ['radament', 1], ['council-member', 3], ['izual', 1], ['countess', 1], ['countess', 1]]);
+// t345u: Rakanishu took den 1 (the plains camp); the Countess moved to her own den 5 (t354u: only one Countess).
+assert.deepEqual(dens.map((d) => [d.unit, d.count]), [['rakanishu', 1], ['radament', 1], ['council-member', 3], ['izual', 1], ['countess', 1]]);
 assert.ok(dens.every((d) => d.cave && d.respawn === 180), 'only caves, 180 s');
 
 const sim = createMatch(sanctuary, barbarian, 1);

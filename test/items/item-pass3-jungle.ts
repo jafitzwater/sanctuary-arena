@@ -15,7 +15,7 @@ const TOWER_MARGIN = 60;
 const LANE_MIN = mapLen(260); // scales with MAP_SCALE (147 px at 6,800)
 const lanes = (sanctuary.paths ?? []).map((path) => path.lane);
 const dens = sanctuary.dens ?? [];
-assert.equal(dens.length, 6); // t345u: + the Countess's mirrored pair
+assert.equal(dens.length, 5); // t345u: + the Countess; t354u: one Countess only (no mirror)
 
 for (const den of dens) {
   for (const tower of sanctuary.towers) {
@@ -31,8 +31,9 @@ for (const den of dens) {
   assert.ok(inJungleInterior(sanctuary, den.x, den.y), `${den.unit} sits in the middle jungle`);
   assert.ok(walkable(sanctuary, den.x, den.y), `${den.unit} cave floor is walkable`);
 }
-// Caves come in mirrored pairs.
+// Caves come in mirrored pairs, except the one Countess (t354u [JOSEPH]: one Countess, in the plains).
 for (const den of dens) {
+  if (den.unit === 'countess') continue;
   assert.ok(
     dens.some((other) => Math.hypot(sanctuary.width - den.x - other.x, sanctuary.height - den.y - other.y) <= 1),
     `${den.unit} has a mirrored cave`,

@@ -79,15 +79,14 @@ test('placement: Rakanishu holds den 1, the plains Cairn Stones camp, respawning
   assert.equal(unit.maxHp, 600);
 });
 
-test('the Countess moved out: a mirrored pair (one per side), off lanes/river/towers, walkable, stats unchanged', () => {
+test('the Countess moved out: ONE Countess (t354u), in the act 1 plains, off lanes/river/towers, walkable, stats unchanged', () => {
   const dens = (map.dens ?? []).filter((d) => d.unit === 'countess');
-  assert.equal(dens.length, 2);
-  const [a, b] = dens;
-  assert.ok(Math.abs(a.x - (W - b.x)) < 1e-6 && Math.abs(a.y - (H - b.y)) < 1e-6, 'exact mirror');
+  assert.equal(dens.length, 1, 'one Countess, period');
+  const [a] = dens;
+  assert.equal(zoneAt(map, a.x, a.y), 'jungle-plains', 'in the plains (act 1 area)');
+  const twin = (map.dens ?? []).find((d) => Math.abs(d.x - (W - a.x)) < 1e-6 && Math.abs(d.y - (H - a.y)) < 1e-6);
+  assert.equal(twin, undefined, 'no mirrored Countess');
   const rakDen = (map.dens ?? []).find((d) => d.unit === RAKANISHU_ID)!;
-  const blue = (d: { x: number; y: number }) =>
-    Math.hypot(d.x - map.playerBase.x, d.y - map.playerBase.y) < Math.hypot(d.x - map.enemyBase.x, d.y - map.enemyBase.y);
-  assert.notEqual(blue(a), blue(b), 'one per side');
   for (const den of dens) {
     assert.ok(Math.hypot(den.x - rakDen.x, den.y - rakDen.y) > 300, 'not in the plains camp any more');
     assert.equal(den.cave, true);
@@ -111,7 +110,7 @@ test('the Countess moved out: a mirrored pair (one per side), off lanes/river/to
   }
   assert.deepEqual([countess.hp, countess.ad, countess.gold, countess.xp], [800, 33, 136, 126]);
   const sim = createMatch(map, barbarian, 1);
-  assert.equal(sim.units.filter((u) => u.defId === 'countess' && u.alive).length, 2);
+  assert.equal(sim.units.filter((u) => u.defId === 'countess').length, 1);
 });
 
 function arena(): { sim: Sim; boss: Unit; hero: Unit } {

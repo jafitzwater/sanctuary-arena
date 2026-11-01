@@ -771,8 +771,8 @@ function clearHalf(x: number, y: number, nx: number, ny: number, sign: number): 
   const sim = pastOpening(createMatch(sanctuary, barbarian, 1));
   const dens = sim.map.dens ?? [];
   // Item 15 [DOC]/[JOSEPH]: the 6 dens became 4 cave bosses (Countess, Radament, Council, Izual).
-  // t345u: Rakanishu took the plains camp and the Countess moved to a mirrored pair of her own: 6 dens.
-  assert.equal(dens.length, 6);
+  // t345u: Rakanishu took the plains camp and the Countess moved to a den of her own; t354u: one Countess only: 5 dens.
+  assert.equal(dens.length, 5);
   const boss = sim.units.find((unit) => unit.name === 'The Countess');
   assert.ok(boss && boss.team === 'wild' && boss.alive);
   const named = sim.units.find((unit) => unit.name === 'Izual');
