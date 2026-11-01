@@ -104,7 +104,7 @@ async function main(): Promise<void> {
     const themes = dens.map((den) => campThemeForDen(map, den));
     assert.deepEqual([...themes].sort(), [...CAMP_THEMES].sort());
     const byId = Object.fromEntries(dens.map((den, i) => [den.unit, themes[i]]));
-    assert.deepEqual(byId, { rakanishu: 'plains', radament: 'forge', 'council-member': 'jungle', izual: 'desert' });
+    assert.deepEqual(byId, { rakanishu: 'plains', radament: 'desert', 'council-member': 'jungle', izual: 'forge' }); // t365u: Radament/Izual swapped
     assert.equal(ZONE_CAMP['jungle-dense'], 'jungle');
     assert.equal(ZONE_CAMP['jungle-lava'], 'forge');
     // The same number of camps on each side (blue = nearer the blue base): plains + forge blue, jungle + desert red.
