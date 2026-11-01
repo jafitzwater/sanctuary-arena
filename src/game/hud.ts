@@ -2,8 +2,8 @@ import portraitUrl from '../assets/art/d2/portrait.webp';
 import { clampMinimapW, MINIMAP, teamIconsWidth } from './view';
 import { drawClassPortrait } from './art/director-sheets';
 import { DEFAULT_CLASS_ID } from './data/classes';
-import { HERO_ART, HERO_SPOTS, heroSelectView, howToNext, spotBox, stepHero, type HowToEvent } from './heroSelect';
-import { HeroSelectFx } from './heroSelectFx';
+import { HERO_ART, HERO_SPOTS, heroLayerUrls, heroSelectView, howToNext, spotBox, stepHero, type HowToEvent } from './heroSelect';
+import { HeroSelectFx, type HeroLayerImages } from './heroSelectFx';
 import { itemIcon, plateIcons, skillIcon } from './art/icons';
 import { isBetterGear, isShopItem, itemById, itemGate, ITEMS, potionCap, type ItemDef } from './data/items';
 import { canRankUp, inShopRange, netGearPrice, manaCost, MAX_LEVEL, xpToNext } from './combat';
@@ -416,7 +416,20 @@ export class Hud {
     const fx = this.root.querySelector<HTMLCanvasElement>('#hs-fx');
     this.playBtn = this.root.querySelector<HTMLButtonElement>('#play-btn');
     if (bg && !bg.src) bg.src = `${import.meta.env.BASE_URL}${HERO_ART.url}`;
-    if (bg && fx) this.heroFx = new HeroSelectFx(fx, bg);
+    if (fx && !this.heroFx) {
+      // t389u: each hero's forward pose and clean plate (about 30 KB a hero), fetched in the background.
+      const layers: Record<string, HeroLayerImages> = {};
+      for (const spot of HERO_SPOTS) {
+        const urls = heroLayerUrls(spot.id);
+        const forward = new Image();
+        const plate = new Image();
+        forward.decoding = plate.decoding = 'async';
+        forward.src = `${import.meta.env.BASE_URL}${urls.forward}`;
+        plate.src = `${import.meta.env.BASE_URL}${urls.plate}`;
+        layers[spot.id] = { forward, plate };
+      }
+      this.heroFx = new HeroSelectFx(fx, layers);
+    }
     if (host && host.childElementCount === 0) {
       for (const spot of HERO_SPOTS) {
         const button = document.createElement('button');

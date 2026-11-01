@@ -7,13 +7,17 @@ import assert from 'node:assert/strict';
 import { existsSync, statSync } from 'node:fs';
 import { ROSTER } from '../src/game/data/classes/roster';
 import { DEFAULT_CLASS_ID } from '../src/game/data/classes';
-import { HeroSelectFx } from '../src/game/heroSelectFx';
+import { HeroSelectFx, SORC_RAISED_HAND, SORC_STAFF_TIP, type HeroLayerImages } from '../src/game/heroSelectFx';
+import { FORWARD_STEP, HERO_ART_LAYERS } from '../src/game/heroSelectArt';
 import {
   COMING_SOON,
+  HERO_BASE,
   HERO_EFFECTS,
-  LIT_LUM,
-  STAND_BACK_LUM,
-  heroLook,
+  STAND_BACK_GAIN,
+  forwardPoint,
+  forwardRect,
+  heroLayerUrls,
+  plateRect,
   heroLooks,
   HERO_ART,
   HERO_BLURBS,
@@ -47,18 +51,44 @@ for (let i = 1; i < HERO_SPOTS.length; i++) {
   const b = spotBox(HERO_SPOTS[i]);
   assert.ok(a.left + a.width <= b.left + 1e-9, `${HERO_SPOTS[i - 1].id} / ${HERO_SPOTS[i].id} hotspots overlap`);
 }
-// t378u: every hero has its own effect config; only the Sorceress has the lightning arc.
+// t389u: no per-class effects any more; only the Sorceress keeps her (live canvas) lightning.
 assert.deepEqual(Object.keys(HERO_EFFECTS).sort(), [...ORDER].sort());
-const WANT_FX: Record<string, string> = { amazon: 'sparks', assassin: 'cold', necromancer: 'souls', barbarian: 'rage', paladin: 'holy', sorceress: 'lightning', druid: 'cold' };
+assert.deepEqual(ORDER.filter((id) => HERO_EFFECTS[id] === 'lightning'), ['sorceress']);
+assert.deepEqual(ORDER.filter((id) => HERO_EFFECTS[id] !== null), ['sorceress']);
+
+// t389u forward layers: every hero has a forward cutout and a clean plate, shipped and light.
+assert.deepEqual(Object.keys(HERO_ART_LAYERS).sort(), [...ORDER].sort());
+assert.deepEqual(FORWARD_STEP, { scale: 1.22, dy: 41 });
+let layerBytes = 0;
 for (const id of ORDER) {
-  const e = HERO_EFFECTS[id];
-  assert.equal(e.fx, WANT_FX[id], `${id} effect`);
-  for (const c of [...e.glow, ...e.accent]) assert.ok(Number.isInteger(c) && c >= 0 && c <= 255, `${id} colour`);
-  assert.ok(e.strength > 0 && e.strength <= 1, `${id} strength`);
-  // Coming soon heroes play a subtle version; the five playable ones play it in full.
-  assert.equal(e.strength < 1, !PLAYABLE.includes(id), `${id} strength vs playable`);
+  for (const url of Object.values(heroLayerUrls(id))) {
+    const file = `public/${url}`;
+    assert.ok(existsSync(file), file);
+    layerBytes += statSync(file).size;
+    assert.ok(statSync(file).size < 60 * 1024, `${file} is ${statSync(file).size} bytes`);
+  }
+  const art = HERO_ART_LAYERS[id];
+  const spot = HERO_SPOTS.find((s) => s.id === id)!;
+  const fr = forwardRect(id)!;
+  const pr = plateRect(id)!;
+  // Step forward: 1.22x the standing size, pivoting on the feet (same x), feet 41 base px lower.
+  assert.ok(Math.abs(fr.w - art.forward[2] * 1.22 * HERO_BASE.scale) < 1e-9 && Math.abs(fr.h - art.forward[3] * 1.22 * HERO_BASE.scale) < 1e-9, `${id} scale`);
+  const feetX = HERO_BASE.x + art.feet[0] * HERO_BASE.scale;
+  const u = (art.feet[0] - art.forward[0]) / art.forward[2];
+  assert.ok(Math.abs(fr.x + u * fr.w - feetX) < 1e-9, `${id} pivots on its feet`);
+  const v = (art.feet[1] - art.forward[1]) / art.forward[3];
+  assert.ok(Math.abs(fr.y + v * fr.h - (HERO_BASE.y + (art.feet[1] + 41) * HERO_BASE.scale)) < 1e-9, `${id} feet 41 px lower`);
+  // The forward pose and the plate stay in the frame, and the plate covers the standing hero's hotspot centre.
+  assert.ok(fr.x >= 0 && fr.y >= 0 && fr.x + fr.w <= HERO_ART.width && fr.y + fr.h <= HERO_ART.height, `${id} forward in frame`);
+  assert.ok(pr.x < spot.x && pr.x + pr.w > spot.x, `${id} plate covers x ${spot.x}`);
 }
-assert.deepEqual(ORDER.filter((id) => HERO_EFFECTS[id].fx === 'lightning'), ['sorceress']);
+assert.ok(layerBytes < 320 * 1024, `forward layers + plates ${layerBytes} bytes`);
+// Lightning ends sit on the Sorceress's forward staff orb and raised hand (inside her forward box, upper part).
+for (const p of [SORC_STAFF_TIP, SORC_RAISED_HAND]) {
+  const q = forwardPoint('sorceress', p.x, p.y)!;
+  const r = forwardRect('sorceress')!;
+  assert.ok(q.x > r.x && q.x < r.x + r.w && q.y > r.y && q.y < r.y + r.h * 0.2, 'lightning anchored on the forward pose');
+}
 
 // Blurb table: one complete entry per hero, nothing extra.
 assert.deepEqual(Object.keys(HERO_BLURBS).sort(), [...ORDER].sort());
@@ -115,28 +145,23 @@ const bg = `public/${HERO_ART.url}`;
 assert.ok(existsSync(bg), bg);
 assert.ok(statSync(bg).size < 200 * 1024, `${bg} is ${statSync(bg).size} bytes`);
 
-// t378u: one hero highlighted at a time; everyone else stands back at a common level.
+// t378u/t389u: one hero forward at a time; everyone else stands back (shaded x0.42 as in the mock-ups, still).
+assert.equal(STAND_BACK_GAIN, 0.42);
 for (const sel of ORDER) {
   const looks = heroLooks(sel);
   assert.deepEqual(looks.map((l) => l.id), ORDER);
-  assert.deepEqual(looks.filter((l) => l.lit).map((l) => l.id), [sel], `only ${sel} lit`);
+  assert.deepEqual(looks.filter((l) => l.lit).map((l) => l.id), [sel], `only ${sel} forward`);
   for (const l of looks) {
     const spot = HERO_SPOTS.find((s) => s.id === l.id)!;
     if (l.lit) {
-      assert.ok(l.gain === 1 && l.lift > 1 && l.glow > 0 && l.sway && l.fx === HERO_EFFECTS[l.id].fx, `${l.id} lit look`);
-      // Lit heroes reach about the same brightness, whatever the backdrop baked in.
-      assert.ok(spot.lum * l.lift >= LIT_LUM * 0.8, `${l.id} lit bright enough (${(spot.lum * l.lift).toFixed(1)})`);
+      assert.ok(l.gain === 1 && l.fx === HERO_EFFECTS[l.id], `${l.id} lit look`);
+      assert.deepEqual(Object.keys(l).sort(), ['fx', 'gain', 'id', 'lit'], 'no sway / lift / glow state left');
     } else {
-      assert.ok(l.gain < 1 && l.lift === 0 && l.glow === 0 && !l.sway && l.fx === null, `${l.id} stands back under ${sel}`);
-      assert.ok(spot.lum * l.gain <= STAND_BACK_LUM + 1e-9, `${l.id} back level (${(spot.lum * l.gain).toFixed(1)})`);
+      assert.ok(spot && l.gain === STAND_BACK_GAIN && l.fx === null, `${l.id} stands back under ${sel}`);
     }
   }
 }
-// The baked-in Sorceress (about twice as bright in the art) gets the most shade when she stands back.
-const back = (id: string) => heroLook(id, 'barbarian').gain;
-assert.ok(ORDER.filter((id) => id !== 'sorceress' && id !== 'barbarian').every((id) => back('sorceress') < back(id)));
-assert.ok(HERO_SPOTS.find((s) => s.id === 'sorceress')!.lum * back('sorceress') <= STAND_BACK_LUM);
-// Unknown selection: nobody lit.
+// Unknown selection: nobody forward.
 assert.equal(heroLooks('nobody').filter((l) => l.lit).length, 0);
 
 // t378u state reset, on the real renderer with a recording 2D context: after any selection history (re-select,
@@ -164,7 +189,7 @@ function fakeCanvas(log: Rec[] | null) {
           if (key === 'restore') tx = stack.pop() ?? 0;
           if (key === 'setTransform') tx = 0;
           if (!log) return;
-          if (key === 'drawImage') log.push({ op: 'drawImage', args: [Math.round(((args[1] as number) + (args[3] as number) / 2) * 10) / 10] });
+          if (key === 'drawImage') log.push({ op: 'drawImage', args: [(args[0] as { name: string }).name, Math.round(((args[1] as number) + (args[3] as number) / 2) * 10) / 10] });
           if (key === 'fill') {
             const f = target.fillStyle;
             log.push({ op: 'fill', args: [Math.round(tx), f instanceof FakeGradient ? f.stops.join('|') : String(f)] });
@@ -188,38 +213,62 @@ const hadDoc = 'document' in g;
 const hadWin = 'window' in g;
 g.document = { createElement: () => fakeCanvas(null) };
 g.window = { devicePixelRatio: 1 };
-const art = { complete: true, naturalWidth: 1920, naturalHeight: 787 } as unknown as HTMLImageElement;
+const img = (name: string) => ({ complete: true, naturalWidth: 100, naturalHeight: 100, name }) as unknown as HTMLImageElement;
+const layers: Record<string, HeroLayerImages> = {};
+for (const id of ORDER) layers[id] = { forward: img(`${id}:forward`), plate: img(`${id}:plate`) };
 const frame = (fx: HeroSelectFx, log: Rec[], sel: string, time: number) => {
   log.length = 0;
   fx.draw(time, sel, false);
   return JSON.stringify(log);
 };
 const shared: Rec[] = [];
-const used = new HeroSelectFx(fakeCanvas(shared) as unknown as HTMLCanvasElement, art);
+const used = new HeroSelectFx(fakeCanvas(shared) as unknown as HTMLCanvasElement, layers);
 const history = ['sorceress', 'barbarian', 'sorceress', 'sorceress', 'assassin', 'sorceress', 'druid', 'sorceress', 'paladin', 'necromancer', 'sorceress', 'amazon'];
 let time = 3.1;
 for (const sel of history) {
   for (let f = 0; f < 3; f++) frame(used, shared, sel, (time += 1 / 240)); // rapid: a few frames each
   for (const next of ORDER) {
     const freshLog: Rec[] = [];
-    const fresh = new HeroSelectFx(fakeCanvas(freshLog) as unknown as HTMLCanvasElement, art);
+    const fresh = new HeroSelectFx(fakeCanvas(freshLog) as unknown as HTMLCanvasElement, layers);
     assert.equal(frame(used, shared, next, time), frame(fresh, freshLog, next, time), `after ${sel}, ${next} frame matches a fresh screen`);
   }
 }
 const lightningStrokes = (log: Rec[]) => log.filter((r) => r.op === 'stroke' && String(r.args[1]).startsWith('rgba(245, 248, 255'));
+const drawn = (log: Rec[]) => log.filter((r) => r.op === 'drawImage').map((r) => r.args[0] as string);
 for (const sel of ORDER) {
   frame(used, shared, 'sorceress', (time += 0.05));
   assert.ok(lightningStrokes(shared).length > 0, 'sorceress frame has lightning');
+  assert.deepEqual(drawn(shared), ['sorceress:plate', 'sorceress:forward']);
   frame(used, shared, sel, (time += 0.05));
-  const lifts = shared.filter((r) => r.op === 'drawImage').map((r) => r.args[0] as number);
-  const spot = HERO_SPOTS.find((s) => s.id === sel)!;
-  assert.ok(lifts.length >= 2 && lifts.every((x) => Math.abs(x - spot.x) < 1.5), `${sel}: only ${sel} is lifted (${lifts})`);
+  // Exactly one hero forward: its plate under, its forward pose over; nobody else's layers.
+  assert.deepEqual(drawn(shared), [`${sel}:plate`, `${sel}:forward`], `${sel}: only ${sel} steps forward`);
+  // Everyone else stands back: exactly one veil (black at 0.58 = x0.42), between the plate and the forward pose.
+  const shades = shared.filter((r) => r.op === 'fill' && String(r.args[1]).startsWith('rgba(0, 0, 0'));
+  assert.deepEqual(shades.map((r) => r.args[1]), [`rgba(0, 0, 0, ${1 - STAND_BACK_GAIN})`], `${sel}: one stand-back veil`);
+  const order = shared.filter((r) => r.op === 'drawImage' || shades.includes(r)).map((r) => (r.op === 'fill' ? 'veil' : r.args[0]));
+  assert.deepEqual(order, [`${sel}:plate`, 'veil', `${sel}:forward`], `${sel}: plate, veil, then the forward pose unshaded`);
   if (sel !== 'sorceress') {
     assert.equal(lightningStrokes(shared).length, 0, `no lightning left after switching to ${sel}`);
-    const sorcX = HERO_SPOTS.find((s) => s.id === 'sorceress')!.x;
-    const atSorc = shared.filter((r) => r.op !== 'drawImage' && Math.abs((r.args[0] as number) - sorcX) < 2);
-    assert.ok(atSorc.length >= 1 && atSorc.every((r) => r.op === 'fill' && String(r.args[1]).startsWith('rgba(4, 3, 2')), `sorceress only gets the stand-back shade under ${sel}`);
+    assert.equal(shared.filter((r) => r.op === 'stroke').length, 0, `${sel}: lit hold, no effects`);
   }
+}
+// Still (reduced motion): the Sorceress's lightning holds one frame; the others are identical whatever the time.
+for (const id of ORDER) {
+  const l1: Rec[] = [];
+  const l2: Rec[] = [];
+  const f1 = new HeroSelectFx(fakeCanvas(l1) as unknown as HTMLCanvasElement, layers);
+  const f2 = new HeroSelectFx(fakeCanvas(l2) as unknown as HTMLCanvasElement, layers);
+  f1.draw(1.3, id, id !== 'sorceress');
+  f2.draw(7.9, id, id !== 'sorceress');
+  if (id !== 'sorceress') assert.equal(JSON.stringify(l1), JSON.stringify(l2), `${id} holds still`);
+}
+// Layers not loaded yet: no plate, veil or forward pose drawn (the scene simply shows as is).
+{
+  const log: Rec[] = [];
+  const pending: Record<string, HeroLayerImages> = { barbarian: { forward: { complete: false, naturalWidth: 0 } as HTMLImageElement, plate: img('barbarian:plate') } };
+  new HeroSelectFx(fakeCanvas(log) as unknown as HTMLCanvasElement, pending).draw(2, 'barbarian', false);
+  assert.equal(drawn(log).length, 0, 'nothing drawn until the forward layer loads');
+  assert.equal(log.filter((r) => r.op === 'fill').length, 0, 'no veil until the forward layer loads');
 }
 if (!hadDoc) delete g.document;
 if (!hadWin) delete g.window;
