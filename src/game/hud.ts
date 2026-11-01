@@ -1,8 +1,9 @@
 import portraitUrl from '../assets/art/d2/portrait.webp';
 import { clampMinimapW, MINIMAP, teamIconsWidth } from './view';
 import { drawClassPortrait } from './art/director-sheets';
-import { ROSTER } from './data/classes/roster';
 import { DEFAULT_CLASS_ID } from './data/classes';
+import { HERO_ART, HERO_SPOTS, heroSelectView, howToNext, spotBox, stepHero, type HowToEvent } from './heroSelect';
+import { HeroSelectFx } from './heroSelectFx';
 import { itemIcon, plateIcons, skillIcon } from './art/icons';
 import { isBetterGear, isShopItem, itemById, itemGate, ITEMS, potionCap, type ItemDef } from './data/items';
 import { canRankUp, inShopRange, netGearPrice, manaCost, MAX_LEVEL, xpToNext } from './combat';
@@ -44,6 +45,11 @@ export class Hud {
 
   shopOpen = false;
   helpOpen = false;
+  /** Hero select (t373u): the hero picked at the campfire, playable or not, and the how-to-play modal. */
+  heroSel = DEFAULT_CLASS_ID;
+  howToOpen = false;
+  private heroFx: HeroSelectFx | null = null;
+  private playBtn: HTMLButtonElement | null = null;
   treeOpen = false;
   tab: MenuTab = 'stats';
   beltSlot = 0;
@@ -145,7 +151,7 @@ export class Hud {
       (event.currentTarget as HTMLElement).classList.toggle('off');
     });
     this.arm('#play-btn', () => this.onPlay?.());
-    this.buildClasses();
+    this.buildHeroSelect();
     this.arm('#again-btn', () => this.onAgain?.());
     this.arm('#menu-btn', () => this.onMenu?.());
     this.arm('#end-next', () => this.onContinue?.());
@@ -291,6 +297,8 @@ export class Hud {
     const hud = this.q('#hud');
     const end = this.q('#end');
     this.reveal(title, mode === 'title');
+    if (mode === 'title') this.heroFx?.draw(performance.now() / 1000, this.heroSel, reducedMotion());
+    else if (this.howToOpen) this.setHowTo({ type: 'close' });
     this.reveal(hud, mode === 'play');
     this.reveal(end, mode === 'end');
     if (mode === 'end') this.fillEnd(sim, post);
@@ -393,45 +401,119 @@ export class Hud {
     if (this.treeOpen) this.syncTree(sim);
   }
 
+  /** Game confirmed a playable pick (or restored one): keep the campfire in step. */
   markClass(id: string): void {
-    for (const button of this.root.querySelectorAll<HTMLButtonElement>('.class-btn')) {
-      button.classList.toggle('on', button.dataset.class === id);
-    }
+    if (this.heroSel !== id) this.selectHero(id, false);
   }
 
-  private buildClasses(): void {
-    const host = this.root.querySelector('#class-pick');
-    if (!host || host.childElementCount > 0) return;
-    for (const entry of ROSTER) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'class-btn';
-      button.dataset.class = entry.id;
-      button.disabled = !entry.playable;
-      button.textContent = entry.playable ? entry.name : `${entry.name} — coming soon`;
-      if (entry.id === DEFAULT_CLASS_ID) button.classList.add('on');
-      button.addEventListener('click', () => {
-        if (!entry.playable) return;
-        this.markClass(entry.id);
-        this.onPickClass?.(entry.id);
-      });
-      host.appendChild(button);
+  /**
+   * Hero select (t373u-t375u): seven hotspots over the D2R campfire art. Every hero can be
+   * selected; only playable ones reach the Game (onPickClass) and show Enter Sanctuary.
+   */
+  private buildHeroSelect(): void {
+    const host = this.root.querySelector('#hs-spots');
+    const bg = this.root.querySelector<HTMLImageElement>('#hs-bg');
+    const fx = this.root.querySelector<HTMLCanvasElement>('#hs-fx');
+    this.playBtn = this.root.querySelector<HTMLButtonElement>('#play-btn');
+    if (bg && !bg.src) bg.src = `${import.meta.env.BASE_URL}${HERO_ART.url}`;
+    if (bg && fx) this.heroFx = new HeroSelectFx(fx, bg);
+    if (host && host.childElementCount === 0) {
+      for (const spot of HERO_SPOTS) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'hero-spot';
+        button.dataset.class = spot.id;
+        button.setAttribute('role', 'radio');
+        button.setAttribute('aria-label', spot.name);
+        const box = spotBox(spot);
+        button.style.left = `${box.left}%`;
+        button.style.top = `${box.top}%`;
+        button.style.width = `${box.width}%`;
+        button.style.height = `${box.height}%`;
+        button.addEventListener('click', () => this.selectHero(spot.id, true));
+        host.appendChild(button);
+      }
     }
+    this.arm('#howto-btn', () => this.setHowTo({ type: 'toggle' }));
+    this.arm('#howto-close', () => this.setHowTo({ type: 'close' }));
+    const modal = this.root.querySelector<HTMLElement>('#howto');
+    const card = this.root.querySelector<HTMLElement>('#howto-card');
+    modal?.addEventListener('pointerdown', (event) => {
+      if (event.target !== modal) return;
+      event.preventDefault();
+      this.setHowTo({ type: 'pointer', insideCard: !!card && card.contains(event.target as Node) });
+    });
+    // Capture phase, so it runs before the game's window key handler (Enter there starts the match).
+    window.addEventListener(
+      'keydown',
+      (event) => {
+        if (this.q('#title').hidden) return;
+        const target = event.target instanceof Element ? event.target : null;
+        if (this.howToOpen) {
+          if (event.key === 'Escape') this.setHowTo({ type: 'key', key: event.key });
+          // No match starts behind the modal; a focused modal button still activates natively.
+          if (event.key === 'Enter') event.stopPropagation();
+          return;
+        }
+        if (event.key === 'Enter' && target?.closest('#howto-btn')) {
+          event.stopPropagation();
+          return;
+        }
+        const spot = target?.closest<HTMLElement>('.hero-spot');
+        if (event.key === 'Enter' && spot?.dataset.class) {
+          // Enter on a hero picks it, then enters Sanctuary if it is playable (the old Enter shortcut).
+          event.preventDefault();
+          event.stopPropagation();
+          this.selectHero(spot.dataset.class, true);
+          if (heroSelectView(spot.dataset.class).showEnter) this.onPlay?.();
+          return;
+        }
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        const next = stepHero(this.heroSel, event.key === 'ArrowLeft' ? -1 : 1);
+        this.selectHero(next, true);
+        this.root.querySelector<HTMLElement>(`.hero-spot[data-class="${next}"]`)?.focus();
+      },
+      true,
+    );
+    this.selectHero(this.heroSel, false);
+  }
+
+  private selectHero(id: string, fromUser: boolean): void {
+    this.heroSel = id;
+    const view = heroSelectView(id);
+    for (const button of this.root.querySelectorAll<HTMLElement>('.hero-spot')) {
+      const on = button.dataset.class === id;
+      button.classList.toggle('on', on);
+      button.setAttribute('aria-checked', on ? 'true' : 'false');
+      button.tabIndex = on ? 0 : -1;
+    }
+    this.text('#title-class', view.name);
+    this.text('#title-blurb', view.blurb);
+    this.q('#title').classList.toggle('coming-soon', view.comingSoon);
+    // Enter Sanctuary is in the DOM only while a playable hero is selected.
+    const actions = this.root.querySelector('#hs-actions');
+    const play = this.playBtn;
+    if (actions && play) {
+      if (view.showEnter && play.parentElement !== actions) actions.appendChild(play);
+      if (!view.showEnter && play.parentElement) play.remove();
+    }
+    if (fromUser && view.showEnter) this.onPickClass?.(id);
+  }
+
+  private setHowTo(event: HowToEvent): void {
+    const open = howToNext(this.howToOpen, event);
+    if (open === this.howToOpen) return;
+    this.howToOpen = open;
+    this.reveal(this.q('#howto'), open);
+    const btn = this.root.querySelector<HTMLElement>('#howto-btn');
+    btn?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) this.root.querySelector<HTMLElement>('#howto-close')?.focus();
+    else btn?.focus();
   }
 
   private fillTitle(sim: Sim): void {
-    this.text('#title-class', sim.classDef.name);
-    this.text('#title-blurb', sim.classDef.blurb);
-    this.text('#title-act', `Act ${sim.map.actNumber} · ${sim.map.name}`);
-    const play = this.root.querySelector('#play-btn');
+    const play = this.playBtn ?? this.root.querySelector('#play-btn');
     if (play) play.textContent = sim.map.id === 'sanctuary' ? 'Enter Sanctuary' : 'Enter the Moor';
-    const keyed = sim.classDef.skills.filter((skill) => skill.key);
-    this.text(
-      '#title-skills',
-      keyed.length
-        ? keyed.map((skill) => `${skill.key} ${skill.name}`).join('   ')
-        : `${sim.classDef.skills[0]?.name ?? 'Bash'} starts on Q. Press T to spend points. Learn a skill before it can go on the belt.`,
-    );
   }
 
   /**
@@ -1145,6 +1227,13 @@ export class Hud {
     el.addEventListener('pointerup', go);
     el.addEventListener('click', go);
   }
+}
+
+let motionQuery: MediaQueryList | null = null;
+function reducedMotion(): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  motionQuery ??= window.matchMedia('(prefers-reduced-motion: reduce)');
+  return motionQuery.matches;
 }
 
 function formatTime(seconds: number): string {
