@@ -13,7 +13,7 @@ import {
   COMING_SOON,
   HERO_BASE,
   HERO_EFFECTS,
-  STAND_BACK_LUM,
+  STAND_BACK_GAIN,
   forwardPoint,
   forwardRect,
   heroLayerUrls,
@@ -145,7 +145,8 @@ const bg = `public/${HERO_ART.url}`;
 assert.ok(existsSync(bg), bg);
 assert.ok(statSync(bg).size < 200 * 1024, `${bg} is ${statSync(bg).size} bytes`);
 
-// t378u/t389u: one hero forward at a time; everyone else stands back (shaded, still) at a common level.
+// t378u/t389u: one hero forward at a time; everyone else stands back (shaded x0.42 as in the mock-ups, still).
+assert.equal(STAND_BACK_GAIN, 0.42);
 for (const sel of ORDER) {
   const looks = heroLooks(sel);
   assert.deepEqual(looks.map((l) => l.id), ORDER);
@@ -156,8 +157,7 @@ for (const sel of ORDER) {
       assert.ok(l.gain === 1 && l.fx === HERO_EFFECTS[l.id], `${l.id} lit look`);
       assert.deepEqual(Object.keys(l).sort(), ['fx', 'gain', 'id', 'lit'], 'no sway / lift / glow state left');
     } else {
-      assert.ok(l.gain < 1 && l.fx === null, `${l.id} stands back under ${sel}`);
-      assert.ok(spot.lum * l.gain <= STAND_BACK_LUM + 1e-9, `${l.id} back level (${(spot.lum * l.gain).toFixed(1)})`);
+      assert.ok(spot && l.gain === STAND_BACK_GAIN && l.fx === null, `${l.id} stands back under ${sel}`);
     }
   }
 }
@@ -242,13 +242,11 @@ for (const sel of ORDER) {
   frame(used, shared, sel, (time += 0.05));
   // Exactly one hero forward: its plate under, its forward pose over; nobody else's layers.
   assert.deepEqual(drawn(shared), [`${sel}:plate`, `${sel}:forward`], `${sel}: only ${sel} steps forward`);
-  // Everyone else gets exactly one stand-back shade (and nothing else).
-  const shades = shared.filter((r) => r.op === 'fill' && String(r.args[1]).startsWith('rgba(4, 3, 2'));
-  assert.equal(shades.length, ORDER.length - 1, `${sel}: six heroes shaded`);
-  for (const other of ORDER.filter((id) => id !== sel)) {
-    const x = HERO_SPOTS.find((s) => s.id === other)!.x;
-    assert.equal(shades.filter((r) => Math.abs((r.args[0] as number) - x) < 2).length, 1, `${other} shaded under ${sel}`);
-  }
+  // Everyone else stands back: exactly one veil (black at 0.58 = x0.42), between the plate and the forward pose.
+  const shades = shared.filter((r) => r.op === 'fill' && String(r.args[1]).startsWith('rgba(0, 0, 0'));
+  assert.deepEqual(shades.map((r) => r.args[1]), [`rgba(0, 0, 0, ${1 - STAND_BACK_GAIN})`], `${sel}: one stand-back veil`);
+  const order = shared.filter((r) => r.op === 'drawImage' || shades.includes(r)).map((r) => (r.op === 'fill' ? 'veil' : r.args[0]));
+  assert.deepEqual(order, [`${sel}:plate`, 'veil', `${sel}:forward`], `${sel}: plate, veil, then the forward pose unshaded`);
   if (sel !== 'sorceress') {
     assert.equal(lightningStrokes(shared).length, 0, `no lightning left after switching to ${sel}`);
     assert.equal(shared.filter((r) => r.op === 'stroke').length, 0, `${sel}: lit hold, no effects`);
@@ -264,12 +262,13 @@ for (const id of ORDER) {
   f2.draw(7.9, id, id !== 'sorceress');
   if (id !== 'sorceress') assert.equal(JSON.stringify(l1), JSON.stringify(l2), `${id} holds still`);
 }
-// Layers not loaded yet: no plate or forward pose drawn (the standing figure simply shows unshaded).
+// Layers not loaded yet: no plate, veil or forward pose drawn (the scene simply shows as is).
 {
   const log: Rec[] = [];
   const pending: Record<string, HeroLayerImages> = { barbarian: { forward: { complete: false, naturalWidth: 0 } as HTMLImageElement, plate: img('barbarian:plate') } };
   new HeroSelectFx(fakeCanvas(log) as unknown as HTMLCanvasElement, pending).draw(2, 'barbarian', false);
   assert.equal(drawn(log).length, 0, 'nothing drawn until the forward layer loads');
+  assert.equal(log.filter((r) => r.op === 'fill').length, 0, 'no veil until the forward layer loads');
 }
 if (!hadDoc) delete g.document;
 if (!hadWin) delete g.window;

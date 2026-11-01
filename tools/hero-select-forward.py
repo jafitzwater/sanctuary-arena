@@ -12,7 +12,11 @@ ART = sys.argv[1] if len(sys.argv) > 1 else '/workspace/audit'
 OUT = 'public/ui/hero-forward'
 PLATE_SCALE = 0.6  # same density as the 1920 px backdrop (3200 px source)
 anch = json.load(open(f'{ART}/heroselect-art-forward-anchors.json'))
-base = np.asarray(Image.open(f'{ART}/heroselect-art-base.png').convert('RGB'))
+# t389u polish: the plates come from the edge colour-matched base that hero-select-bg.py pastes into the backdrop
+# (heroselect-art-base-matched.png, written by it), so they match the frame exactly; run hero-select-bg.py first.
+import os
+_bp = f'{ART}/heroselect-art-base-matched.png'
+base = np.asarray(Image.open(_bp if os.path.exists(_bp) else f'{ART}/heroselect-art-base.png').convert('RGB'))
 H, W = base.shape[:2]
 t = 1424 / 1024
 # mask crops and their boxes (in 1024-wide units of the base) as used for the mock-ups (hs/build2.py)

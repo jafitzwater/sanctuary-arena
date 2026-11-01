@@ -19,11 +19,6 @@ export interface HeroSpot {
   feet: number;
   /** Hotspot width in reference px. */
   w: number;
-  /**
-   * Mean luminance (0-255) of the hero's box in the shipped backdrop (`python tools/hero-select-bg.py --measure`).
-   * The stand-back shade is normalised by this so every hero standing back sits at the same level.
-   */
-  lum: number;
 }
 
 /** Hotspot space: the 1024x420 reference image (the shipped WebP is the same frame at 1920px). */
@@ -46,13 +41,13 @@ export function heroLayerUrls(id: string): { forward: string; plate: string } {
  * against the backdrop (NEEDS JOSEPH: hotspot refinements).
  */
 export const HERO_SPOTS: readonly HeroSpot[] = [
-  { id: 'amazon', name: 'Amazon', x: 334, top: 160, feet: 288, w: 54, lum: 31.9 },
-  { id: 'assassin', name: 'Assassin', x: 392, top: 166, feet: 282, w: 46, lum: 33.7 },
-  { id: 'necromancer', name: 'Necromancer', x: 450, top: 158, feet: 276, w: 50, lum: 25.2 },
-  { id: 'barbarian', name: 'Barbarian', x: 508, top: 146, feet: 270, w: 56, lum: 31.1 },
-  { id: 'paladin', name: 'Paladin', x: 573, top: 154, feet: 272, w: 54, lum: 23.7 },
-  { id: 'sorceress', name: 'Sorceress', x: 632, top: 140, feet: 286, w: 56, lum: 27.8 },
-  { id: 'druid', name: 'Druid', x: 700, top: 156, feet: 282, w: 54, lum: 29.7 },
+  { id: 'amazon', name: 'Amazon', x: 334, top: 160, feet: 288, w: 54 },
+  { id: 'assassin', name: 'Assassin', x: 392, top: 166, feet: 282, w: 46 },
+  { id: 'necromancer', name: 'Necromancer', x: 450, top: 158, feet: 276, w: 50 },
+  { id: 'barbarian', name: 'Barbarian', x: 508, top: 146, feet: 270, w: 56 },
+  { id: 'paladin', name: 'Paladin', x: 573, top: 154, feet: 272, w: 54 },
+  { id: 'sorceress', name: 'Sorceress', x: 632, top: 140, feet: 286, w: 56 },
+  { id: 'druid', name: 'Druid', x: 700, top: 156, feet: 282, w: 54 },
 ];
 
 /** Selected-hero effects (t389u): only the Sorceress has one; the others get a simple lit hold. */
@@ -66,10 +61,11 @@ export const HERO_EFFECTS: Readonly<Record<string, HeroFx | null>> = {
   druid: null,
 };
 
-/** Target mean luminance of a hero standing back (shaded). */
-export const STAND_BACK_LUM = 17;
-/** Unselected heroes are always at least this much darker than the art, so they read as "back". */
-const MAX_STAND_BACK_GAIN = 0.8;
+/**
+ * Standing back: the scene behind the hero who steps forward is multiplied by this, as in the approved mock-ups
+ * (heroselect-art-mockup-*.png: base x0.42, forward pose unshaded on top).
+ */
+export const STAND_BACK_GAIN = 0.42;
 
 /**
  * What one hero looks like this frame. The overlay renders purely from this (no per-hero state is kept
@@ -86,10 +82,7 @@ export interface HeroLook {
 
 export function heroLook(id: string, selected: string): HeroLook {
   const spot = heroSpot(id);
-  const lum = spot?.lum ?? STAND_BACK_LUM;
-  if (id !== selected || !spot) {
-    return { id, lit: false, gain: Math.min(MAX_STAND_BACK_GAIN, STAND_BACK_LUM / lum), fx: null };
-  }
+  if (id !== selected || !spot) return { id, lit: false, gain: STAND_BACK_GAIN, fx: null };
   return { id, lit: true, gain: 1, fx: HERO_EFFECTS[id] ?? null };
 }
 

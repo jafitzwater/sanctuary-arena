@@ -1,9 +1,10 @@
-import { HERO_ART, HERO_SPOTS, forwardPoint, forwardRect, heroLooks, plateRect, type HeroLook, type HeroSpot } from './heroSelect';
+import { HERO_ART, STAND_BACK_GAIN, forwardPoint, forwardRect, heroLooks, plateRect } from './heroSelect';
 
 /**
  * Hero select overlay (t373u-t378u, t389u): a canvas over the backdrop, redrawn from scratch every frame
  * from `heroLooks(selected)` (no per-hero state survives a frame). The backdrop carries the approved
- * standing-back base (every hero shaded and still); heroes standing back are darkened to a common level.
+ * standing-back base (every hero shaded and still). When a hero steps forward, the whole scene behind it is
+ * multiplied by STAND_BACK_GAIN (x0.42, as in the approved mock-ups), so the six standing back read clearly shaded.
  * The selected hero steps forward: a clean plate hides its standing figure and its forward-pose layer is
  * drawn scaled 1.22 about the feet and lowered (forwardRect), lit and held still. The Sorceress keeps her
  * live canvas lightning between staff and raised hand; no other hero gets an effect.
@@ -65,14 +66,12 @@ export class HeroSelectFx {
     const lit = looks.find((look) => look.lit);
     const layer = lit ? this.layers[lit.id] : undefined;
     const forward = lit && layer && ready(layer.forward) && ready(layer.plate) ? lit : undefined;
-    // 1) the lit hero's clean plate over its standing figure, 2) everyone else's shade, 3) the forward pose
-    // (on top, so a neighbour's shade never dims it), 4) the Sorceress's lightning.
-    if (forward && layer) this.image(ctx, layer.plate, plateRect(forward.id));
-    for (const look of looks) {
-      const spot = HERO_SPOTS.find((entry) => entry.id === look.id);
-      if (spot && !look.lit) this.standBack(ctx, spot, look);
-    }
+    // 1) the lit hero's clean plate over its standing figure, 2) the stand-back veil over the whole scene (plate
+    // included, as in the mock-ups), 3) the forward pose, unshaded on top, 4) the Sorceress's lightning.
+    // Plate, veil and forward pose go together: until the forward layer loads, the scene shows as is.
     if (forward && layer) {
+      this.image(ctx, layer.plate, plateRect(forward.id));
+      this.standBack(ctx);
       this.image(ctx, layer.forward, forwardRect(forward.id));
       if (forward.fx === 'lightning') {
         const a = forwardPoint(forward.id, SORC_STAFF_TIP.x, SORC_STAFF_TIP.y);
@@ -95,26 +94,14 @@ export class HeroSelectFx {
     ctx.drawImage(img, r.x, r.y, r.w, r.h);
   }
 
-  /** Darken a hero standing back to the common level: black at (1 - gain) is a multiply by gain. */
-  private standBack(ctx: CanvasRenderingContext2D, spot: HeroSpot, look: HeroLook): void {
-    const a = 1 - look.gain;
-    if (a <= 0) return;
-    const cy = (spot.top + spot.feet) / 2;
-    this.shadeEllipse(ctx, spot.x, cy, spot.w * 0.86, (spot.feet - spot.top) * 0.68, a);
-  }
-
-  private shadeEllipse(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, a: number): void {
+  /** The scene standing back: black at (1 - STAND_BACK_GAIN) over the frame is a multiply by STAND_BACK_GAIN. */
+  private standBack(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
-    ctx.translate(x, y);
-    ctx.scale(rx / ry, 1);
-    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, ry);
-    g.addColorStop(0, `rgba(4, 3, 2, ${a})`);
-    g.addColorStop(0.75, `rgba(4, 3, 2, ${a * 0.92})`);
-    g.addColorStop(1, 'rgba(4, 3, 2, 0)');
-    ctx.fillStyle = g;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = `rgba(0, 0, 0, ${1 - STAND_BACK_GAIN})`;
     ctx.beginPath();
-    ctx.arc(0, 0, ry, 0, Math.PI * 2);
+    ctx.rect(0, 0, HERO_ART.width, HERO_ART.height);
     ctx.fill();
     ctx.restore();
   }
