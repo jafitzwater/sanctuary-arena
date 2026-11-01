@@ -257,9 +257,13 @@ export const SANCTUARY_DESIGN: ActDef = {
   dens: [
     // t345u: Rakanishu is the plains mob boss in the Cairn Stones camp (camp art unchanged).
     { id: 1, x: 3200, y: 5600, unit: 'rakanishu', count: 1, respawn: CAVE_RESPAWN, cave: true },
-    { id: 2, x: 4400, y: 9800, unit: 'radament', count: 1, respawn: CAVE_RESPAWN, cave: true },
+    // t365u CORRECTION to t364u [JOSEPH]: Radament = act 2 desert den, Izual = act 4 river of flame (lava field)
+    // den. Dens 2 and 4 swap positions (ids, units, stats, respawn and team unchanged): Radament (4400, 9800) ->
+    // (8800, 6400) desert ruin gate, Izual (8800, 6400) -> (4400, 9800) lava field Hell Forge. Still one camp per
+    // zone and exact (W - x, H - y) mirrors (Rakanishu's twin is now Radament).
+    { id: 2, x: 8800, y: 6400, unit: 'radament', count: 1, respawn: CAVE_RESPAWN, cave: true },
     { id: 3, x: 7600, y: 2200, unit: 'council-member', count: 3, respawn: CAVE_RESPAWN, cave: true },
-    { id: 4, x: 8800, y: 6400, unit: 'izual', count: 1, respawn: CAVE_RESPAWN, cave: true },
+    { id: 4, x: 4400, y: 9800, unit: 'izual', count: 1, respawn: CAVE_RESPAWN, cave: true },
     // t345u: the Countess moved out of the plains camp to open ground between the top and mid lanes. Played
     // coords about (1360, 2153): road 856, river 858, tower 998, nearest den/shrine/pit 1116 played px away;
     // walkable in a 250 px ring. No camp art (camp: false), so she does not duplicate the Cairn Stones camp;

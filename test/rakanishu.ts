@@ -61,7 +61,7 @@ test('stats: melee, tougher than any camp monster, below the Countess and every 
   assert.ok(CAVE_BOSSES.some((b) => b.unit === RAKANISHU_ID && b.count === 1));
 });
 
-test('placement: Rakanishu holds den 1, the plains Cairn Stones camp, respawning like the other caves; mirrored by Izual', () => {
+test('placement: Rakanishu holds den 1, the plains Cairn Stones camp, respawning like the other caves; mirrored by Radament (t365u swap)', () => {
   const dens = map.dens ?? [];
   const den = dens.find((d) => d.unit === RAKANISHU_ID)!;
   assert.ok(den);
@@ -72,7 +72,7 @@ test('placement: Rakanishu holds den 1, the plains Cairn Stones camp, respawning
   assert.equal(den.respawn, CAVE_RESPAWN);
   assert.equal(den.count, 1);
   const twin = dens.find((d) => Math.abs(d.x - (W - den.x)) < 1e-6 && Math.abs(d.y - (H - den.y)) < 1e-6);
-  assert.equal(twin?.unit, 'izual');
+  assert.equal(twin?.unit, 'radament'); // t365u: Radament now holds the desert den (was Izual)
   const sim = createMatch(map, barbarian, 1);
   const unit = sim.units.find((u) => u.defId === RAKANISHU_ID)!;
   assert.ok(unit && unit.alive && unit.team === 'wild' && unit.pack === 1);
