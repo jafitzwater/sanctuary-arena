@@ -32,27 +32,40 @@
         <p>Sanctuary Arena is played with the phone on its side.</p>
       </div>
 
-      <section id="title">
-        <p class="eyebrow" id="title-act">Act I · Sanctuary</p>
-        <h1>Sanctuary Arena</h1>
-        <p class="class-name" id="title-class">Barbarian</p>
-        <div id="class-pick" class="class-pick"></div>
-        <p class="blurb" id="title-blurb"></p>
-        <button id="play-btn" type="button">Enter Sanctuary</button>
-        <p class="skill-row" id="title-skills"></p>
-        <details>
-          <summary>How to play</summary>
-          <div class="help-grid">
-            <div>
-              <h3>Touch</h3>
-              <p>Touch the left half of the screen to drop a stick under your thumb, and let go to hide it. Attack is the sword button in the bottom-right, with four skill petals around it. Tap a skill to cast at your target, or drag off it to aim. A gold + spends a point. Only a learned skill can sit on a slot. The map sits in the top-left and toggles. Shop uses category tabs and an icon grid.</p>
-            </div>
-            <div>
-              <h3>Mouse and keys</h3>
-              <p>Click the ground to move. Click an enemy to attack. Arrow keys also move. Q W E R cast the four belt skills (Shift+key ranks one up). T opens stats and the loadout. Space attacks. B opens the shop. 5 and 6 drink potions.</p>
+      <section id="title" class="hero-select" aria-label="Select hero class">
+        <div class="hs-stage" id="hs-stage">
+          <img id="hs-bg" class="hs-bg" alt="" decoding="async" draggable="false" />
+          <canvas id="hs-fx" aria-hidden="true"></canvas>
+          <div id="hs-spots" class="hs-spots" role="radiogroup" aria-label="Hero class"></div>
+        </div>
+        <h1 class="hs-logo">Sanctuary Arena</h1>
+        <button id="howto-btn" class="hs-help-btn" type="button" aria-label="How to play" aria-haspopup="dialog" aria-controls="howto">?</button>
+        <header class="hs-head">
+          <p class="hs-heading">Select Hero Class</p>
+          <p class="class-name" id="title-class">Barbarian</p>
+          <p class="blurb" id="title-blurb"></p>
+        </header>
+        <div class="hs-actions" id="hs-actions">
+          <button id="play-btn" type="button">Enter Sanctuary</button>
+        </div>
+        <div id="howto" class="hs-modal" hidden role="dialog" aria-modal="true" aria-labelledby="howto-heading">
+          <div class="sheet hs-modal-card" id="howto-card">
+            <header>
+              <h2 id="howto-heading">How to play</h2>
+              <button id="howto-close" class="x-btn" type="button" aria-label="Close">×</button>
+            </header>
+            <div class="help-grid">
+              <div>
+                <h3>Touch</h3>
+                <p>Touch the left half of the screen to drop a stick under your thumb, and let go to hide it. Attack is the sword button in the bottom-right, with four skill petals around it. Tap a skill to cast at your target, or drag off it to aim. A gold + spends a point. Only a learned skill can sit on a slot. The map sits in the top-left and toggles. Shop uses category tabs and an icon grid.</p>
+              </div>
+              <div>
+                <h3>Mouse and keys</h3>
+                <p>Click the ground to move. Click an enemy to attack. Arrow keys also move. Q W E R cast the four belt skills (Shift+key ranks one up). T opens stats and the loadout. Space attacks. B opens the shop. 5 and 6 drink potions.</p>
+              </div>
             </div>
           </div>
-        </details>
+        </div>
       </section>
 
       <div id="hud" hidden>
