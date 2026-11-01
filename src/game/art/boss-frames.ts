@@ -11,7 +11,7 @@
  * Walk is distance-driven: one frame per stride/8 of world distance actually travelled (no foot sliding).
  * The hit reaction is visual only and never holds back a strike: wind-up / strike frames win over it.
  * Death plays once and holds its last frame (the existing corpse fade dims it).
- * Priority: dead > strike / recovery > wind-up > hit reaction > walk > idle.
+ * Priority: dead > walk (while moving: no sliding poses) > strike / recovery > wind-up > hit reaction > idle.
  */
 
 export type BossArtId = 'countess' | 'radament' | 'izual' | 'council-a' | 'council-b' | 'council-c';
@@ -107,6 +107,9 @@ export function bossHitCol(age: number): number {
 
 export function bossFrame(id: BossArtId, s: BossFrameState): BossFrame {
   if (!s.alive) return { anim: 'death', col: bossDeathCol(s.deadFor) };
+  // Moving always shows the distance-driven walk (no foot sliding): a wind-up, strike recovery or hit reaction
+  // only plays while the boss stands (it always stands when its strike lands: it strikes in range).
+  if (s.moving) return { anim: 'walk', col: bossWalkCol(s.travel, BOSS_STRIDE_U[id]) };
   if (s.swing > 0) {
     const rest = BOSS_FRAMES.attack - BOSS_IMPACT_COL;
     return { anim: 'attack', col: BOSS_IMPACT_COL + Math.min(rest - 1, Math.floor((1 - Math.min(1, s.swing)) * rest)) };
@@ -117,7 +120,6 @@ export function bossFrame(id: BossArtId, s: BossFrameState): BossFrame {
   }
   const hit = bossHitCol(s.hitAge);
   if (hit >= 0) return { anim: 'hit', col: hit };
-  if (s.moving) return { anim: 'walk', col: bossWalkCol(s.travel, BOSS_STRIDE_U[id]) };
   const ms = Math.max(0, s.clock) * 1000;
   return { anim: 'idle', col: Math.floor(ms / BOSS_IDLE_MS) % BOSS_FRAMES.idle };
 }

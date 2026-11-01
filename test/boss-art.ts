@@ -169,13 +169,13 @@ test('walk picker: one frame per stride/8 of distance travelled, wraps every str
   assert.equal(bossWalkCol(-5, 100), 0);
 });
 
-test('hit picker: 4 frames over BOSS_HIT_S after a hit lands, then over; never over a wind-up or strike (non-blocking)', () => {
+test('hit picker: 4 frames over BOSS_HIT_S after a hit lands, then over; never over a wind-up, strike or walk (non-blocking)', () => {
   assert.deepEqual([0, 0.081, 0.161, 0.241].map(bossHitCol), [0, 1, 2, 3]);
   assert.equal(bossHitCol(BOSS_HIT_S), -1);
   assert.equal(bossHitCol(Infinity), -1);
   assert.equal(bossHitCol(-1), -1);
   assert.deepEqual(bossFrame('izual', { ...base, hitAge: 0.1 }), { anim: 'hit', col: 1 });
-  assert.deepEqual(bossFrame('izual', { ...base, hitAge: 0.1, moving: true, travel: 50 }), { anim: 'hit', col: 1 }, 'hit shows over walk');
+  assert.equal(bossFrame('izual', { ...base, hitAge: 0.1, moving: true, travel: 50 }).anim, 'walk', 'walking feet never slide under a hit pose');
   assert.equal(bossFrame('izual', { ...base, hitAge: 0.1, engaged: true, attackCd: 0.2 }).anim, 'attack', 'wind-up wins');
   assert.equal(bossFrame('izual', { ...base, hitAge: 0.1, swing: 0.5 }).anim, 'attack', 'strike wins');
   assert.deepEqual(bossFrame('izual', { ...base, hitAge: 0.5 }).anim, 'idle', 'over after BOSS_HIT_S');
@@ -207,10 +207,13 @@ test('attack picker (v2 wind-up): cols 0-5 over the last BOSS_WINDUP s before th
   assert.deepEqual(bossFrame('radament', { ...base, swing: 0.01 }), { anim: 'attack', col: 11 });
   last = 5;
   for (let sw = 1; sw > 0; sw -= 0.05) {
-    const c = bossFrame('radament', { ...base, swing: sw, moving: true }).col;
+    const c = bossFrame('radament', { ...base, swing: sw }).col;
     assert.ok(c >= last && c >= 6 && c <= 11);
     last = c;
   }
+  // Closing in with the cooldown already up (or the target stepping away mid-recovery): walk, never a sliding pose.
+  assert.equal(bossFrame('radament', { ...base, engaged: true, attackCd: 0, moving: true, travel: 30 }).anim, 'walk');
+  assert.equal(bossFrame('radament', { ...base, swing: 0.5, moving: true, travel: 30 }).anim, 'walk');
   // Idle cycle (unchanged from t364u).
   assert.deepEqual(Array.from({ length: 8 }, (_, i) => bossFrame('izual', { ...base, clock: i * 0.125 + 0.01 }).col), [0, 1, 2, 3, 4, 5, 6, 7]);
 });

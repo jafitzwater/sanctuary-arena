@@ -329,6 +329,8 @@ export class Renderer {
   private readonly rakHitAt = new Map<number, number>();
   /** t370u: sim time a hit last landed on each approved boss (starts its 4-frame hit reaction). */
   private readonly bossHitAt = new Map<number, number>();
+  /** t370u: each approved boss's hitFlash last frame (a rise = a hit landed). */
+  private readonly bossFlash = new Map<number, number>();
   /** t370u: when each dead approved boss's death animation first showed (per death). */
   private readonly bossDeathAt = new Map<number, { diedAt: number; start: number }>();
   private look: LookLive = { recall: false, recallSec: 0, recallFill: 0, slash: false, spark: false, flinch: false };
@@ -1359,8 +1361,9 @@ export class Renderer {
    * t364u + t370u: the Countess, Radament, Izual and Council A/B/C from Joseph's approved per-animation atlases
    * (boss-atlas.ts). Row from the shared on-screen compass (classSheetRow, as the heroes and Rakanishu); animation
    * and column from boss-frames.ts: walk by distance travelled (pose.travel, no foot sliding), the v2 wind-up /
-   * strike around the sim's own strike moment, a 4-frame hit reaction when a hit lands (never over a wind-up or
-   * strike), death once then held under the corpse fade. Renderer-side bookkeeping only; nothing in the sim changes.
+   * strike around the sim's own strike moment, a 4-frame hit reaction when a hit lands (never over a wind-up,
+   * strike or walk), death once then held under the corpse fade. Renderer-side bookkeeping only; nothing in the
+   * sim changes.
    * While an animation loads its idle frame stands in; false (procedural token) while idle is not loaded either.
    */
   private paintBossArt(
@@ -1373,7 +1376,11 @@ export class Renderer {
     height: number,
     opts: DrawOpts,
   ): boolean {
-    if (unit.alive && unit.hitFlash > 0.1) {
+    // A landed hit resets hitFlash up to 0.12 (combat.ts); it only decays in between, so any rise is a new hit
+    // (robust to slow frames, unlike a threshold). Restart the reaction at most once per BOSS_HIT_S.
+    const flash = this.bossFlash.get(unit.id) ?? 0;
+    this.bossFlash.set(unit.id, unit.hitFlash);
+    if (unit.alive && unit.hitFlash > flash + 1e-4) {
       const last = this.bossHitAt.get(unit.id);
       if (last == null || this.simTime - last > BOSS_HIT_S) this.bossHitAt.set(unit.id, this.simTime);
     }
