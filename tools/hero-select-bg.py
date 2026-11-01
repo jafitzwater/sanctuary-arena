@@ -1,8 +1,17 @@
 # Hero select backdrop (t373u): Joseph-supplied D2R "Select Hero Class" art (refs/hero-select-bg.jpg).
 # Removes the baked-in title/blurb text and the baked Sorceress lightning (drawn live on a canvas instead),
 # then writes a 1920px WebP. Needs opencv-python-headless + numpy. Usage: python tools/hero-select-bg.py <src.jpg>
+# t378u: `python tools/hero-select-bg.py --measure` prints each hero's mean luminance in the shipped WebP
+# (HeroSpot.lum in src/game/heroSelect.ts; boxes below mirror HERO_SPOTS x/top/feet/w).
 import cv2, numpy as np
 import sys
+if len(sys.argv)>1 and sys.argv[1]=='--measure':
+    im=cv2.imread('public/ui/hero-select-bg.webp')[...,::-1].astype(float); k=im.shape[1]/1024
+    spots=dict(amazon=(334,160,288,54),assassin=(392,166,282,46),necromancer=(450,158,276,50),barbarian=(508,146,270,56),
+               paladin=(573,154,272,54),sorceress=(632,140,286,56),druid=(700,156,282,54))
+    for name,(x,t,f,w) in spots.items():
+        print(name, round(im[int(t*k):int(f*k),int((x-w/2)*k):int((x+w/2)*k)].mean(),1))
+    sys.exit(0)
 src=cv2.imread(sys.argv[1] if len(sys.argv)>1 else "hero-select-bg.jpg")
 H,W=src.shape[:2]; s=W/1024
 def R(x0,y0,x1,y1): return int(x0*s),int(y0*s),int(x1*s),int(y1*s)
