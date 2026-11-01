@@ -45,6 +45,7 @@ export function campThemeAt(map: ActDef, x: number, y: number): CampTheme | null
 }
 
 export function campThemeForDen(map: ActDef, den: DenSpawn): CampTheme | null {
+  if (den.camp === false) return null;
   return campThemeAt(map, den.x, den.y);
 }
 

@@ -23,7 +23,8 @@ assert.equal(UNIT_DEFS.radament.hp, 1200);
 assert.equal(UNIT_DEFS['council-member'].hp, 1000);
 assert.equal(UNIT_DEFS.izual.hp, 2000);
 const dens = sanctuary.dens!;
-assert.deepEqual(dens.map((d) => [d.unit, d.count]), [['countess', 1], ['radament', 1], ['council-member', 3], ['izual', 1]]);
+// t345u: Rakanishu took den 1 (the plains camp); the Countess moved to her own den 5 (t354u: only one Countess).
+assert.deepEqual(dens.map((d) => [d.unit, d.count]), [['rakanishu', 1], ['radament', 1], ['council-member', 3], ['izual', 1], ['countess', 1]]);
 assert.ok(dens.every((d) => d.cave && d.respawn === 180), 'only caves, 180 s');
 
 const sim = createMatch(sanctuary, barbarian, 1);
@@ -32,7 +33,7 @@ const sim = createMatch(sanctuary, barbarian, 1);
 sim.units = sim.units.filter((u) => !(u.kind === 'champion' && u.bot));
 const pack = (id: number) => sim.units.filter((u) => u.alive && u.pack === id);
 assert.equal(pack(3).length, 3, 'the Council is 3');
-const countess = pack(1)[0];
+const countess = pack(5)[0];
 assert.equal(countess.maxHp, 800, 'no wave or den scaling on cave bosses');
 
 // Reset after 60 s with no attack.
@@ -55,6 +56,6 @@ assert.equal(sim.potions.health, 1);
 assert.equal(sim.potions.mana, 1);
 const t2 = sim.time;
 while (sim.time - t2 < 179) updateSim(sim, emptyInput(), 0.05);
-assert.equal(pack(1).length, 0, 'not back before 3 minutes');
-while (pack(1).length === 0 && sim.time - t2 < 182) updateSim(sim, emptyInput(), 0.05);
-assert.equal(pack(1).length, 1, 'back after 3 minutes');
+assert.equal(pack(5).length, 0, 'not back before 3 minutes');
+while (pack(5).length === 0 && sim.time - t2 < 182) updateSim(sim, emptyInput(), 0.05);
+assert.equal(pack(5).length, 1, 'back after 3 minutes');

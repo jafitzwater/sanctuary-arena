@@ -26,6 +26,6 @@ for (const px of [CHARACTER_OUTLINE_PX, TOWER_OUTLINE_PX, TREE_OUTLINE_PX, BASE_
 assert.equal(RUIN_ALPHA, 1);
 const render = readFileSync('src/game/render.ts', 'utf8');
 assert.match(render, /!unit\.alive && \(unit\.kind === 'tower' \|\| unit\.kind === 'base'\)\) \{\s*ctx\.globalAlpha = RUIN_ALPHA;/);
-assert.equal((render.match(/\(unit\.corpse \/ 4\.5\) \* 0\.55\) : 0\.55;/g) ?? []).length, 2, 'other dead-unit fades unchanged');
+assert.equal((render.match(/\(unit\.corpse \/ 4\.5\) \* 0\.55\) : 0\.55;/g) ?? []).length, 3, 'other dead-unit fades unchanged'); // t345u: + Rakanishu's painter
 
 console.log('thin-outlines: ok');

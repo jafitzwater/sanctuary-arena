@@ -53,6 +53,8 @@ export interface DenSpawn {
   boss?: string;
   /** Item 15: a cave boss. Stats come straight from its UnitDef; drops potions; resets after 60 s quiet. */
   cave?: boolean;
+  /** t345u: false = no 3D camp art for this den (drawn clearing only). Default true. */
+  camp?: boolean;
 }
 
 export interface TowerSpawn {

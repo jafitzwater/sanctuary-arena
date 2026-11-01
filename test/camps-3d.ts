@@ -94,13 +94,17 @@ async function main(): Promise<void> {
     }
   });
 
-  await test('one camp per jungle zone: each of the four dens maps to a different theme, two per side', () => {
-    const dens = map.dens ?? [];
+  await test('one camp per jungle zone: each of the four camp dens maps to a different theme, two per side', () => {
+    // t345u: the Countess's den (camp: false) carries no camp art; the four camp dens are unchanged.
+    const all = map.dens ?? [];
+    assert.equal(all.length, 5); // t354u: one Countess only
+    const dens = all.filter((den) => den.camp !== false);
     assert.equal(dens.length, 4);
+    for (const den of all.filter((d) => d.camp === false)) assert.equal(campThemeForDen(map, den), null, `den ${den.id} has no camp art`);
     const themes = dens.map((den) => campThemeForDen(map, den));
     assert.deepEqual([...themes].sort(), [...CAMP_THEMES].sort());
     const byId = Object.fromEntries(dens.map((den, i) => [den.unit, themes[i]]));
-    assert.deepEqual(byId, { countess: 'plains', radament: 'forge', 'council-member': 'jungle', izual: 'desert' });
+    assert.deepEqual(byId, { rakanishu: 'plains', radament: 'forge', 'council-member': 'jungle', izual: 'desert' });
     assert.equal(ZONE_CAMP['jungle-dense'], 'jungle');
     assert.equal(ZONE_CAMP['jungle-lava'], 'forge');
     // The same number of camps on each side (blue = nearer the blue base): plains + forge blue, jungle + desert red.
@@ -109,7 +113,7 @@ async function main(): Promise<void> {
     const blue = dens.filter(isBlue);
     assert.deepEqual(blue.map((d) => campThemeForDen(map, d)).sort(), ['forge', 'plains']);
     assert.equal(dens.length - blue.length, 2);
-    for (const den of dens) {
+    for (const den of all) {
       assert.ok(zoneAt(map, den.x, den.y).startsWith('jungle-'), `den ${den.id} off lanes, river and bases`);
       for (let a = 0; a < 16; a++) {
         const ang = (a / 16) * Math.PI * 2;
@@ -122,6 +126,12 @@ async function main(): Promise<void> {
     const dens = map.dens ?? [];
     for (const den of dens) {
       const twin = dens.find((d) => Math.abs(d.x - (map.width - den.x)) < 1e-6 && Math.abs(d.y - (map.height - den.y)) < 1e-6);
+      if (den.unit === 'countess') {
+        // t354u [JOSEPH]: one Countess only, in the plains: the one den with no mirror.
+        assert.equal(twin, undefined);
+        assert.equal(den.camp, false);
+        continue;
+      }
       assert.ok(twin, `den ${den.id} has a mirror`);
       assert.equal(campThemeForDen(map, twin), MIRROR[campThemeForDen(map, den)!]);
     }

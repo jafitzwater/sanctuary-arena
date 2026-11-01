@@ -2,6 +2,7 @@ import { waveMob, waveStrength, WAVE_SIZE, WAVE_STAGGER } from './data/waves';
 import { itemById } from './data/items';
 import { ORB_RADIUS, ORB_REFILL, orbRestore, orbSpots, poolRestore, POOL_RADIUS, POOL_STAND } from './data/orbs';
 import { CAVE_RESET } from './data/caves';
+import { resolveSparks } from './sparks';
 import { grassPatches, hiddenUnits } from './data/grass';
 import { TOWER_DAMAGE_MULT, TOWER_TIERS, type ActDef, type DenSpawn, type PathDef, type SealSpawn } from './data/acts/types';
 import { paceOf } from './pace';
@@ -66,6 +67,7 @@ export function createMatch(map: ActDef, classDef: ClassDef, seed = 1): Sim {
     units: [],
     projectiles: [],
     fx: [],
+    sparks: [],
     nextId: 1,
     playerId: 0,
     enemyChampionId: 0,
@@ -231,6 +233,7 @@ function blankUnit(sim: Sim, partial: Pick<Unit, 'defId' | 'kind' | 'team' | 'na
     facing: partial.facing ?? 0,
     swing: 0,
     hitFlash: 0,
+    sparkCd: 0,
     stun: 0,
     slow: 0,
     slowPct: 0,
@@ -500,6 +503,7 @@ export function updateSim(sim: Sim, input: FrameInput, dt: number): void {
   updatePits(sim, step);
   updateShrines(sim, step);
   updateOrbs(sim, step);
+  resolveSparks(sim, step, (target, attacker, amount) => damageUnit(sim, target, amount, attacker, 'magic'));
 
   for (const fx of sim.fx) {
     fx.t += step;
@@ -543,6 +547,7 @@ function tickStatus(sim: Sim, unit: Unit, dt: number): void {
   unit.guardT = Math.max(0, unit.guardT - dt);
   unit.haste = Math.max(0, unit.haste - dt);
   unit.hitFlash = Math.max(0, unit.hitFlash - dt);
+  unit.sparkCd = Math.max(0, unit.sparkCd - dt);
   unit.swing = Math.max(0, unit.swing - dt * 3.4);
   unit.combat = Math.max(0, unit.combat - dt);
   if (!unit.alive && unit.kind === 'minion') unit.corpse -= dt;

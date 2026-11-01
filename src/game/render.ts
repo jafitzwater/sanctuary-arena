@@ -99,6 +99,7 @@ import {
   cameraZoom,
   characterScale,
   championSpriteScale,
+  CHAMPION_SPRITE_SCALE,
   facingToScreen,
   screenToFacing,
   fromView,
@@ -124,7 +125,10 @@ import { CAMP_ART, campArt, campFrontMask, campThemeForDen, type CampTheme } fro
 import type { DenSpawn } from './data/acts/types';
 import { player } from './query';
 import { GROUND_BASE, groundAt, tilePaint, walkable, type GroundKind } from './terrain';
-import type { Camera, Sim, Unit } from './types';
+import type { Camera, Sim, Spark, Unit } from './types';
+import { RAKANISHU_ID, SPARK_DELAY } from './data/rakanishu';
+import { drawRakanishu, drawSparkFrame, rakanishuHeight, SPARK_FRAMES } from './art/rakanishu-art';
+import { rakanishuCol } from './art/rakanishu-frames';
 import { BADGE_RIM, FRAME, FRAME_COLORS, nameplateBarTop, unitFrameData, xpRingRadius, type UnitFrameData } from './unitFrame';
 
 /** Unit-frame restyle: bar left / bar top inside the cached chrome canvas (badge to the left, name above). */
@@ -319,6 +323,8 @@ export class Renderer {
   private readonly slashFace = new Map<number, number>();
   private readonly slashArmed = new Map<number, boolean>();
   private readonly sparkArmed = new Set<number>();
+  /** t345u: sim time each Rakanishu last started a hit reaction. */
+  private readonly rakHitAt = new Map<number, number>();
   private look: LookLive = { recall: false, recallSec: 0, recallFill: 0, slash: false, spark: false, flinch: false };
   private seen = { slash: 0, spark: 0, flinch: 0, portal: 0, heroSlash: 0 };
   private shadeCanvas: HTMLCanvasElement | null = null;
@@ -478,6 +484,7 @@ export class Renderer {
       drawBolt(ctx, p.x, p.y, shot.color, owner?.defId === 'blood-raven');
       this.lights.push({ screenX: p.x, screenY: p.y, radius: 40, intensity: 0.85, color: shot.color });
     }
+    this.drawSparks(ctx, sim, u);
     for (const fx of sim.fx) {
       if (fx.kind === 'text') continue;
       this.drawFx(ctx, fx);
@@ -1262,6 +1269,7 @@ export class Renderer {
     height: number,
     opts: DrawOpts,
   ): boolean {
+    if (unit.defId === RAKANISHU_ID) return this.paintRakanishu(ctx, unit, pose, dx, dy, height, opts);
     const anim: FlareAnim = !unit.alive
       ? 'die'
       : attack !== 'none'
@@ -1303,6 +1311,99 @@ export class Renderer {
     }
     ctx.restore();
     return drew;
+  }
+
+  /**
+   * t345u: Rakanishu from his trimmed atlas. Row from the shared on-screen compass (PR #94 facing fix, the same
+   * classSheetRow as the heroes); column from rakanishu-frames.ts (idle, walk12, attack12, hit4, death5).
+   * False while the atlas is loading, so the procedural token stands in.
+   */
+  private paintRakanishu(ctx: CanvasRenderingContext2D, unit: Unit, pose: Pose, dx: number, dy: number, height: number, opts: DrawOpts): boolean {
+    if (unit.alive && unit.hitFlash > 0.1) {
+      const last = this.rakHitAt.get(unit.id);
+      if (last == null || this.simTime - last > 0.32) this.rakHitAt.set(unit.id, this.simTime);
+    }
+    const hitAt = this.rakHitAt.get(unit.id);
+    const col = rakanishuCol({
+      alive: unit.alive,
+      deadFor: Math.max(0, this.simTime - unit.diedAt),
+      swing: unit.swing,
+      attackCd: unit.attackCd,
+      engaged: unit.targetId != null,
+      moving: pose.state !== 'idle',
+      loco: pose.loco,
+      hitAge: hitAt == null ? Infinity : this.simTime - hitAt,
+    });
+    ctx.save();
+    if (!unit.alive) ctx.globalAlpha = unit.corpse > 0 ? Math.max(0.05, (unit.corpse / 4.5) * 0.55) : 0.55;
+    else if (unit.invuln > 0 && Math.sin(opts.time * 28) > 0) ctx.globalAlpha = 0.45;
+    // Shadow and ring sized like a hero's (his body is wider than tall horns suggest).
+    const base = height * 0.72;
+    groundShadow(ctx, dx, dy, base);
+    groundRing(ctx, dx, dy, base, unit.team === 'ally');
+    const drew = drawRakanishu(ctx, classSheetRow(pose.compass), col, dx, dy, height);
+    ctx.restore();
+    return drew;
+  }
+
+  /**
+   * t345u: Rakanishu's lightning. A burst plays the approved spark sheet on him; each bolt is a jagged line from
+   * his chest to the spot it was aimed at while in flight, then a spark at that spot (bright on a hit, small and
+   * dim on a dodge).
+   */
+  private drawSparks(ctx: CanvasRenderingContext2D, sim: Sim, u: number): void {
+    const heroH = heroDrawHeight('idle') * CHAMPION_SPRITE_SCALE * u;
+    const rakH = rakanishuHeight(heroH);
+    for (const spark of sim.sparks) {
+      const a = this.project(spark.x0, spark.y0);
+      if (spark.kind === 'burst') {
+        const k = spark.t / spark.life;
+        drawSparkFrame(ctx, k * SPARK_FRAMES, a.x, a.y - rakH * 0.55, rakH * 1.1, 1 - k * 0.5);
+        this.lights.push({ screenX: a.x, screenY: a.y - rakH * 0.5, radius: 90, intensity: 0.9 * (1 - k), color: 'rgb(150, 200, 255)' });
+        continue;
+      }
+      const b = this.project(spark.tx, spark.ty);
+      if (!spark.landed) {
+        this.paintBoltLine(ctx, spark, a.x, a.y - rakH * 0.5, b.x, b.y - heroH * 0.45, Math.min(1, spark.t / SPARK_DELAY));
+        continue;
+      }
+      const k = Math.min(1, (spark.t - SPARK_DELAY) / Math.max(0.01, spark.life - SPARK_DELAY));
+      const size = spark.hit ? heroH * 0.9 : heroH * 0.45;
+      drawSparkFrame(ctx, 2 + k * (SPARK_FRAMES - 2), b.x, b.y - (spark.hit ? heroH * 0.45 : 4), size, spark.hit ? 1 : 0.5);
+      if (spark.hit) this.lights.push({ screenX: b.x, screenY: b.y - heroH * 0.4, radius: 50, intensity: 0.8 * (1 - k), color: 'rgb(150, 200, 255)' });
+    }
+  }
+
+  private paintBoltLine(ctx: CanvasRenderingContext2D, spark: Spark, x0: number, y0: number, x1: number, y1: number, reach: number): void {
+    const ex = x0 + (x1 - x0) * reach;
+    const ey = y0 + (y1 - y0) * reach;
+    const len = Math.hypot(ex - x0, ey - y0);
+    if (len < 1) return;
+    const nx = -(ey - y0) / len;
+    const ny = (ex - x0) / len;
+    const steps = 6;
+    // Deterministic jitter per bolt and 30 ms tick, so the zig-zag flickers but never depends on frame rate.
+    let seed = (spark.id * 7919 + Math.floor(spark.t / 0.03) * 104729) >>> 0;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296) - 0.5;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (const [w, color] of [[5, 'rgba(90, 150, 255, 0.35)'], [1.8, 'rgba(225, 240, 255, 0.95)']] as const) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = w;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      for (let i = 1; i < steps; i++) {
+        const t = i / steps;
+        const off = rnd() * Math.min(18, len * 0.18);
+        ctx.lineTo(x0 + (ex - x0) * t + nx * off, y0 + (ey - y0) * t + ny * off);
+      }
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    }
+    ctx.restore();
+    this.lights.push({ screenX: ex, screenY: ey, radius: 40, intensity: 0.8, color: 'rgb(150, 200, 255)' });
   }
 
   /**
@@ -1919,6 +2020,8 @@ export class Renderer {
   }
 
   private unitHeight(unit: Unit): number {
+    // t345u: Rakanishu is drawn at the heroes' px/m (his sheet shares their scale), horn tips included.
+    if (unit.defId === RAKANISHU_ID) return rakanishuHeight(heroDrawHeight('idle') * CHAMPION_SPRITE_SCALE);
     if (bossLook(unit)) return bossLook(unit)?.height ?? 150;
     if (unit.defId === 'fallen' && unit.name === 'Bishibosh') return 92;
     switch (unit.defId) {
