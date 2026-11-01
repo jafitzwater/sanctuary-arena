@@ -129,6 +129,8 @@ import type { Camera, Sim, Spark, Unit } from './types';
 import { RAKANISHU_ID, SPARK_DELAY } from './data/rakanishu';
 import { drawRakanishu, drawSparkFrame, rakanishuHeight, SPARK_FRAMES } from './art/rakanishu-art';
 import { rakanishuCol } from './art/rakanishu-frames';
+import { bossArtTick, bossHeight, bossRingPx, drawBossFrame, requestBossArt } from './art/boss-atlas';
+import { bossArtFor, bossCol, type BossArtId } from './art/boss-frames';
 import { BADGE_RIM, FRAME, FRAME_COLORS, nameplateBarTop, unitFrameData, xpRingRadius, type UnitFrameData } from './unitFrame';
 
 /** Unit-frame restyle: bar left / bar top inside the cached chrome canvas (badge to the left, name above). */
@@ -456,6 +458,7 @@ export class Renderer {
     this.heroXp = sim.xp;
     this.simTime = sim.time;
     const u = this.spriteScale();
+    this.prefetchBossArt(sim, u);
     const layers: { depth: number; paint: () => void }[] = [];
     const myTeam = sim.units.find((unit) => unit.id === sim.playerId)?.team;
     // Item 17: enemies hidden in grass are not drawn.
@@ -1270,6 +1273,8 @@ export class Renderer {
     opts: DrawOpts,
   ): boolean {
     if (unit.defId === RAKANISHU_ID) return this.paintRakanishu(ctx, unit, pose, dx, dy, height, opts);
+    const art = bossArtFor(unit.defId, unit.id);
+    if (art) return this.paintBossArt(ctx, unit, art, pose, dx, dy, height, opts);
     const anim: FlareAnim = !unit.alive
       ? 'die'
       : attack !== 'none'
@@ -1344,6 +1349,58 @@ export class Renderer {
     const drew = drawRakanishu(ctx, classSheetRow(pose.compass), col, dx, dy, height);
     ctx.restore();
     return drew;
+  }
+
+  /**
+   * t364u: the Countess, Radament, Izual and Council A/B/C from Joseph's approved atlases (boss-atlas.ts). Row from
+   * the shared on-screen compass (classSheetRow, as the heroes and Rakanishu); column from boss-frames.ts (idle8 /
+   * attack12 only). False while the atlas is loading, so the procedural token stands in. Visual only.
+   */
+  private paintBossArt(
+    ctx: CanvasRenderingContext2D,
+    unit: Unit,
+    art: BossArtId,
+    pose: Pose,
+    dx: number,
+    dy: number,
+    height: number,
+    opts: DrawOpts,
+  ): boolean {
+    const col = bossCol({
+      alive: unit.alive,
+      swing: unit.swing,
+      attackCd: unit.attackCd,
+      engaged: unit.targetId != null,
+      clock: this.simTime + (unit.id % 8) * 0.37,
+    });
+    ctx.save();
+    if (!unit.alive) ctx.globalAlpha = unit.corpse > 0 ? Math.max(0.05, (unit.corpse / 4.5) * 0.55) : 0.55;
+    else if (unit.invuln > 0 && Math.sin(opts.time * 28) > 0) ctx.globalAlpha = 0.45;
+    // Shadow and ring sized to the body, not to wings/horns (Izual's wings would make a huge shadow).
+    const base = Math.min(height, heroDrawHeight('idle') * CHAMPION_SPRITE_SCALE * this.spriteScale() * 2) * 0.72;
+    groundShadow(ctx, dx, dy, base);
+    groundRing(ctx, dx, dy, base, unit.team === 'ally');
+    const drew = drawBossFrame(ctx, art, classSheetRow(pose.compass), col, dx, dy, height);
+    ctx.restore();
+    return drew;
+  }
+
+  /**
+   * t364u: lazy load. An approved boss atlas starts loading only when its boss is within about one screen of the
+   * view (or drawn), so it is usually ready before it appears; atlases unused for a while are released.
+   */
+  private prefetchBossArt(sim: Sim, u: number): void {
+    const ring = bossRingPx((heroDrawHeight('idle') * CHAMPION_SPRITE_SCALE * u) / 56);
+    const { cssW, cssH } = this.camera;
+    for (const unit of sim.units) {
+      if (!unit.alive && unit.corpse <= 0) continue;
+      const art = bossArtFor(unit.defId, unit.id);
+      if (!art) continue;
+      const p = this.project(unit.x, unit.y);
+      if (p.x < -cssW || p.x > cssW * 2 || p.y < -cssH || p.y > cssH * 2) continue;
+      requestBossArt(art, ring);
+    }
+    bossArtTick();
   }
 
   /**
@@ -2022,6 +2079,9 @@ export class Renderer {
   private unitHeight(unit: Unit): number {
     // t345u: Rakanishu is drawn at the heroes' px/m (his sheet shares their scale), horn tips included.
     if (unit.defId === RAKANISHU_ID) return rakanishuHeight(heroDrawHeight('idle') * CHAMPION_SPRITE_SCALE);
+    // t364u: the approved bosses keep their sheet scale as rendered (the heroes' px/m).
+    const art = bossArtFor(unit.defId, unit.id);
+    if (art) return bossHeight(art, heroDrawHeight('idle') * CHAMPION_SPRITE_SCALE);
     if (bossLook(unit)) return bossLook(unit)?.height ?? 150;
     if (unit.defId === 'fallen' && unit.name === 'Bishibosh') return 92;
     switch (unit.defId) {

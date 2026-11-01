@@ -125,3 +125,14 @@ The standing stones, carved runes, ruin pillars and lintel, forge, anvil, torche
 | [Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html) [Standard] by Quaternius ([download](https://quaternius.itch.io/universal-animation-library)), CC0 1.0 | `UAL1_Standard.glb`: `Sword_Idle`, `Walk_Loop`, `Sword_Attack`, `Hit_Chest`, `Death01` |
 
 Original work for this project: the horns, hair tuft, eye glints, spiky shoulder pad, ragged kilt, belt, armour vertex colours, the scimitar, and `public/sprites/bosses/rakanishu-spark.png` (procedural lightning spark sheet). Rendered headless in Blender 4.5 LTS (orthographic, 8 directions rendered separately, no mirroring). No Mixamo, CC-BY or ripped art. The Diablo II Rakanishu was a look-only reference; none of its pixels are in the sheet.
+
+## Approved boss sheets (Countess v2, Radament v2, Izual v1, Council A/B/C v1; order t364u)
+
+`public/sprites/bosses/{countess,radament,izual,council-a,council-b,council-c}-atlas.webp` are the Sprite Director's approved 8-direction sheets (idle 8 + attack 12 frames per facing), repacked 1:1 without scaling by `scripts/boss-atlases.py`. They are rendered from 3D models and animations. All third-party sources are [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/); attribution is not required but given here.
+
+| Source | Used for |
+| --- | --- |
+| [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html) [Standard] by Quaternius ([download](https://quaternius.itch.io/universal-base-characters)), CC0 1.0 | Countess: `Superhero_Female_FullBody` body mesh and rig. Radament, Izual, Council A/B/C: `Superhero_Male_FullBody` body mesh and rig |
+| [Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html) [Standard] by Quaternius ([download](https://quaternius.itch.io/universal-animation-library)), CC0 1.0 | `UAL1_Standard.glb`: Countess `Sword_Idle`, `Sword_Attack`; Radament `Idle_Loop`, `Punch_Cross`; Izual `Idle_Loop`, `Sword_Attack`; Council `Idle_Loop`, `Sword_Attack`, `Punch_Cross` |
+
+Original work for this project: all costume, armour, horns, wings, wrappings, weapons, shields and colours on top of the base bodies. Rendered headless in Blender 4.5 LTS (orthographic, 8 directions rendered separately, no mirroring). No Mixamo, CC-BY or ripped art. The Diablo II characters were look-only references; none of their pixels are in the sheets.
